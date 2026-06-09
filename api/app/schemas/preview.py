@@ -58,8 +58,9 @@ class PartDownloadItem(BaseModel):
 
 class PartsDataResponse(BaseModel):
     partset_id: str
-    private_id: str
+    private_id: str | None = None
     public_id: str
+    mode: str = "owner"
     title: str | None = None
     composer: str | None = None
     publisher: str | None = None

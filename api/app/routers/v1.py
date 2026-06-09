@@ -5,13 +5,24 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_db
 from app.models import Partset
-from app.schemas.partset import ImportProgressResponse, PartsetCreateResponse
+from app.schemas.partset import (
+    DeletePartsetResponse,
+    ImportProgressResponse,
+    PartsetCreateResponse,
+    UpdateMetadataRequest,
+    UpdateMetadataResponse,
+)
 from app.schemas.segment import (
     SavePageSegmentsRequest,
     SavePageSegmentsResponse,
     SegmentDataResponse,
 )
 from app.services.partsets import create_pdf_partset, import_progress_payload
+from app.services.partset_admin import (
+    delete_partset,
+    resolve_partset_access,
+    update_partset_metadata,
+)
 from app.schemas.preview import (
     CombinePartsRequest,
     CombinePartsResponse,
@@ -239,6 +250,22 @@ def partgen_status(private_id: str, db: Session = Depends(get_db)) -> PartgenPro
 
 
 @router.get(
+    "/access/{access_id}/parts",
+    response_model=PartsDataResponse,
+)
+def parts_by_access_id(access_id: str, db: Session = Depends(get_db)) -> PartsDataResponse:
+    resolved = resolve_partset_access(db, access_id)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    partset, mode = resolved
+    try:
+        payload = get_parts_data(db, partset, mode=mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return PartsDataResponse(**payload)
+
+
+@router.get(
     "/partsets/{private_id}/parts",
     response_model=PartsDataResponse,
 )
@@ -247,7 +274,52 @@ def parts_data(private_id: str, db: Session = Depends(get_db)) -> PartsDataRespo
     if not partset:
         raise HTTPException(status_code=404, detail="Partset not found")
     try:
-        payload = get_parts_data(db, partset)
+        payload = get_parts_data(db, partset, mode="owner")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return PartsDataResponse(**payload)
+
+
+@router.put(
+    "/partsets/{private_id}/metadata",
+    response_model=UpdateMetadataResponse,
+)
+def update_metadata(
+    private_id: str,
+    body: UpdateMetadataRequest,
+    x_csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+    db: Session = Depends(get_db),
+) -> UpdateMetadataResponse:
+    verify_csrf(x_csrf_token)
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    title = body.title.strip()
+    composer = body.composer.strip()
+    if not title or not composer:
+        raise HTTPException(status_code=400, detail="Title and composer are required")
+    update_partset_metadata(
+        db,
+        partset,
+        title=title,
+        composer=composer,
+        publisher=body.publisher.strip(),
+    )
+    return UpdateMetadataResponse()
+
+
+@router.delete(
+    "/partsets/{private_id}",
+    response_model=DeletePartsetResponse,
+)
+def delete_partset_route(
+    private_id: str,
+    x_csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+    db: Session = Depends(get_db),
+) -> DeletePartsetResponse:
+    verify_csrf(x_csrf_token)
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    delete_partset(db, partset)
+    return DeletePartsetResponse()

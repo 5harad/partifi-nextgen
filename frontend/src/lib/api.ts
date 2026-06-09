@@ -169,6 +169,45 @@ export async function getPartsData(privateId: string): Promise<PartsDataResponse
   return res.json()
 }
 
+export async function getPartsByAccessId(accessId: string): Promise<PartsDataResponse> {
+  const res = await fetch(`/api/v1/access/${accessId}/parts`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to load parts')
+  }
+  return res.json()
+}
+
+export async function updatePartsetMetadata(
+  privateId: string,
+  body: { title: string; composer: string; publisher: string },
+  csrfToken: string,
+): Promise<void> {
+  const res = await fetch(`/api/v1/partsets/${privateId}/metadata`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to update metadata')
+  }
+}
+
+export async function deletePartset(privateId: string, csrfToken: string): Promise<void> {
+  const res = await fetch(`/api/v1/partsets/${privateId}`, {
+    method: 'DELETE',
+    headers: { 'X-CSRF-Token': csrfToken },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to delete partset')
+  }
+}
+
 export async function sha1File(file: File): Promise<string> {
   const buffer = await file.arrayBuffer()
   const hash = await crypto.subtle.digest('SHA-1', buffer)

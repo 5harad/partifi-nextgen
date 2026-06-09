@@ -25,8 +25,9 @@ export type PartgenProgressResponse = {
 
 export type PartsDataResponse = {
   partset_id: string
-  private_id: string
+  private_id: string | null
   public_id: string
+  mode: 'owner' | 'public'
   title: string | null
   composer: string | null
   publisher: string | null

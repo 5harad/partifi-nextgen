@@ -13,3 +13,17 @@ class ImportProgressResponse(BaseModel):
     progress: float = 0.0
     total_progress: float = 0.0
     is_complete: bool = False
+
+
+class UpdateMetadataRequest(BaseModel):
+    title: str
+    composer: str
+    publisher: str = ""
+
+
+class UpdateMetadataResponse(BaseModel):
+    status: str = "success"
+
+
+class DeletePartsetResponse(BaseModel):
+    status: str = "success"

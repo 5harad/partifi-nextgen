@@ -76,3 +76,18 @@ def presigned_get_url(
         Params=params,
         ExpiresIn=expires_in,
     )
+
+
+def delete_prefix(prefix: str) -> None:
+    settings = get_settings()
+    client = get_s3_client()
+    if prefix and not prefix.endswith("/"):
+        prefix = f"{prefix}/"
+    paginator = client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=settings.s3_bucket, Prefix=prefix):
+        objects = [{"Key": obj["Key"]} for obj in page.get("Contents", [])]
+        if objects:
+            client.delete_objects(
+                Bucket=settings.s3_bucket,
+                Delete={"Objects": objects},
+            )

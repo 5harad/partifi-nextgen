@@ -316,7 +316,7 @@ def start_part_generation(db: Session, partset: Partset) -> str | None:
     return job_id
 
 
-def get_parts_data(db: Session, partset: Partset) -> dict:
+def get_parts_data(db: Session, partset: Partset, *, mode: str = "owner") -> dict:
     ensure_import_complete(partset)
     parts = (
         db.query(Part)
@@ -348,10 +348,11 @@ def get_parts_data(db: Session, partset: Partset) -> dict:
             download_name=score_name,
         )
 
-    return {
+    payload = {
         "partset_id": partset.id,
-        "private_id": partset.private_id or "",
+        "private_id": partset.private_id if mode == "owner" else None,
         "public_id": partset.id,
+        "mode": mode,
         "title": partset.title,
         "composer": partset.composer,
         "publisher": partset.publisher,
@@ -359,3 +360,4 @@ def get_parts_data(db: Session, partset: Partset) -> dict:
         "parts": download_items,
         "parts_ready": bool(partset.parts_ready),
     }
+    return payload

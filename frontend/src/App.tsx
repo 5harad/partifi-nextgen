@@ -21,6 +21,7 @@ function App() {
       <Route path="/:privateId/preview" element={<PreviewPage />} />
       <Route path="/:privateId/partgen" element={<PartgenProgressPage />} />
       <Route path="/:privateId/parts" element={<PartsPage />} />
+      <Route path="/:accessId" element={<PartsPage />} />
     </Routes>
   )
 }
