@@ -14,43 +14,12 @@ import {
   computeRegionLayouts,
   marginPctToPx,
   marginPxToPct,
+  materializeAllPagesWithSuggestions,
+  nextRegionId,
   pageDataAreEqual,
-  pctToPx,
+  regionsFromPageData,
 } from '../../lib/segmentUtils'
 import type { PageSegmentData, RegionState, SegmentDataResponse } from '../../types/segment'
-
-let regionCounter = 0
-
-function nextRegionId() {
-  regionCounter += 1
-  return `region-${regionCounter}`
-}
-
-function regionsFromPageData(data: PageSegmentData): RegionState[] {
-  const regions: RegionState[] = []
-  for (const seg of data.segments) {
-    regions.push({
-      id: nextRegionId(),
-      topPx: pctToPx(seg.pos[0]),
-      tags: seg.tags,
-      tagIsSuggestion: seg.tag_is_suggestion,
-      label: seg.label,
-      labelIsSuggestion: seg.label_is_suggestion,
-    })
-  }
-  if (data.segments.length > 0) {
-    const last = data.segments[data.segments.length - 1]
-    regions.push({
-      id: nextRegionId(),
-      topPx: pctToPx(last.pos[1]),
-      tags: '',
-      tagIsSuggestion: false,
-      label: '',
-      labelIsSuggestion: false,
-    })
-  }
-  return regions
-}
 
 type Props = {
   data: SegmentDataResponse
@@ -234,31 +203,6 @@ export function SegmentEditor({ data }: Props) {
     [data.private_id],
   )
 
-  const saveIfDirty = useCallback(
-    async (page: number) => {
-      const pageData = getCurrentPageData()
-      const serverData = serverPageDataRef.current
-      if (!pageDataAreEqual(serverData, pageData)) {
-        setSaving(true)
-        try {
-          await persistPage(page, pageData)
-          serverPageDataRef.current = JSON.parse(JSON.stringify(pageData))
-          setPagesData((prev) => {
-            const next = { ...prev, [`p${page}`]: pageData }
-            setTagList(buildTagList(next, data.num_pages))
-            return next
-          })
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Save failed')
-          throw err
-        } finally {
-          setSaving(false)
-        }
-      }
-    },
-    [getCurrentPageData, persistPage, data.num_pages],
-  )
-
   const applyPageData = (nextPage: number, allPages: Record<string, PageSegmentData>) => {
     const key = `p${nextPage}`
     const pageData = allPages[key] ?? {
@@ -422,7 +366,8 @@ export function SegmentEditor({ data }: Props) {
   }
 
   const handleContinue = async () => {
-    const allPages = { ...pagesData, [currentPageKey]: getCurrentPageData() }
+    const currentPages = { ...pagesData, [currentPageKey]: getCurrentPageData() }
+    const allPages = materializeAllPagesWithSuggestions(currentPages, data.num_pages)
     const hasTag = Object.values(allPages).some((page) =>
       page.segments.some((s) => s.tags !== '' && s.tags !== '(none)'),
     )
@@ -431,10 +376,15 @@ export function SegmentEditor({ data }: Props) {
       return
     }
     try {
-      await saveIfDirty(pageNum)
+      setSaving(true)
+      for (let p = 1; p <= data.num_pages; p++) {
+        await persistPage(p, allPages[`p${p}`]!)
+      }
       navigate(`/${data.private_id}/preview`)
     } catch {
       /* error set */
+    } finally {
+      setSaving(false)
     }
   }
 

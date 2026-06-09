@@ -5,6 +5,11 @@ from sqlalchemy.orm import Session
 from app.models import Partset, Score
 from app.services.queue import enqueue_job
 from app.services.s3 import upload_bytes
+from app.services.score_cache import (
+    copy_score_segs_to_partset,
+    mark_import_pipeline_complete,
+    score_analysis_complete,
+)
 from app.utils.ids import gen_partset_ids, gen_score_id
 
 MAX_UPLOAD_BYTES = 60_000_000
@@ -114,3 +119,59 @@ def create_pdf_partset(
     )
 
     return partset, action
+
+
+def create_partset_from_score(
+    db: Session,
+    *,
+    score_id: str,
+    title: str,
+    composer: str,
+    publisher: str,
+    copyright: str,
+) -> Partset:
+    score = db.get(Score, score_id)
+    if not score:
+        raise ValueError("Score not found")
+
+    public_id, private_id = gen_partset_ids(db)
+    now = datetime.utcnow()
+
+    partset = Partset(
+        id=public_id,
+        private_id=private_id,
+        score_id=score_id,
+        title=title.strip(),
+        composer=composer.strip(),
+        publisher=publisher.strip() or None,
+        copyright=copyright,
+        create_ts=now,
+        num_downloads=0,
+        import_progress=0.0,
+        convert_progress=0.0,
+        analysis_progress=0.0,
+        cut_progress=0.0,
+        paste_progress=0.0,
+    )
+    db.add(partset)
+    db.flush()
+
+    if score_analysis_complete(db, score_id):
+        mark_import_pipeline_complete(db, partset, score)
+        copy_score_segs_to_partset(db, score_id, public_id)
+        db.commit()
+        db.refresh(partset)
+        return partset
+
+    partset.status = "import"
+    partset.import_start = now
+    partset.import_complete = now
+    partset.import_progress = 100.0
+    db.commit()
+    db.refresh(partset)
+
+    enqueue_job(
+        "import_pipeline",
+        {"partset_id": public_id, "score_id": score_id},
+    )
+    return partset

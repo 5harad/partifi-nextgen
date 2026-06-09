@@ -12,12 +12,18 @@ from app.schemas.partset import (
     UpdateMetadataRequest,
     UpdateMetadataResponse,
 )
+from app.schemas.search import CreateFromScoreRequest, SearchResponse
 from app.schemas.segment import (
     SavePageSegmentsRequest,
     SavePageSegmentsResponse,
     SegmentDataResponse,
 )
-from app.services.partsets import create_pdf_partset, import_progress_payload
+from app.services.partsets import (
+    create_partset_from_score,
+    create_pdf_partset,
+    import_progress_payload,
+)
+from app.services.search import search_partsets
 from app.services.partset_admin import (
     delete_partset,
     resolve_partset_access,
@@ -111,6 +117,39 @@ async def create_partset(
         id=partset.private_id or "",
         action=action,
     )
+
+
+@router.get("/search", response_model=SearchResponse)
+def search(q: str = "", db: Session = Depends(get_db)) -> SearchResponse:
+    results = search_partsets(db, q)
+    return SearchResponse(results=results)
+
+
+@router.post("/partsets/from-score", response_model=PartsetCreateResponse)
+def create_partset_from_library_score(
+    body: CreateFromScoreRequest,
+    x_csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+    db: Session = Depends(get_db),
+) -> PartsetCreateResponse:
+    verify_csrf(x_csrf_token)
+    if body.copyright not in COPYRIGHT_VALUES:
+        raise HTTPException(status_code=400, detail="Invalid copyright value")
+    title = body.title.strip()
+    composer = body.composer.strip()
+    if not title or not composer:
+        raise HTTPException(status_code=400, detail="Title and composer are required")
+    try:
+        partset = create_partset_from_score(
+            db,
+            score_id=body.score_id.strip(),
+            title=title,
+            composer=composer,
+            publisher=body.publisher.strip(),
+            copyright=body.copyright,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return PartsetCreateResponse(status="ok", id=partset.private_id or "", action="continue")
 
 
 @router.get(

@@ -1,4 +1,5 @@
 import type { PageSegmentData, RegionState, SegmentItem } from '../types/segment'
+import { applySuggestionsToRegions } from './segmentTagSuggestions'
 
 export const VIEWER_HEIGHT = 776
 export const VIEWER_WIDTH = 600
@@ -111,4 +112,72 @@ export function marginPxToPct(px: number): number {
 
 export function marginPctToPx(pct: number): number {
   return Math.round((pct / 100) * VIEWER_WIDTH)
+}
+
+let regionCounter = 0
+
+export function nextRegionId() {
+  regionCounter += 1
+  return `region-${regionCounter}`
+}
+
+export function regionsFromPageData(data: PageSegmentData): RegionState[] {
+  const regions: RegionState[] = []
+  for (const seg of data.segments) {
+    regions.push({
+      id: nextRegionId(),
+      topPx: pctToPx(seg.pos[0]),
+      tags: seg.tags,
+      tagIsSuggestion: seg.tag_is_suggestion,
+      label: seg.label,
+      labelIsSuggestion: seg.label_is_suggestion,
+    })
+  }
+  if (data.segments.length > 0) {
+    const last = data.segments[data.segments.length - 1]
+    regions.push({
+      id: nextRegionId(),
+      topPx: pctToPx(last.pos[1]),
+      tags: '',
+      tagIsSuggestion: false,
+      label: '',
+      labelIsSuggestion: false,
+    })
+  }
+  return regions
+}
+
+export function materializeAllPagesWithSuggestions(
+  pagesData: Record<string, PageSegmentData>,
+  numPages: number,
+): Record<string, PageSegmentData> {
+  let allPages = { ...pagesData }
+  for (let page = 1; page <= numPages; page++) {
+    const key = `p${page}`
+    const base = allPages[key] ?? {
+      left_margin: 0,
+      right_margin: 100,
+      rotation: 0,
+      segments: [],
+    }
+    const regions = regionsFromPageData(base)
+    const suggested = applySuggestionsToRegions(
+      regions,
+      allPages,
+      page,
+      numPages,
+      null,
+      null,
+    )
+    allPages = {
+      ...allPages,
+      [key]: buildPageData(
+        suggested,
+        base.left_margin,
+        base.right_margin,
+        base.rotation,
+      ),
+    }
+  }
+  return allPages
 }

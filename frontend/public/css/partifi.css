@@ -1635,6 +1635,13 @@ a.red:hover
 
 /* SERP */
 
+#search-box {
+	position: relative;
+	width: 100%;
+	min-height: 130px;
+	z-index: 1;
+}
+
 #search-results-wrapper {
 	position: absolute;
 	top: 150px;

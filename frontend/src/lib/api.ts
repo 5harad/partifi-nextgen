@@ -4,6 +4,7 @@ import type {
   PartsDataResponse,
   PreviewDataResponse,
 } from '../types/preview'
+import type { SearchResponse } from '../types/search'
 
 export type PartsetCreateResponse = {
   status: string
@@ -206,6 +207,41 @@ export async function deletePartset(privateId: string, csrfToken: string): Promi
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail || 'Failed to delete partset')
   }
+}
+
+export async function searchPartsets(query: string): Promise<SearchResponse> {
+  const params = new URLSearchParams({ q: query })
+  const res = await fetch(`/api/v1/search?${params}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Search failed')
+  }
+  return res.json()
+}
+
+export async function createPartsetFromScore(
+  body: {
+    score_id: string
+    title: string
+    composer: string
+    publisher: string
+    copyright: string
+  },
+  csrfToken: string,
+): Promise<PartsetCreateResponse> {
+  const res = await fetch('/api/v1/partsets/from-score', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to create partset')
+  }
+  return res.json()
 }
 
 export async function sha1File(file: File): Promise<string> {

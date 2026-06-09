@@ -6,6 +6,44 @@ from app.services.s3 import presigned_get_url
 from app.utils.strings import rm_space, tag_to_filename
 
 
+def _sync_part_rows_from_tags(db: Session, partset_id: str) -> None:
+    tags_set: set[str] = set()
+    rows = db.query(Segment.tags).filter(
+        Segment.partset_id == partset_id,
+        Segment.tags.isnot(None),
+        Segment.tags != "",
+    ).all()
+    for (tag_row,) in rows:
+        for tag in tag_row.split(","):
+            cleaned = rm_space(tag)
+            if cleaned and cleaned not in {"all", "All", "ALL", "(none)"}:
+                tags_set.add(cleaned)
+
+    for tag in tags_set:
+        filename = tag_to_filename(tag)
+        existing = (
+            db.query(Part)
+            .filter(Part.partset_id == partset_id, Part.tag == tag)
+            .first()
+        )
+        if not existing:
+            db.add(
+                Part(
+                    partset_id=partset_id,
+                    tag=tag,
+                    spacing=0.1,
+                    combined=False,
+                    file_name=filename,
+                )
+            )
+
+    parts = db.query(Part).filter(Part.partset_id == partset_id).all()
+    for part in parts:
+        part_tags = [t.strip() for t in part.tag.split(" + ")]
+        if not all(t in tags_set for t in part_tags if t):
+            db.delete(part)
+
+
 def get_partset_by_private_id(db: Session, private_id: str) -> Partset | None:
     return db.query(Partset).filter(Partset.private_id == private_id).first()
 
@@ -138,40 +176,6 @@ def save_page_segments(
             )
         )
 
-    tags_set: set[str] = set()
-    rows = db.query(Segment.tags).filter(
-        Segment.partset_id == partset.id,
-        Segment.tags.isnot(None),
-        Segment.tags != "",
-    ).all()
-    for (tag_row,) in rows:
-        for tag in tag_row.split(","):
-            cleaned = rm_space(tag)
-            if cleaned and cleaned not in {"all", "All", "ALL", "(none)"}:
-                tags_set.add(cleaned)
-
-    for tag in tags_set:
-        filename = tag_to_filename(tag)
-        existing = (
-            db.query(Part)
-            .filter(Part.partset_id == partset.id, Part.tag == tag)
-            .first()
-        )
-        if not existing:
-            db.add(
-                Part(
-                    partset_id=partset.id,
-                    tag=tag,
-                    spacing=0.1,
-                    combined=False,
-                    file_name=filename,
-                )
-            )
-
-    parts = db.query(Part).filter(Part.partset_id == partset.id).all()
-    for part in parts:
-        part_tags = [t.strip() for t in part.tag.split(" + ")]
-        if not all(t in tags_set for t in part_tags if t):
-            db.delete(part)
+    _sync_part_rows_from_tags(db, partset.id)
 
     db.commit()
