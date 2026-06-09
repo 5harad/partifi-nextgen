@@ -368,6 +368,7 @@ a.red:hover
 	position:absolute;
 	left:0px;
 	width:320px;
+	min-height:125px;
 	text-align:left;
 	font-family: 'IM Fell DW Pica SC', serif;
 	font-size: 19px;
@@ -713,6 +714,7 @@ a.red:hover
 	position: absolute; 
 	left: 560px; 
 	top: 2px;
+	z-index: 50;
 }
 
 .seg-handle { 
@@ -725,6 +727,7 @@ a.red:hover
 .region { 
 	position: absolute;
 	width: 600px;
+	overflow: visible;
 }
 
 .tags {
@@ -736,6 +739,7 @@ a.red:hover
 	width: 125px;
 	padding-right: 25px;
 	font-size: 13px;
+	z-index: 1;
 }
 
 .suggestions {
@@ -747,6 +751,7 @@ a.red:hover
 	left: 765px;
 	bottom: 0px;
 	cursor: pointer;
+	z-index: 200;
 }
 
 .rehearsal-nos {
@@ -765,6 +770,45 @@ a.red:hover
 	left: -36px;
 	bottom: 0px;
 	cursor: pointer;
+	z-index: 50;
+}
+
+/* jQuery UI autocomplete (segment editor part names) */
+.ui-autocomplete {
+	position: absolute;
+	cursor: default;
+	z-index: 3000;
+}
+.ui-menu {
+	list-style: none;
+	padding: 2px;
+	margin: 0;
+	display: block;
+}
+.ui-menu .ui-menu-item {
+	margin: 0;
+	padding: 0;
+	width: 100%;
+}
+.ui-menu .ui-menu-item a {
+	text-decoration: none;
+	display: block;
+	padding: .2em .4em;
+	font-size: 13px;
+	color: #222222;
+}
+.ui-menu .ui-menu-item a.ui-state-hover,
+.ui-menu .ui-menu-item a.ui-state-active {
+	border: 1px solid #999999;
+	background: #dadada;
+	font-weight: normal;
+	color: #212121;
+	margin: -1px;
+}
+.ui-widget-content {
+	border: 1px solid #aaaaaa;
+	background: #ffffff;
+	color: #222222;
 }
 
 #slider {

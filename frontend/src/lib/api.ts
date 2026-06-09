@@ -1,3 +1,5 @@
+import type { PageSegmentData, SegmentDataResponse } from '../types/segment'
+
 export type PartsetCreateResponse = {
   status: string
   id: string
@@ -54,6 +56,35 @@ export async function getImportStatus(privateId: string): Promise<ImportProgress
   const res = await fetch(`/api/v1/partsets/${privateId}/import-status`)
   if (!res.ok) throw new Error('Failed to fetch import status')
   return res.json()
+}
+
+export async function getSegmentData(privateId: string): Promise<SegmentDataResponse> {
+  const res = await fetch(`/api/v1/partsets/${privateId}/segment-data`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to load segment data')
+  }
+  return res.json()
+}
+
+export async function savePageSegments(
+  privateId: string,
+  page: number,
+  data: PageSegmentData,
+  csrfToken: string,
+): Promise<void> {
+  const res = await fetch(`/api/v1/partsets/${privateId}/pages/${page}/segments`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to save segments')
+  }
 }
 
 export async function sha1File(file: File): Promise<string> {

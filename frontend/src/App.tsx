@@ -3,6 +3,7 @@ import { AboutPage } from './pages/AboutPage'
 import { HomePage } from './pages/HomePage'
 import { HowToPage } from './pages/HowToPage'
 import { ImportProgressPage } from './pages/ImportProgressPage'
+import { PreviewPage } from './pages/PreviewPage'
 import { SegmentPage } from './pages/SegmentPage'
 
 function App() {
@@ -13,6 +14,7 @@ function App() {
       <Route path="/howto" element={<HowToPage />} />
       <Route path="/:privateId/import" element={<ImportProgressPage />} />
       <Route path="/:privateId/segment" element={<SegmentPage />} />
+      <Route path="/:privateId/preview" element={<PreviewPage />} />
     </Routes>
   )
 }

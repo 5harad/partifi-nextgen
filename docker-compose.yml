@@ -52,10 +52,12 @@ services:
       MYSQL_HOST: mysql
       REDIS_URL: redis://redis:6379/0
       S3_ENDPOINT_URL: http://minio:9000
+      S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
     ports:
       - "8001:8000"
     volumes:
       - ./api:/app
+      - api_venv:/app/.venv
       - api_tmp:/tmp/partifi
     depends_on:
       mysql:
@@ -77,6 +79,7 @@ services:
       S3_ENDPOINT_URL: http://minio:9000
     volumes:
       - ./workers:/app
+      - worker_venv:/app/.venv
       - worker_tmp:/tmp/partifi
     depends_on:
       mysql:
@@ -91,5 +94,7 @@ services:
 volumes:
   mysql_data:
   minio_data:
+  api_venv:
+  worker_venv:
   api_tmp:
   worker_tmp:

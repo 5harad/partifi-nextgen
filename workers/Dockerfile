@@ -13,10 +13,10 @@ ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 
 COPY pyproject.toml uv.lock ./
+COPY . .
+
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project
-
-COPY . .
 
 ENV PATH="/app/.venv/bin:$PATH"
 

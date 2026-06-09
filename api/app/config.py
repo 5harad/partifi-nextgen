@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
 
     s3_endpoint_url: str | None = None
+    s3_public_endpoint_url: str | None = None
     s3_bucket: str = "cdn.partifi.org"
     s3_access_key: str = ""
     s3_secret_key: str = ""
