@@ -32,6 +32,7 @@ partifi-nextgen/
 
 - Docker Desktop
 - Node.js 20+
+- [uv](https://docs.astral.sh/uv/) (optional, for running Python services outside Docker)
 
 ### 1. Start backend services
 
@@ -64,6 +65,20 @@ Open http://localhost:5173 — homepage, about, and how-to should match the lega
 ```bash
 docker compose up -d --scale worker=3
 ```
+
+### Python services (uv, outside Docker)
+
+Each Python service has its own `pyproject.toml` and `uv.lock`:
+
+```bash
+# API
+cd api && uv sync && uv run uvicorn app.main:app --reload --port 8000
+
+# Worker
+cd workers && uv sync && uv run python worker.py
+```
+
+To add a dependency: `uv add <package>` in `api/` or `workers/`, then commit the updated `pyproject.toml` and `uv.lock`.
 
 ## API (v1 skeleton)
 
