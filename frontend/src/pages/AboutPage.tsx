@@ -31,12 +31,12 @@ export function AboutPage() {
             </p>
 
             <p>
-              To help bring Partifi to the most musicians, we&apos;ve teamed up with the online music library{' '}
+              We&apos;re working with the online music library{' '}
               <a href="http://imslp.org/wiki" className="red">
                 IMSLP
-              </a>
-              . You can partifi a score directly from IMSLP via the &#8220;extract parts&#8221; links on each
-              IMSLP page, or you can enter a score&apos;s IMSLP number on the Partifi home page.
+              </a>{' '}
+              so you can partifi scores directly from IMSLP. That integration is coming soon; for now,
+              upload a PDF from the home page.
             </p>
 
             <p>

@@ -49,8 +49,6 @@ def create_pdf_partset(
     copyright: str,
     file_hash: str,
     pdf_bytes: bytes,
-    bcookie: str | None = None,
-    ip_address: str | None = None,
 ) -> tuple[Partset, str]:
     if not pdf_bytes.startswith(PDF_MAGIC):
         raise ValueError("File is not a valid PDF")
@@ -67,8 +65,6 @@ def create_pdf_partset(
         composer=composer,
         publisher=publisher or None,
         copyright=copyright,
-        bcookie=bcookie,
-        ip_address=ip_address,
         create_ts=now,
         num_downloads=0,
         import_progress=0.0,

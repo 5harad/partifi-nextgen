@@ -34,12 +34,6 @@ CREATE TABLE IF NOT EXISTS partsets (
     publisher VARCHAR(255),
     copyright ENUM('before 1923', 'after 1923', 'unknown'),
     user_id VARCHAR(255),
-    bcookie VARCHAR(255),
-    ip_address VARCHAR(255),
-    zip VARCHAR(255),
-    city VARCHAR(255),
-    region VARCHAR(255),
-    country VARCHAR(255),
     num_downloads INT NOT NULL DEFAULT 0,
     status ENUM('import', 'convert', 'analysis', 'cut', 'paste'),
     error ENUM('import', 'convert', 'analysis', 'cut', 'paste'),
@@ -105,6 +99,7 @@ CREATE TABLE IF NOT EXISTS segments (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS breaks (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     partset_id VARCHAR(255) NOT NULL,
     tag VARCHAR(255),
     break INT,
@@ -127,11 +122,6 @@ CREATE TABLE IF NOT EXISTS downloads (
     user_id VARCHAR(255),
     bcookie VARCHAR(255),
     ts DATETIME,
-    ip_address VARCHAR(255),
-    zip VARCHAR(255),
-    city VARCHAR(255),
-    region VARCHAR(255),
-    country VARCHAR(255),
     INDEX idx_downloads_score_id (score_id),
     INDEX idx_downloads_partset_tag (partset_id, tag)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -150,7 +140,6 @@ CREATE TABLE IF NOT EXISTS favorites (
     partset_id VARCHAR(255) NOT NULL,
     user_id VARCHAR(255) NOT NULL,
     admin BOOLEAN,
-    ip_address VARCHAR(255),
     ts DATETIME,
     PRIMARY KEY (partset_id, user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -158,11 +147,6 @@ CREATE TABLE IF NOT EXISTS favorites (
 CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(255) NOT NULL PRIMARY KEY,
     name VARCHAR(255),
-    ip_address VARCHAR(255),
-    zip VARCHAR(255),
-    city VARCHAR(255),
-    region VARCHAR(255),
-    country VARCHAR(255),
     ts DATETIME
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

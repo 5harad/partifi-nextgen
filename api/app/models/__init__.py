@@ -1,33 +1,10 @@
-from app.models.tables import (
-    Break,
-    Composer,
-    Download,
-    Favorite,
-    Friend,
-    ImslpInfo,
-    OriginalPage,
-    OriginalSegment,
-    Page,
-    Part,
-    Partset,
-    Score,
-    Segment,
-    User,
-)
+from app.models.tables import Break, Page, Part, Partset, Score, Segment
 
 __all__ = [
     "Score",
     "Partset",
-    "OriginalPage",
-    "OriginalSegment",
     "Page",
     "Segment",
     "Break",
     "Part",
-    "Download",
-    "ImslpInfo",
-    "Favorite",
-    "User",
-    "Friend",
-    "Composer",
 ]

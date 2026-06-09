@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom'
 import { AboutPage } from './pages/AboutPage'
+import { TermsPage } from './pages/TermsPage'
 import { HomePage } from './pages/HomePage'
 import { HowToPage } from './pages/HowToPage'
 import { ImportProgressPage } from './pages/ImportProgressPage'
@@ -13,6 +14,7 @@ function App() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/about" element={<AboutPage />} />
+      <Route path="/terms" element={<TermsPage />} />
       <Route path="/howto" element={<HowToPage />} />
       <Route path="/:privateId/import" element={<ImportProgressPage />} />
       <Route path="/:privateId/segment" element={<SegmentPage />} />

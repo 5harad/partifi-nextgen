@@ -43,12 +43,6 @@ class Partset(Base):
         Enum("before 1923", "after 1923", "unknown", name="copyright_enum")
     )
     user_id: Mapped[str | None] = mapped_column(String(255))
-    bcookie: Mapped[str | None] = mapped_column(String(255))
-    ip_address: Mapped[str | None] = mapped_column(String(255))
-    zip: Mapped[str | None] = mapped_column(String(255))
-    city: Mapped[str | None] = mapped_column(String(255))
-    region: Mapped[str | None] = mapped_column(String(255))
-    country: Mapped[str | None] = mapped_column(String(255))
     num_downloads: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str | None] = mapped_column(
         Enum("import", "convert", "analysis", "cut", "paste", name="status_enum")
@@ -120,8 +114,9 @@ class Segment(Base):
 class Break(Base):
     __tablename__ = "breaks"
 
-    partset_id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    tag: Mapped[str] = mapped_column(String(255), primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    partset_id: Mapped[str] = mapped_column(String(255), index=True)
+    tag: Mapped[str | None] = mapped_column(String(255))
     break_: Mapped[int | None] = mapped_column("break", Integer)
 
 
@@ -144,11 +139,6 @@ class Download(Base):
     user_id: Mapped[str | None] = mapped_column(String(255))
     bcookie: Mapped[str | None] = mapped_column(String(255))
     ts: Mapped[datetime] = mapped_column(DateTime, primary_key=True)
-    ip_address: Mapped[str | None] = mapped_column(String(255))
-    zip: Mapped[str | None] = mapped_column(String(255))
-    city: Mapped[str | None] = mapped_column(String(255))
-    region: Mapped[str | None] = mapped_column(String(255))
-    country: Mapped[str | None] = mapped_column(String(255))
 
 
 class ImslpInfo(Base):
@@ -169,7 +159,6 @@ class Favorite(Base):
     partset_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     admin: Mapped[bool | None] = mapped_column(Boolean)
-    ip_address: Mapped[str | None] = mapped_column(String(255))
     ts: Mapped[datetime | None] = mapped_column(DateTime)
 
 
@@ -178,11 +167,6 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
     name: Mapped[str | None] = mapped_column(String(255))
-    ip_address: Mapped[str | None] = mapped_column(String(255))
-    zip: Mapped[str | None] = mapped_column(String(255))
-    city: Mapped[str | None] = mapped_column(String(255))
-    region: Mapped[str | None] = mapped_column(String(255))
-    country: Mapped[str | None] = mapped_column(String(255))
     ts: Mapped[datetime | None] = mapped_column(DateTime)
 
 

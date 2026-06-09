@@ -11,6 +11,7 @@ Legacy reference: `../partifi` (PHP + jQuery + Python 2).
 | Frontend | React, TypeScript, Vite |
 | API | FastAPI (Python 3.12) |
 | Workers | Python 3.12 + Redis queue |
+| Pipeline | Shared cut/paste Python package |
 | Database | MySQL 8 |
 | Files | S3 (`cdn.partifi.org`; MinIO locally) |
 | Deploy | Docker Compose on EC2 |
@@ -22,6 +23,7 @@ partifi-nextgen/
 ├── frontend/          # React app (ported partifi.css + images)
 ├── api/               # FastAPI
 ├── workers/           # Background job workers
+├── pipeline/          # Shared cut/paste logic (api + workers)
 ├── docker/            # MySQL init SQL
 └── docker-compose.yml
 ```
@@ -58,7 +60,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 — homepage, about, and how-to should match the legacy look.
+Open http://localhost:5173 — upload a PDF to run the full workflow (import → segment → preview → generate → download).
 
 ### 3. Scale workers (optional)
 
@@ -80,20 +82,40 @@ cd workers && uv sync && uv run python worker.py
 
 To add a dependency: `uv add <package>` in `api/` or `workers/`, then commit the updated `pyproject.toml` and `uv.lock`.
 
-## API (v1 skeleton)
+### Tests
+
+```bash
+cd api && uv sync --group dev && uv run pytest
+```
+
+## API (v1)
+
+Health:
 
 - `GET /health` — liveness
 - `GET /health/ready` — MySQL, Redis, S3 checks
-- `GET /api/v1/csrf-token` — CSRF token for mutations
-- `GET /api/v1/partsets/{private_id}/import-status` — import progress
+
+Partsets (CSRF required on mutations):
+
+- `GET /api/v1/csrf-token`
+- `POST /api/v1/partsets` — upload PDF, create partset
+- `GET /api/v1/partsets/{private_id}/import-status`
+- `GET /api/v1/partsets/{private_id}/segment-data`
+- `PUT /api/v1/partsets/{private_id}/pages/{page}/segments`
+- `GET /api/v1/partsets/{private_id}/preview-data`
+- `PUT /api/v1/partsets/{private_id}/layout`
+- `POST /api/v1/partsets/{private_id}/parts/combine`
+- `POST /api/v1/partsets/{private_id}/generate`
+- `GET /api/v1/partsets/{private_id}/partgen-status`
+- `GET /api/v1/partsets/{private_id}/parts`
 
 ## Phase roadmap
 
-1. **Foundation** (current) — monorepo, CSS parity, API skeleton, Docker
-2. **Import + pipeline** — upload, IMSLP, Python 3 workers
-3. **Segment editor** — highest UI risk
-4. **Preview + generation** — cut/paste pipeline
-5. **Supporting pages** — search, library, donate
+1. **Foundation** — done (monorepo, CSS parity, Docker, uv)
+2. **Import + pipeline** — PDF upload + workers done; IMSLP import pending
+3. **Segment editor** — done
+4. **Preview + generation** — done
+5. **Supporting pages** — search, library, public download URLs (next)
 6. **Migration + cutover** — DB import, DNS, decommission Linode
 
 ## Production infra
