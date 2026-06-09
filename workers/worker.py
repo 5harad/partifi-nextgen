@@ -6,17 +6,23 @@ import json
 import logging
 import signal
 import sys
-import time
 
 import redis
 
 from config import get_settings
+from jobs.import_pipeline import run_import_pipeline
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("partifi.worker")
 
 QUEUE_KEY = "partifi:jobs"
 RUNNING = True
+
+JOB_HANDLERS = {
+    "import_pipeline": lambda payload: run_import_pipeline(
+        payload["partset_id"], payload["score_id"]
+    ),
+}
 
 
 def _handle_signal(_signum, _frame) -> None:
@@ -31,9 +37,15 @@ signal.signal(signal.SIGTERM, _handle_signal)
 
 def process_job(job: dict) -> None:
     job_type = job.get("type", "unknown")
+    payload = job.get("payload", {})
     logger.info("Processing job %s type=%s", job.get("id"), job_type)
-    # Phase 2: wire import, convert, analyze, cut, paste handlers
-    time.sleep(0.1)
+
+    handler = JOB_HANDLERS.get(job_type)
+    if not handler:
+        logger.error("Unknown job type: %s", job_type)
+        return
+
+    handler(payload)
 
 
 def main() -> None:

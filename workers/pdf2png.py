@@ -1,0 +1,109 @@
+"""Python 3 port of legacy pdf2png.py."""
+
+from __future__ import annotations
+
+import argparse
+import glob
+import multiprocessing
+import os
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+from PIL import Image
+
+import db_conn
+
+
+def pdf2png(pdffile: str, outdir: str, partset_id: str | None, num_tasks: int) -> None:
+    outfile = os.path.basename(pdffile).rsplit(".", 1)[0] + ".png"
+    highres_file = os.path.join(outdir, "highres", outfile)
+    gs_cmd = [
+        "gs",
+        "-q",
+        "-dNOPAUSE",
+        "-dBATCH",
+        "-sDEVICE=pnggray",
+        "-dDOINTERPOLATE",
+        "-dUseCropBox",
+        "-dPDFFitPage",
+        "-g2550x3300",
+        f"-sOutputFile={highres_file}",
+        pdffile,
+    ]
+    subprocess.check_call(gs_cmd)
+
+    im = Image.open(highres_file)
+    lowres_im = im.resize((600, 776), Image.LANCZOS)
+    lowres_file = os.path.join(outdir, "lowres", outfile)
+    lowres_im.save(lowres_file)
+
+    thumb_im = im.resize((100, 129), Image.LANCZOS)
+    thumb_file = os.path.join(outdir, "thumbs", outfile)
+    thumb_im.save(thumb_file)
+
+    if partset_id:
+        progress = 100.0 / num_tasks
+        db_conn.execute(
+            "UPDATE partsets SET convert_progress = convert_progress + :progress WHERE id = :id",
+            {"progress": progress, "id": partset_id},
+        )
+
+
+def pdf2png_star(args):
+    return pdf2png(*args)
+
+
+def par_pdf2png(pdffile: str, outdir: str, partset_id: str | None) -> None:
+    pdffile = os.path.abspath(pdffile)
+    outdir = os.path.abspath(outdir)
+    tempdir = tempfile.mkdtemp(dir="/tmp/partifi")
+    origpath = os.getcwd()
+
+    os.chdir(tempdir)
+    subprocess.check_call(
+        ["gs", "-o", os.path.join(tempdir, "score.pdf"), "-sDEVICE=pdfwrite", "-dPDFSETTINGS=/prepress", pdffile]
+    )
+    subprocess.check_call(["pdftk", os.path.join(tempdir, "score.pdf"), "burst", "output", os.path.join(tempdir, "page-%d.pdf")])
+    os.chdir(origpath)
+
+    for sub in ("highres", "lowres", "thumbs"):
+        os.makedirs(os.path.join(outdir, sub), exist_ok=True)
+
+    pdfpages = glob.glob(os.path.join(tempdir, "page*.pdf"))
+    num_tasks = max(len(pdfpages), 1)
+    params = [(pdfpage, outdir, partset_id, num_tasks) for pdfpage in pdfpages]
+
+    workers = max(multiprocessing.cpu_count() // 2, 1)
+    with multiprocessing.Pool(workers) as pool:
+        pool.map(pdf2png_star, params)
+
+    shutil.rmtree(tempdir)
+
+
+def convert_score(partset_id: str, pdf_path: Path, workdir: Path) -> None:
+    db_conn.execute(
+        "UPDATE partsets SET status = 'convert', convert_start = NOW(), convert_progress = 0 WHERE id = :id",
+        {"id": partset_id},
+    )
+    par_pdf2png(str(pdf_path), str(workdir), partset_id)
+    db_conn.execute(
+        "UPDATE partsets SET convert_complete = NOW(), convert_progress = 100 WHERE id = :id",
+        {"id": partset_id},
+    )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Parallel conversion of a PDF to PNG")
+    parser.add_argument("inputpdf")
+    parser.add_argument("outdir")
+    parser.add_argument("--update-db", metavar="partset_id", dest="partset_id", default=None)
+    args = parser.parse_args()
+    convert_score(args.partset_id, Path(args.inputpdf), Path(args.outdir)) if args.partset_id else par_pdf2png(
+        args.inputpdf, args.outdir, None
+    )
+
+
+if __name__ == "__main__":
+    main()

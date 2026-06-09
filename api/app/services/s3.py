@@ -32,6 +32,17 @@ def ensure_bucket() -> None:
         client.create_bucket(Bucket=settings.s3_bucket)
 
 
+def upload_bytes(key: str, data: bytes, content_type: str = "application/octet-stream") -> None:
+    settings = get_settings()
+    client = get_s3_client()
+    client.put_object(
+        Bucket=settings.s3_bucket,
+        Key=key,
+        Body=data,
+        ContentType=content_type,
+    )
+
+
 def presigned_get_url(key: str, expires_in: int = 3600) -> str:
     settings = get_settings()
     client = get_s3_client()

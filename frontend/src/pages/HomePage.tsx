@@ -1,8 +1,73 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
+import { createPartsetFromPdf, getCsrfToken, sha1File } from '../lib/api'
 
 export function HomePage() {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [importMode, setImportMode] = useState<'pdf' | 'imslp'>('pdf')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [filename, setFilename] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState(searchParams.get('err') || '')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const openFilePicker = () => fileInputRef.current?.click()
+
+  const handleFileChange = async (file: File | undefined) => {
+    setError('')
+    if (!file) {
+      setSelectedFile(null)
+      setFilename('')
+      return
+    }
+
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setError('Please select a PDF file.')
+      return
+    }
+    if (file.size > 60_000_000) {
+      setError('Please select a file no larger than 60 MB.')
+      return
+    }
+
+    setSelectedFile(file)
+    setFilename(file.name)
+  }
+
+  const handlePdfSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+
+    const title = (document.getElementById('pdf_title') as HTMLInputElement).value.trim()
+    const composer = (document.getElementById('pdf_composer') as HTMLInputElement).value.trim()
+    const publisher = (document.getElementById('pdf_publisher') as HTMLInputElement).value.trim()
+    const copyright = (document.getElementById('pdf_copyright') as HTMLSelectElement).value
+
+    if (!selectedFile || !filename || !title || !composer || !copyright) {
+      setError('Please complete the form before continuing.')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const [csrfToken, fileHash] = await Promise.all([getCsrfToken(), sha1File(selectedFile)])
+      const result = await createPartsetFromPdf({
+        file: selectedFile,
+        title,
+        composer,
+        publisher,
+        copyright,
+        fileHash,
+        csrfToken,
+      })
+      navigate(`/${result.id}/import`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed')
+      setSubmitting(false)
+    }
+  }
 
   return (
     <Layout>
@@ -16,6 +81,10 @@ export function HomePage() {
           alt=""
         />
         <img src="/images/musicstand.gif" height={640} width={774} alt="" />
+
+        {error && (
+          <div style={{ color: '#ff9999', padding: '10px 40px' }}>{error}</div>
+        )}
 
         <div id="step">STEP 1. &nbsp; Import sheet music</div>
 
@@ -42,12 +111,22 @@ export function HomePage() {
         </div>
 
         {importMode === 'pdf' ? (
-          <form id="pdf-form" onSubmit={(e) => e.preventDefault()}>
+          <form id="pdf-form" onSubmit={handlePdfSubmit}>
             <div id="score-field" className="score-input-label">
               score<span className="asterisk">*</span>
-              <input type="text" name="filename" id="filename" readOnly />
-              <div id="file-select">Select file</div>
-              <input type="file" id="file-elem" name="score" style={{ visibility: 'hidden' }} />
+              <input type="text" name="filename" id="filename" readOnly value={filename} />
+              <div id="file-select" onClick={openFilePicker} role="button" tabIndex={0}>
+                Select file
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                id="file-elem"
+                name="score"
+                accept="application/pdf,.pdf"
+                style={{ visibility: 'hidden' }}
+                onChange={(e) => handleFileChange(e.target.files?.[0])}
+              />
             </div>
             <div className="score-input-label title-field">
               title<span className="asterisk">*</span>
@@ -73,43 +152,20 @@ export function HomePage() {
                 <option value="unknown">Unknown</option>
               </select>
             </div>
-            <div id="pdf-submit" className="banner-button import-next-button">
-              Import score &raquo;
+            <div
+              id="pdf-submit"
+              className="banner-button import-next-button"
+              onClick={submitting ? undefined : handlePdfSubmit}
+              role="button"
+              tabIndex={0}
+              style={{ opacity: submitting ? 0.6 : 1 }}
+            >
+              {submitting ? 'Uploading...' : 'Import score »'}
             </div>
           </form>
         ) : (
           <form id="imslp-form" onSubmit={(e) => e.preventDefault()}>
-            <div id="imslp-field" className="score-input-label">
-              imslp id<span className="asterisk">*</span>
-              <input type="text" id="imslp_id" />
-            </div>
-            <div className="score-input-label title-field">
-              title<span className="asterisk">*</span>
-              <input type="text" className="score-input" id="imslp_title" />
-            </div>
-            <div className="score-input-label composer-field">
-              composer<span className="asterisk">*</span>
-              <input type="text" className="score-input" id="imslp_composer" />
-            </div>
-            <div className="score-input-label publisher-field">
-              edition &nbsp;
-              <input type="text" className="score-input" id="imslp_publisher" />
-            </div>
-            <div className="copyright-tip" />
-            <div className="copyright">
-              copyright<span className="asterisk">*</span>
-            </div>
-            <div className="copyright-options">
-              <select id="imslp_copyright" defaultValue="">
-                <option value="" />
-                <option value="before 1923">Published before 1923</option>
-                <option value="after 1923">Published in or after 1923</option>
-                <option value="unknown">Unknown</option>
-              </select>
-            </div>
-            <div id="imslp-submit" className="banner-button import-next-button">
-              Import score &raquo;
-            </div>
+            <p style={{ padding: '20px 40px', color: '#ccc' }}>IMSLP import coming in a later phase.</p>
           </form>
         )}
       </div>
