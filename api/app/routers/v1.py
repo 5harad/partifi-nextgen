@@ -12,6 +12,25 @@ from app.schemas.segment import (
     SegmentDataResponse,
 )
 from app.services.partsets import create_pdf_partset, import_progress_payload
+from app.schemas.preview import (
+    CombinePartsRequest,
+    CombinePartsResponse,
+    GeneratePartsResponse,
+    PartgenProgressResponse,
+    PartsDataResponse,
+    PreviewDataResponse,
+    SaveLayoutRequest,
+    SaveLayoutResponse,
+)
+from app.services.preview import (
+    combine_parts,
+    get_parts_data,
+    get_preview_data,
+    partgen_progress_payload,
+    save_layout,
+    start_part_generation,
+)
+
 from app.services.segments import (
     get_partset_by_private_id,
     get_segments_data,
@@ -135,3 +154,100 @@ def save_segments(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return SavePageSegmentsResponse(status="success")
+
+
+@router.get(
+    "/partsets/{private_id}/preview-data",
+    response_model=PreviewDataResponse,
+)
+def preview_data(private_id: str, db: Session = Depends(get_db)) -> PreviewDataResponse:
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    try:
+        payload = get_preview_data(db, partset)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return PreviewDataResponse(**payload)
+
+
+@router.put(
+    "/partsets/{private_id}/layout",
+    response_model=SaveLayoutResponse,
+)
+def save_partset_layout(
+    private_id: str,
+    body: SaveLayoutRequest,
+    x_csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+    db: Session = Depends(get_db),
+) -> SaveLayoutResponse:
+    verify_csrf(x_csrf_token)
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    save_layout(db, partset, body.breaks, body.spacings)
+    return SaveLayoutResponse()
+
+
+@router.post(
+    "/partsets/{private_id}/parts/combine",
+    response_model=CombinePartsResponse,
+)
+def combine_partset_parts(
+    private_id: str,
+    body: CombinePartsRequest,
+    x_csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+    db: Session = Depends(get_db),
+) -> CombinePartsResponse:
+    verify_csrf(x_csrf_token)
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    try:
+        combine_parts(db, partset, body.action, body.tag)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return CombinePartsResponse()
+
+
+@router.post(
+    "/partsets/{private_id}/generate",
+    response_model=GeneratePartsResponse,
+)
+def generate_parts(
+    private_id: str,
+    x_csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+    db: Session = Depends(get_db),
+) -> GeneratePartsResponse:
+    verify_csrf(x_csrf_token)
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    job_id = start_part_generation(db, partset)
+    return GeneratePartsResponse(status="success", job_id=job_id)
+
+
+@router.get(
+    "/partsets/{private_id}/partgen-status",
+    response_model=PartgenProgressResponse,
+)
+def partgen_status(private_id: str, db: Session = Depends(get_db)) -> PartgenProgressResponse:
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    return PartgenProgressResponse(**partgen_progress_payload(partset))
+
+
+@router.get(
+    "/partsets/{private_id}/parts",
+    response_model=PartsDataResponse,
+)
+def parts_data(private_id: str, db: Session = Depends(get_db)) -> PartsDataResponse:
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    try:
+        payload = get_parts_data(db, partset)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return PartsDataResponse(**payload)

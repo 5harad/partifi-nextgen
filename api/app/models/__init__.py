@@ -1,7 +1,6 @@
 from app.models.tables import (
     Break,
     Composer,
-    Donation,
     Download,
     Favorite,
     Friend,
@@ -31,5 +30,4 @@ __all__ = [
     "User",
     "Friend",
     "Composer",
-    "Donation",
 ]

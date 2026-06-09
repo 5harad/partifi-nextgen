@@ -177,17 +177,3 @@ CREATE TABLE IF NOT EXISTS composers (
     popularity INT NOT NULL,
     FULLTEXT idx_composers_composer (composer)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS donations (
-    id VARCHAR(255) NOT NULL PRIMARY KEY,
-    ts DATETIME,
-    user_id VARCHAR(255),
-    name VARCHAR(255),
-    email VARCHAR(255),
-    amount FLOAT,
-    anonymous BOOLEAN,
-    public_name VARCHAR(255),
-    status ENUM('success', 'failure'),
-    error_msg VARCHAR(255),
-    INDEX idx_donations_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

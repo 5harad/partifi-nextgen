@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://localhost:6379/0"
     worker_concurrency: int = 1
+    partgen_pool_size: int = 0  # 0 = auto (half of CPU cores)
 
     s3_endpoint_url: str | None = None
     s3_bucket: str = "cdn.partifi.org"

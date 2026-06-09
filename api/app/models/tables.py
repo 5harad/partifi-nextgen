@@ -198,20 +198,3 @@ class Composer(Base):
 
     composer: Mapped[str] = mapped_column(String(255), primary_key=True)
     popularity: Mapped[int] = mapped_column(Integer)
-
-
-class Donation(Base):
-    __tablename__ = "donations"
-
-    id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    ts: Mapped[datetime | None] = mapped_column(DateTime)
-    user_id: Mapped[str | None] = mapped_column(String(255))
-    name: Mapped[str | None] = mapped_column(String(255))
-    email: Mapped[str | None] = mapped_column(String(255))
-    amount: Mapped[float | None] = mapped_column(Float)
-    anonymous: Mapped[bool | None] = mapped_column(Boolean)
-    public_name: Mapped[str | None] = mapped_column(String(255))
-    status: Mapped[str | None] = mapped_column(
-        Enum("success", "failure", name="donation_status_enum")
-    )
-    error_msg: Mapped[str | None] = mapped_column(String(255))

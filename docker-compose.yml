@@ -44,7 +44,8 @@ services:
 
   api:
     build:
-      context: ./api
+      context: .
+      dockerfile: api/Dockerfile
     restart: unless-stopped
     env_file:
       - .env
@@ -57,6 +58,7 @@ services:
       - "8001:8000"
     volumes:
       - ./api:/app
+      - ./pipeline:/app/pipeline
       - api_venv:/app/.venv
       - api_tmp:/tmp/partifi
     depends_on:
@@ -69,7 +71,8 @@ services:
 
   worker:
     build:
-      context: ./workers
+      context: .
+      dockerfile: workers/Dockerfile
     restart: unless-stopped
     env_file:
       - .env
@@ -79,6 +82,7 @@ services:
       S3_ENDPOINT_URL: http://minio:9000
     volumes:
       - ./workers:/app
+      - ./pipeline:/app/pipeline
       - worker_venv:/app/.venv
       - worker_tmp:/tmp/partifi
     depends_on:

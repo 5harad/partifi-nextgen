@@ -61,11 +61,18 @@ def get_presign_s3_client():
     return boto3.client(**kwargs)
 
 
-def presigned_get_url(key: str, expires_in: int = 3600) -> str:
+def presigned_get_url(
+    key: str,
+    expires_in: int = 3600,
+    download_name: str | None = None,
+) -> str:
     settings = get_settings()
     client = get_presign_s3_client()
+    params: dict = {"Bucket": settings.s3_bucket, "Key": key}
+    if download_name:
+        params["ResponseContentDisposition"] = f'attachment; filename="{download_name}"'
     return client.generate_presigned_url(
         "get_object",
-        Params={"Bucket": settings.s3_bucket, "Key": key},
+        Params=params,
         ExpiresIn=expires_in,
     )

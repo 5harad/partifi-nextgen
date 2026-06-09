@@ -30,9 +30,6 @@ export function Footer() {
             </Link>{' '}
             &nbsp; | &nbsp; <a href={`mailto:${CONTACT_EMAIL}`} className="contact">Contact</a>
           </div>
-          <div id="blurb-donate" onClick={() => { window.location.href = '/donate' }} role="link" tabIndex={0}>
-            Donate &raquo;
-          </div>
         </div>
       </div>
     </div>

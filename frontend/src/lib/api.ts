@@ -1,4 +1,9 @@
 import type { PageSegmentData, SegmentDataResponse } from '../types/segment'
+import type {
+  PartgenProgressResponse,
+  PartsDataResponse,
+  PreviewDataResponse,
+} from '../types/preview'
 
 export type PartsetCreateResponse = {
   status: string
@@ -85,6 +90,83 @@ export async function savePageSegments(
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail || 'Failed to save segments')
   }
+}
+
+export async function getPreviewData(privateId: string): Promise<PreviewDataResponse> {
+  const res = await fetch(`/api/v1/partsets/${privateId}/preview-data`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to load preview data')
+  }
+  return res.json()
+}
+
+export async function saveLayout(
+  privateId: string,
+  body: { breaks: Record<string, number[]>; spacings: Record<string, number> },
+  csrfToken: string,
+): Promise<void> {
+  const res = await fetch(`/api/v1/partsets/${privateId}/layout`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to save layout')
+  }
+}
+
+export async function combineParts(
+  privateId: string,
+  action: 'add' | 'remove',
+  tag: string,
+  csrfToken: string,
+): Promise<void> {
+  const res = await fetch(`/api/v1/partsets/${privateId}/parts/combine`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify({ action, tag }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to update combined parts')
+  }
+}
+
+export async function startPartGeneration(
+  privateId: string,
+  csrfToken: string,
+): Promise<void> {
+  const res = await fetch(`/api/v1/partsets/${privateId}/generate`, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': csrfToken },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to start part generation')
+  }
+}
+
+export async function getPartgenStatus(privateId: string): Promise<PartgenProgressResponse> {
+  const res = await fetch(`/api/v1/partsets/${privateId}/partgen-status`)
+  if (!res.ok) throw new Error('Failed to fetch part generation status')
+  return res.json()
+}
+
+export async function getPartsData(privateId: string): Promise<PartsDataResponse> {
+  const res = await fetch(`/api/v1/partsets/${privateId}/parts`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to load parts')
+  }
+  return res.json()
 }
 
 export async function sha1File(file: File): Promise<string> {

@@ -14,3 +14,8 @@ def execute(query: str, params: dict | None = None) -> None:
 def fetchone(query: str, params: dict | None = None):
     with engine.connect() as conn:
         return conn.execute(text(query), params or {}).fetchone()
+
+
+def fetchall(query: str, params: dict | None = None):
+    with engine.connect() as conn:
+        return conn.execute(text(query), params or {}).fetchall()

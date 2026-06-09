@@ -10,6 +10,7 @@ import sys
 import redis
 
 from config import get_settings
+from jobs.gen_parts import run_gen_parts
 from jobs.import_pipeline import run_import_pipeline
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -22,6 +23,7 @@ JOB_HANDLERS = {
     "import_pipeline": lambda payload: run_import_pipeline(
         payload["partset_id"], payload["score_id"]
     ),
+    "gen_parts": lambda payload: run_gen_parts(payload["partset_id"]),
 }
 
 
