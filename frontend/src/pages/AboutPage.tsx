@@ -35,8 +35,8 @@ export function AboutPage() {
               <a href="http://imslp.org/wiki" className="red">
                 IMSLP
               </a>{' '}
-              so you can partifi scores directly from IMSLP. That integration is coming soon; for now,
-              upload a PDF from the home page.
+              so you can partifi scores directly from IMSLP via the home page or the
+              &#8220;extract parts&#8221; links on IMSLP score pages.
             </p>
 
             <p>

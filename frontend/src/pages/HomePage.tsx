@@ -1,7 +1,9 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
-import { createPartsetFromPdf, getCsrfToken, sha1File } from '../lib/api'
+import { createPartsetFromImslp, createPartsetFromPdf, getCsrfToken, getImslpInfo, sha1File } from '../lib/api'
+import { guessCopyrightFromPublisher, normalizeImslpIdInput } from '../lib/imslpUtils'
+import type { CopyrightValue } from '../lib/imslpUtils'
 
 export function HomePage() {
   const navigate = useNavigate()
@@ -12,6 +14,17 @@ export function HomePage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(searchParams.get('err') || '')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const [imslpId, setImslpId] = useState('')
+  const [imslpTitle, setImslpTitle] = useState('')
+  const [imslpComposer, setImslpComposer] = useState('')
+  const [imslpPublisher, setImslpPublisher] = useState('')
+  const [imslpCopyright, setImslpCopyright] = useState<CopyrightValue | ''>('')
+  const [imslpLookupPending, setImslpLookupPending] = useState(false)
+  const lookupGenRef = useRef(0)
+  const abortRef = useRef<AbortController | null>(null)
+
+  const MIN_IMSLP_ID_LENGTH = 4
 
   const openFilePicker = () => fileInputRef.current?.click()
 
@@ -35,6 +48,83 @@ export function HomePage() {
     setSelectedFile(file)
     setFilename(file.name)
   }
+
+  const lookupImslp = useCallback(async (rawId: string) => {
+    const normalized = normalizeImslpIdInput(rawId)
+
+    abortRef.current?.abort()
+    abortRef.current = null
+
+    if (!normalized || !/^\d+$/.test(normalized)) {
+      setImslpLookupPending(false)
+      setImslpTitle('')
+      setImslpComposer('')
+      setImslpPublisher('')
+      setImslpCopyright('')
+      return
+    }
+
+    if (normalized.length < MIN_IMSLP_ID_LENGTH) {
+      setImslpLookupPending(false)
+      return
+    }
+
+    const controller = new AbortController()
+    abortRef.current = controller
+    const gen = ++lookupGenRef.current
+    setImslpLookupPending(true)
+    setImslpTitle('')
+    setImslpComposer('')
+    setImslpPublisher('')
+    setImslpCopyright('')
+
+    try {
+      const info = await getImslpInfo(normalized, controller.signal)
+      if (gen !== lookupGenRef.current) return
+      if (!info) {
+        setError('IMSLP score not found or not a PDF.')
+        return
+      }
+      setError('')
+      setImslpTitle(info.title)
+      setImslpComposer(info.composer)
+      setImslpPublisher(info.publisher)
+      const guessed = guessCopyrightFromPublisher(info.publisher)
+      if (guessed) {
+        setImslpCopyright(guessed)
+      } else if (info.title) {
+        setImslpCopyright('unknown')
+      }
+    } catch (err) {
+      if (gen !== lookupGenRef.current || controller.signal.aborted) return
+      setError(err instanceof Error ? err.message : 'IMSLP lookup failed')
+    } finally {
+      if (gen === lookupGenRef.current) {
+        setImslpLookupPending(false)
+        abortRef.current = null
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    const param = searchParams.get('imslp')
+    if (param && /^\d+$/.test(param)) {
+      setImportMode('imslp')
+      setImslpId(param)
+    }
+  }, [searchParams])
+
+  useEffect(() => {
+    if (importMode !== 'imslp') return
+    const timer = window.setTimeout(() => {
+      void lookupImslp(imslpId)
+    }, 600)
+    return () => window.clearTimeout(timer)
+  }, [imslpId, importMode, lookupImslp])
+
+  useEffect(() => {
+    return () => abortRef.current?.abort()
+  }, [])
 
   const handlePdfSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -65,6 +155,36 @@ export function HomePage() {
       navigate(`/${result.id}/import`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
+      setSubmitting(false)
+    }
+  }
+
+  const handleImslpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+
+    const normalized = normalizeImslpIdInput(imslpId)
+    if (!normalized || !imslpTitle || !imslpComposer || !imslpCopyright) {
+      setError('Please complete the form before continuing.')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const csrfToken = await getCsrfToken()
+      const result = await createPartsetFromImslp(
+        {
+          imslp_id: normalized,
+          title: imslpTitle,
+          composer: imslpComposer,
+          publisher: imslpPublisher,
+          copyright: imslpCopyright,
+        },
+        csrfToken,
+      )
+      navigate(`/${result.id}/import`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Import failed')
       setSubmitting(false)
     }
   }
@@ -164,8 +284,72 @@ export function HomePage() {
             </div>
           </form>
         ) : (
-          <form id="imslp-form" onSubmit={(e) => e.preventDefault()}>
-            <p style={{ padding: '20px 40px', color: '#ccc' }}>IMSLP import coming in a later phase.</p>
+          <form id="imslp-form" onSubmit={handleImslpSubmit}>
+            <div id="imslp-field" className="score-input-label">
+              imslp id<span className="asterisk">*</span>
+              <input
+                type="text"
+                id="imslp_id"
+                value={imslpId}
+                onChange={(e) => setImslpId(e.target.value)}
+              />
+            </div>
+            <div className="score-input-label title-field">
+              title<span className="asterisk">*</span>
+              <input
+                type="text"
+                className="score-input"
+                id="imslp_title"
+                value={imslpTitle}
+                onChange={(e) => setImslpTitle(e.target.value)}
+              />
+            </div>
+            <div className="score-input-label composer-field">
+              composer<span className="asterisk">*</span>
+              <input
+                type="text"
+                className="score-input"
+                id="imslp_composer"
+                value={imslpComposer}
+                onChange={(e) => setImslpComposer(e.target.value)}
+              />
+            </div>
+            <div className="score-input-label publisher-field">
+              edition &nbsp;
+              <input
+                type="text"
+                className="score-input"
+                id="imslp_publisher"
+                value={imslpPublisher}
+                onChange={(e) => setImslpPublisher(e.target.value)}
+              />
+            </div>
+            <div className="copyright-tip" />
+            <div className="copyright">
+              copyright<span className="asterisk">*</span>
+            </div>
+            <div className="copyright-options">
+              <select
+                id="imslp_copyright"
+                value={imslpCopyright}
+                onChange={(e) => setImslpCopyright(e.target.value as CopyrightValue | '')}
+              >
+                <option value="" />
+                <option value="before 1923">Published before 1923</option>
+                <option value="after 1923">Published in or after 1923</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </div>
+            <div
+              id="imslp-submit"
+              className="banner-button import-next-button"
+              onClick={submitting || imslpLookupPending ? undefined : handleImslpSubmit}
+              role="button"
+              tabIndex={0}
+              style={{ opacity: submitting || imslpLookupPending ? 0.6 : 1 }}
+            >
+              {submitting ? 'Importing...' : imslpLookupPending ? 'Looking up…' : 'Import score »'}
+            </div>
           </form>
         )}
       </div>

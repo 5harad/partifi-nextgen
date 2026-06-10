@@ -377,6 +377,7 @@ dependencies = [
     { name = "boto3" },
     { name = "cryptography" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "itsdangerous" },
     { name = "pillow" },
     { name = "pydantic-settings" },
@@ -389,7 +390,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "pytest" },
 ]
 
@@ -398,6 +398,7 @@ requires-dist = [
     { name = "boto3", specifier = "==1.35.76" },
     { name = "cryptography", specifier = "==44.0.0" },
     { name = "fastapi", specifier = "==0.115.6" },
+    { name = "httpx", specifier = "==0.28.1" },
     { name = "itsdangerous", specifier = "==2.2.0" },
     { name = "pillow", specifier = "==11.0.0" },
     { name = "pydantic-settings", specifier = "==2.6.1" },
@@ -409,10 +410,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "httpx", specifier = "==0.28.1" },
-    { name = "pytest", specifier = "==8.3.4" },
-]
+dev = [{ name = "pytest", specifier = "==8.3.4" }]
 
 [[package]]
 name = "pillow"

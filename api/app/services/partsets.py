@@ -121,6 +121,73 @@ def create_pdf_partset(
     return partset, action
 
 
+def create_imslp_partset(
+    db: Session,
+    *,
+    imslp_id: str,
+    title: str,
+    composer: str,
+    publisher: str,
+    copyright: str,
+) -> tuple[Partset, str]:
+    from app.services.imslp import lookup_imslp_info, normalize_imslp_id
+
+    normalized = normalize_imslp_id(imslp_id)
+    if not normalized:
+        raise ValueError("Invalid IMSLP id")
+
+    info = lookup_imslp_info(db, normalized)
+    if not info:
+        raise ValueError("IMSLP score not found or not a PDF")
+
+    public_id, private_id = gen_partset_ids(db)
+    now = datetime.utcnow()
+
+    partset = Partset(
+        id=public_id,
+        private_id=private_id,
+        imslp_id=normalized,
+        title=title.strip(),
+        composer=composer.strip(),
+        publisher=publisher.strip() or None,
+        copyright=copyright,
+        create_ts=now,
+        num_downloads=0,
+        import_progress=0.0,
+        convert_progress=0.0,
+        analysis_progress=0.0,
+        cut_progress=0.0,
+        paste_progress=0.0,
+    )
+    db.add(partset)
+    db.flush()
+
+    existing = db.query(Score).filter(Score.imslp_id == normalized).first()
+    if existing:
+        partset.score_id = existing.id
+        partset.status = "import"
+        partset.import_start = now
+        partset.import_complete = now
+        partset.import_progress = 100.0
+        db.commit()
+        db.refresh(partset)
+        enqueue_job(
+            "import_pipeline",
+            {"partset_id": public_id, "score_id": existing.id},
+        )
+        return partset, "continue"
+
+    partset.status = "import"
+    partset.import_start = now
+    db.commit()
+    db.refresh(partset)
+    enqueue_job(
+        "imslp_import",
+        {"partset_id": public_id, "imslp_id": normalized},
+    )
+    return partset, "continue"
+
+
 def create_partset_from_score(
     db: Session,
     *,

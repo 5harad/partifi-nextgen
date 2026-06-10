@@ -82,6 +82,14 @@ cd workers && uv sync && uv run python worker.py
 
 To add a dependency: `uv add <package>` in `api/` or `workers/`, then commit the updated `pyproject.toml` and `uv.lock`.
 
+If you use Docker with the persisted `api_venv` / `worker_venv` volumes, refresh installed packages after pulling dependency changes:
+
+```bash
+docker compose exec api uv sync --frozen --no-dev
+docker compose exec worker uv sync --frozen --no-dev
+docker compose restart api worker
+```
+
 ### Tests
 
 ```bash
@@ -99,6 +107,10 @@ Partsets (CSRF required on mutations):
 
 - `GET /api/v1/csrf-token`
 - `POST /api/v1/partsets` — upload PDF, create partset
+- `GET /api/v1/imslp/{imslp_id}/info` — IMSLP metadata lookup
+- `POST /api/v1/partsets/imslp` — import score from IMSLP
+- `GET /api/v1/search` — search public library
+- `POST /api/v1/partsets/from-score` — partify from existing library score
 - `GET /api/v1/partsets/{private_id}/import-status`
 - `GET /api/v1/partsets/{private_id}/segment-data`
 - `PUT /api/v1/partsets/{private_id}/pages/{page}/segments`
@@ -112,10 +124,10 @@ Partsets (CSRF required on mutations):
 ## Phase roadmap
 
 1. **Foundation** — done (monorepo, CSS parity, Docker, uv)
-2. **Import + pipeline** — PDF upload + workers done; IMSLP import pending
+2. **Import + pipeline** — PDF upload + IMSLP import + workers done
 3. **Segment editor** — done
 4. **Preview + generation** — done
-5. **Supporting pages** — search, library, public download URLs (next)
+5. **Supporting pages** — search done; library pending
 6. **Migration + cutover** — DB import, DNS, decommission Linode
 
 ## Production infra

@@ -5,6 +5,7 @@ import type {
   PreviewDataResponse,
 } from '../types/preview'
 import type { SearchResponse } from '../types/search'
+import type { ImslpInfoResponse } from '../types/imslp'
 
 export type PartsetCreateResponse = {
   status: string
@@ -215,6 +216,65 @@ export async function searchPartsets(query: string): Promise<SearchResponse> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail || 'Search failed')
+  }
+  return res.json()
+}
+
+export async function getImslpInfo(
+  imslpId: string,
+  signal?: AbortSignal,
+): Promise<ImslpInfoResponse | null> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 20000)
+
+  const abortFromParent = () => controller.abort()
+  signal?.addEventListener('abort', abortFromParent)
+
+  try {
+    const res = await fetch(`/api/v1/imslp/${encodeURIComponent(imslpId)}/info`, {
+      signal: controller.signal,
+    })
+    if (res.status === 404) return null
+    if (res.status === 504) {
+      throw new Error('IMSLP lookup timed out. Try again in a moment.')
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'IMSLP lookup failed')
+    }
+    return res.json()
+  } catch (err) {
+    if (controller.signal.aborted && !signal?.aborted) {
+      throw new Error('IMSLP lookup timed out. Try again in a moment.')
+    }
+    throw err
+  } finally {
+    window.clearTimeout(timeout)
+    signal?.removeEventListener('abort', abortFromParent)
+  }
+}
+
+export async function createPartsetFromImslp(
+  body: {
+    imslp_id: string
+    title: string
+    composer: string
+    publisher: string
+    copyright: string
+  },
+  csrfToken: string,
+): Promise<PartsetCreateResponse> {
+  const res = await fetch('/api/v1/partsets/imslp', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to import from IMSLP')
   }
   return res.json()
 }

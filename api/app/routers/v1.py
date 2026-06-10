@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Uploa
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy.orm import Session
 
+import asyncio
+
 from app.config import get_settings
 from app.db import get_db
 from app.models import Partset
@@ -12,6 +14,7 @@ from app.schemas.partset import (
     UpdateMetadataRequest,
     UpdateMetadataResponse,
 )
+from app.schemas.imslp import CreateFromImslpRequest, ImslpInfoResponse
 from app.schemas.search import CreateFromScoreRequest, SearchResponse
 from app.schemas.segment import (
     SavePageSegmentsRequest,
@@ -19,10 +22,12 @@ from app.schemas.segment import (
     SegmentDataResponse,
 )
 from app.services.partsets import (
+    create_imslp_partset,
     create_partset_from_score,
     create_pdf_partset,
     import_progress_payload,
 )
+from app.services.imslp import lookup_imslp_info_remote
 from app.services.search import search_partsets
 from app.services.partset_admin import (
     delete_partset,
@@ -123,6 +128,55 @@ async def create_partset(
 def search(q: str = "", db: Session = Depends(get_db)) -> SearchResponse:
     results = search_partsets(db, q)
     return SearchResponse(results=results)
+
+
+@router.get("/imslp/{imslp_id}/info", response_model=ImslpInfoResponse)
+async def imslp_info(imslp_id: str) -> ImslpInfoResponse:
+    try:
+        info = await asyncio.wait_for(
+            asyncio.to_thread(lookup_imslp_info_remote, imslp_id),
+            timeout=20.0,
+        )
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail="IMSLP lookup timed out. Try again in a moment.",
+        ) from exc
+    except TimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail="IMSLP lookup timed out. Try again in a moment.",
+        ) from exc
+    if not info:
+        raise HTTPException(status_code=404, detail="IMSLP score not found or not a PDF")
+    return ImslpInfoResponse(**info)
+
+
+@router.post("/partsets/imslp", response_model=PartsetCreateResponse)
+def create_partset_from_imslp(
+    body: CreateFromImslpRequest,
+    x_csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+    db: Session = Depends(get_db),
+) -> PartsetCreateResponse:
+    verify_csrf(x_csrf_token)
+    if body.copyright not in COPYRIGHT_VALUES:
+        raise HTTPException(status_code=400, detail="Invalid copyright value")
+    title = body.title.strip()
+    composer = body.composer.strip()
+    if not title or not composer:
+        raise HTTPException(status_code=400, detail="Title and composer are required")
+    try:
+        partset, action = create_imslp_partset(
+            db,
+            imslp_id=body.imslp_id.strip(),
+            title=title,
+            composer=composer,
+            publisher=body.publisher.strip(),
+            copyright=body.copyright,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return PartsetCreateResponse(status="ok", id=partset.private_id or "", action=action)
 
 
 @router.post("/partsets/from-score", response_model=PartsetCreateResponse)
