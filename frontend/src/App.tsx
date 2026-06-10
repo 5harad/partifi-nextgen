@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom'
 import { AboutPage } from './pages/AboutPage'
+import { PrivacyPage } from './pages/PrivacyPage'
 import { TermsPage } from './pages/TermsPage'
 import { HomePage } from './pages/HomePage'
 import { HowToPage } from './pages/HowToPage'
@@ -17,6 +18,7 @@ function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/about" element={<AboutPage />} />
       <Route path="/terms" element={<TermsPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/howto" element={<HowToPage />} />
       <Route path="/search" element={<SearchPage />} />
       <Route path="/library" element={<LibraryPage />} />

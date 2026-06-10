@@ -24,7 +24,8 @@ export function Footer() {
           maintaining a publicly accessible library of user-contributed scores, we seek to support
           the study and performance of historical music.
           <div id="fine-print">
-            &copy; {year} Partifi LLC &nbsp; | &nbsp; <Link to="/terms">Terms of Service</Link> &nbsp; | &nbsp;{' '}
+            &copy; {year} Partifi &nbsp; | &nbsp; <Link to="/terms">Terms of Service</Link> &nbsp; | &nbsp;{' '}
+            <Link to="/privacy">Privacy Policy</Link> &nbsp; | &nbsp;{' '}
             <Link id="about-link" to="/about">
               About
             </Link>{' '}

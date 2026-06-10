@@ -1827,7 +1827,8 @@ a.red:hover
 
 #about-panel 
 {
-	height: 770px;
+	min-height: 770px;
+	height: auto;
 	width: 885px;
 	padding: 15px;
 	margin: auto;

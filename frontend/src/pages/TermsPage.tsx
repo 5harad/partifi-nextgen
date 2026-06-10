@@ -19,8 +19,8 @@ export function TermsPage() {
             <p className="bold">Partifi Terms of Service</p>
 
             <p>
-              Partifi is offered as-is for personal and educational use. By using this site, you agree to
-              these terms.
+              Partifi is offered as-is. You may use it for any lawful purpose, including personal,
+              educational, and professional work. By using this site, you agree to these terms.
             </p>
 
             <p>
@@ -30,8 +30,8 @@ export function TermsPage() {
             </p>
 
             <p>
-              Partifi LLC provides this tool without warranty. We are not liable for any loss or damage
-              arising from your use of the service or from scores you create, download, or share.
+              We provide this tool without warranty. We are not liable for any loss or damage arising from
+              your use of the service or from scores you create, download, or share.
             </p>
 
             <p>
