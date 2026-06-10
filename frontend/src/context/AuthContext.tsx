@@ -1,0 +1,81 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
+import {
+  fetchAuthMe,
+  getGoogleClientId,
+  googleLogin,
+  logout as apiLogout,
+} from '../lib/authApi'
+import type { AuthUser } from '../types/auth'
+
+type AuthContextValue = {
+  user: AuthUser | null
+  loading: boolean
+  googleEnabled: boolean
+  refresh: () => Promise<void>
+  loginWithGoogle: (accessToken: string) => Promise<void>
+  logout: () => Promise<void>
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null)
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const navigate = useNavigate()
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [loading, setLoading] = useState(true)
+  const googleEnabled = Boolean(getGoogleClientId())
+
+  const refresh = useCallback(async () => {
+    const data = await fetchAuthMe()
+    setUser(data.user)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await fetchAuthMe()
+        if (!cancelled) setUser(data.user)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const loginWithGoogle = useCallback(async (accessToken: string) => {
+    const data = await googleLogin(accessToken)
+    setUser(data.user)
+  }, [])
+
+  const logout = useCallback(async () => {
+    await apiLogout()
+    setUser(null)
+    navigate('/')
+  }, [navigate])
+
+  const value = useMemo(
+    () => ({
+      user,
+      loading,
+      googleEnabled,
+      refresh,
+      loginWithGoogle,
+      logout,
+    }),
+    [user, loading, googleEnabled, refresh, loginWithGoogle, logout],
+  )
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
+
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext)
+  if (!ctx) {
+    throw new Error('useAuth must be used within AuthProvider')
+  }
+  return ctx
+}

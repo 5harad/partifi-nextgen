@@ -1,10 +1,13 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   deletePartset,
   getCsrfToken,
   updatePartsetMetadata,
 } from '../../lib/api'
+import { fetchFavoriteStatus, updateFavorite } from '../../lib/authApi'
+import { useAuth } from '../../context/AuthContext'
+import { HelpTip } from '../HelpTip'
 import type { PartsDataResponse } from '../../types/preview'
 
 type Props = {
@@ -21,9 +24,11 @@ async function copyLink(text: string) {
 }
 
 export function PartsDownloadPane({ data, onDataChange }: Props) {
+  const { user } = useAuth()
   const isOwner = data.mode === 'owner'
   const privateId = data.private_id ?? ''
   const publicId = data.public_id
+  const accessId = isOwner ? privateId : publicId
 
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(data.title ?? '')
@@ -31,6 +36,15 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
   const [publisher, setPublisher] = useState(data.publisher ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [favorite, setFavorite] = useState(false)
+
+  useEffect(() => {
+    if (!user) {
+      setFavorite(false)
+      return
+    }
+    void fetchFavoriteStatus(accessId).then(setFavorite)
+  }, [user, accessId])
 
   const editorLink = partsetUrl(`/${privateId}/parts`)
   const downloadLink = partsetUrl(`/${publicId}`)
@@ -90,22 +104,47 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
     }
   }, [privateId])
 
+  const toggleFavorite = useCallback(async () => {
+    if (!user) {
+      window.alert('You must be logged in to add a score to your library.')
+      return
+    }
+    try {
+      const next = await updateFavorite(accessId, favorite ? 'remove' : 'add')
+      setFavorite(next)
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Failed to update library')
+    }
+  }, [user, accessId, favorite])
+
   return (
     <div className="download-pane">
       <div className="box-top" />
-      {isOwner && (
+      {(isOwner || user) && (
         <div className="download-menu">
-          <Link to={`/${privateId}/segment`} className="red">
-            edit parts
-          </Link>
-          {' | '}
-          <a href="#" className="red" onClick={(e) => { e.preventDefault(); startEdit() }}>
-            edit metadata
-          </a>
-          {' | '}
-          <a href="#" className="red" onClick={(e) => { e.preventDefault(); void handleDelete() }}>
-            delete parts
-          </a>
+          {isOwner && (
+            <>
+              <Link to={`/${privateId}/segment`} className="red">
+                edit parts
+              </Link>
+              {' | '}
+              <a href="#" className="red" onClick={(e) => { e.preventDefault(); startEdit() }}>
+                edit metadata
+              </a>
+              {' | '}
+              <a href="#" className="red" onClick={(e) => { e.preventDefault(); void handleDelete() }}>
+                delete parts
+              </a>
+            </>
+          )}
+          {user && (
+            <>
+              {isOwner && ' | '}
+              <a href="#" className="red" id="library-link" onClick={(e) => { e.preventDefault(); void toggleFavorite() }}>
+                {favorite ? 'remove from library' : 'add to library'}
+              </a>
+            </>
+          )}
         </div>
       )}
       <div className="partset-info">
@@ -214,9 +253,9 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
                 {editorLink}
               </Link>
             </div>
-            <div
+            <HelpTip
               className="partset-link-tip editor-tip"
-              title="The editor link returns you to this page to edit and download the parts."
+              text="The editor link returns you to this page to edit and download the parts."
             />
             <div
               className="copy-button"
@@ -237,9 +276,9 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
             </Link>
           </div>
           {isOwner && (
-            <div
+            <HelpTip
               className="partset-link-tip download-tip"
-              title="Use the download link to share your parts with others. This link lets you download but not edit the parts."
+              text="Use the download link to share your parts with others. This link lets you download but not edit the parts."
             />
           )}
           <div

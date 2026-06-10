@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.models import Partset, Score
+from app.services.library import claim_partset_for_user
 from app.services.queue import enqueue_job
 from app.services.s3 import upload_bytes
 from app.services.score_cache import (
@@ -54,6 +55,7 @@ def create_pdf_partset(
     copyright: str,
     file_hash: str,
     pdf_bytes: bytes,
+    user_id: str | None = None,
 ) -> tuple[Partset, str]:
     if not pdf_bytes.startswith(PDF_MAGIC):
         raise ValueError("File is not a valid PDF")
@@ -110,6 +112,9 @@ def create_pdf_partset(
         action = "upload"
         upload_bytes(f"scores/{score_id}/score.pdf", pdf_bytes, "application/pdf")
 
+    if user_id:
+        claim_partset_for_user(db, partset, user_id)
+
     db.commit()
     db.refresh(partset)
 
@@ -129,6 +134,7 @@ def create_imslp_partset(
     composer: str,
     publisher: str,
     copyright: str,
+    user_id: str | None = None,
 ) -> tuple[Partset, str]:
     from app.services.imslp import lookup_imslp_info, normalize_imslp_id
 
@@ -169,6 +175,8 @@ def create_imslp_partset(
         partset.import_start = now
         partset.import_complete = now
         partset.import_progress = 100.0
+        if user_id:
+            claim_partset_for_user(db, partset, user_id)
         db.commit()
         db.refresh(partset)
         enqueue_job(
@@ -179,6 +187,8 @@ def create_imslp_partset(
 
     partset.status = "import"
     partset.import_start = now
+    if user_id:
+        claim_partset_for_user(db, partset, user_id)
     db.commit()
     db.refresh(partset)
     enqueue_job(
@@ -196,6 +206,7 @@ def create_partset_from_score(
     composer: str,
     publisher: str,
     copyright: str,
+    user_id: str | None = None,
 ) -> Partset:
     score = db.get(Score, score_id)
     if not score:
@@ -226,6 +237,8 @@ def create_partset_from_score(
     if score_analysis_complete(db, score_id):
         mark_import_pipeline_complete(db, partset, score)
         copy_score_segs_to_partset(db, score_id, public_id)
+        if user_id:
+            claim_partset_for_user(db, partset, user_id)
         db.commit()
         db.refresh(partset)
         return partset
@@ -234,6 +247,8 @@ def create_partset_from_score(
     partset.import_start = now
     partset.import_complete = now
     partset.import_progress = 100.0
+    if user_id:
+        claim_partset_for_user(db, partset, user_id)
     db.commit()
     db.refresh(partset)
 

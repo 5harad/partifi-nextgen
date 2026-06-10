@@ -16,6 +16,8 @@ dependencies = [
     "itsdangerous==2.2.0",
     "pillow==11.0.0",
     "httpx==0.28.1",
+    "google-auth>=2.53.0",
+    "requests>=2.34.2",
 ]
 
 [tool.uv]

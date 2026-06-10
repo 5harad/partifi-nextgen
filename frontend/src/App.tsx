@@ -4,6 +4,7 @@ import { TermsPage } from './pages/TermsPage'
 import { HomePage } from './pages/HomePage'
 import { HowToPage } from './pages/HowToPage'
 import { ImportProgressPage } from './pages/ImportProgressPage'
+import { LibraryPage } from './pages/LibraryPage'
 import { PartgenProgressPage } from './pages/PartgenProgressPage'
 import { PartsPage } from './pages/PartsPage'
 import { PreviewPage } from './pages/PreviewPage'
@@ -18,6 +19,7 @@ function App() {
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/howto" element={<HowToPage />} />
       <Route path="/search" element={<SearchPage />} />
+      <Route path="/library" element={<LibraryPage />} />
       <Route path="/:privateId/import" element={<ImportProgressPage />} />
       <Route path="/:privateId/segment" element={<SegmentPage />} />
       <Route path="/:privateId/preview" element={<PreviewPage />} />

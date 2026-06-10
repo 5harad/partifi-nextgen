@@ -1,11 +1,45 @@
-import { useState } from 'react'
+import { useGoogleLogin } from '@react-oauth/google'
 import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 const PLACEHOLDER = 'search for music'
 
+function GoogleSignInLink({ onLogin }: { onLogin: (accessToken: string) => Promise<void> }) {
+  const login = useGoogleLogin({
+    scope: 'openid profile email',
+    onSuccess: (response) => {
+      void onLogin(response.access_token).catch((err: unknown) => {
+        window.alert(err instanceof Error ? err.message : 'Login failed')
+      })
+    },
+    onError: () => window.alert('Google sign in failed'),
+  })
+
+  return (
+    <a
+      href="#"
+      style={{ marginLeft: 15 }}
+      onClick={(e) => {
+        e.preventDefault()
+        login()
+      }}
+    >
+      Sign In
+    </a>
+  )
+}
+
 export function Header() {
   const navigate = useNavigate()
-  const [searchValue, setSearchValue] = useState(PLACEHOLDER)
+  const {
+    user,
+    loading,
+    googleEnabled,
+    loginWithGoogle,
+    logout,
+  } = useAuth()
+
+  const firstName = user?.name?.split(' ')[0] ?? 'there'
 
   return (
     <div id="header">
@@ -15,17 +49,16 @@ export function Header() {
       <input
         type="text"
         id="searchbox"
-        value={searchValue}
-        onFocus={() => {
-          if (searchValue === PLACEHOLDER) setSearchValue('')
+        defaultValue={PLACEHOLDER}
+        onFocus={(e) => {
+          if (e.currentTarget.value === PLACEHOLDER) e.currentTarget.value = ''
         }}
-        onBlur={() => {
-          if (!searchValue.trim()) setSearchValue(PLACEHOLDER)
+        onBlur={(e) => {
+          if (!e.currentTarget.value.trim()) e.currentTarget.value = PLACEHOLDER
         }}
-        onChange={(e) => setSearchValue(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
-            const q = searchValue.trim()
+            const q = e.currentTarget.value.trim()
             if (q && q !== PLACEHOLDER) {
               navigate(`/search?q=${encodeURIComponent(q)}`)
             }
@@ -33,6 +66,27 @@ export function Header() {
         }}
       />
       <div id="login">
+        {!loading && user && (
+          <>
+            <span style={{ color: 'white' }}>Hi, {firstName}</span>
+            <a
+              href="#"
+              style={{ marginLeft: 15 }}
+              onClick={(e) => {
+                e.preventDefault()
+                void logout()
+              }}
+            >
+              Sign Out
+            </a>
+            <Link to="/library" style={{ marginLeft: 15 }}>
+              My Library
+            </Link>
+          </>
+        )}
+        {!loading && !user && googleEnabled && (
+          <GoogleSignInLink onLogin={loginWithGoogle} />
+        )}
         <Link to="/howto" style={{ marginLeft: 15 }}>
           Help
         </Link>

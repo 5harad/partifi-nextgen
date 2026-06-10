@@ -1,4 +1,4 @@
-from app.models.tables import Break, Page, Part, Partset, Score, Segment
+from app.models.tables import Break, Favorite, Page, Part, Partset, Score, Segment, User
 
 __all__ = [
     "Score",
@@ -7,4 +7,6 @@ __all__ = [
     "Segment",
     "Break",
     "Part",
+    "Favorite",
+    "User",
 ]

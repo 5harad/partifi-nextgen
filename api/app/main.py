@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.middleware.security import SecurityHeadersMiddleware
-from app.routers import health, v1
+from app.routers import auth, health, v1
 from app.services.s3 import ensure_bucket
 
 
@@ -33,6 +33,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health.router)
+    app.include_router(auth.router)
     app.include_router(v1.router)
 
     return app

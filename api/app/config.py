@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     app_secret: str = "change-me"
     cors_origins: str = "http://localhost:5173"
 
+    google_client_id: str = ""
+
     mysql_host: str = "localhost"
     mysql_port: int = 3306
     mysql_database: str = "partifi"

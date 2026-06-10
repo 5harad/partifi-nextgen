@@ -233,12 +233,41 @@ a.red:hover
 }
 
 .copyright-tip {
-	background-image: url('/images/tooltip_bg.gif');
-	height: 30px;
-	width: 30px;
 	position: absolute;
 	top: 529px;
 	left: 284px;
+}
+
+.help-tip {
+	background-image: url('/images/tooltip_bg.gif');
+	height: 30px;
+	width: 30px;
+	cursor: help;
+	z-index: 2;
+}
+
+.help-tip-popup {
+	display: none;
+	position: absolute;
+	left: 36px;
+	top: 50%;
+	transform: translateY(-50%);
+	width: max-content;
+	max-width: 250px;
+	padding: 12px 16px;
+	box-sizing: border-box;
+	background: #2b2b2b;
+	font-family: 'IM Fell Great Primer', serif;
+	font-size: 15px;
+	line-height: 20px;
+	color: #fff;
+	text-align: left;
+	pointer-events: none;
+}
+
+.help-tip:hover .help-tip-popup,
+.help-tip:focus-visible .help-tip-popup {
+	display: block;
 }
 
 .copyright-options {
@@ -1338,6 +1367,7 @@ a.red:hover
 	position: absolute;
 	top: -5px;
 	left: 0px;
+	pointer-events: none;
 }
 
 .box-bottom {
@@ -1347,6 +1377,7 @@ a.red:hover
 	position: absolute;
 	bottom: -5px;
 	left: 0px;
+	pointer-events: none;
 }
 
 .download-menu {
@@ -1356,6 +1387,7 @@ a.red:hover
 	top: 10px;
 	right: 20px;
 	color: gray;
+	white-space: nowrap;
 }
 
 .partset-info {
@@ -1439,23 +1471,9 @@ a.red:hover
 }
 
 .partset-link-tip {
-	background-image: url('/images/tooltip_bg.gif');
-	height: 30px;
-	width: 30px;
 	position: absolute;
 	top: -3px;
 	left: 340px;
-}
-
-.tooltip {
-	display:none;
-  	background:url('/images/black_arrow_med.png');
-	height:106px;
-  	padding:25px 30px 15px 30px;
-  	width:190px;
-  	font-size:15px;
-	line-height: 20px;
-  	color:#fff;
 }
 
 .copy-button 
@@ -1630,6 +1648,81 @@ a.red:hover
 	text-align:center;
 	font-family: 'IM Fell Great Primer', serif;
 	font-size: 28px;
+}
+
+#library-layout {
+	position: absolute;
+	top: 95px;
+	left: 80px;
+	right: 80px;
+	height: 620px;
+}
+
+#library-list {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 220px;
+	height: 100%;
+	overflow-y: auto;
+	padding-right: 8px;
+}
+
+.library-list-item {
+	font-family: 'IM Fell DW Pica SC', serif;
+	font-size: 14px;
+	text-align: left;
+	color: gray;
+	padding: 12px 10px;
+	border-bottom: 2px dotted gray;
+	cursor: pointer;
+}
+
+.library-list-item:hover {
+	color: black;
+}
+
+.library-list-item.selected {
+	background-color: rgba(255, 255, 255, 0.55);
+	color: black;
+}
+
+.library-list-title {
+	font-size: 17px;
+	color: black;
+	margin-bottom: 4px;
+	line-height: 1.2;
+}
+
+.library-list-composer {
+	font-size: 14px;
+	line-height: 1.2;
+}
+
+#library-detail {
+	position: absolute;
+	top: 0;
+	left: 240px;
+	width: 734px;
+	height: 100%;
+	overflow-y: auto;
+}
+
+#library-detail .library-item {
+	position: relative;
+	top: 0;
+	left: 0;
+	/* Reserve space for the absolute download menu; padding prevents margin collapse. */
+	padding-top: 45px;
+	padding-bottom: 16px;
+}
+
+#library-detail .partset-info {
+	margin-top: 0;
+}
+
+#library-detail .download-menu {
+	z-index: 10;
 }
 
 

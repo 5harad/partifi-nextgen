@@ -62,6 +62,8 @@ npm run dev
 
 Open http://localhost:5173 — upload a PDF to run the full workflow (import → segment → preview → generate → download).
 
+For local library testing without Google credentials, click **Dev Sign In** in the header (development only). Creating a partset while signed in saves it to your library automatically.
+
 ### 3. Scale workers (optional)
 
 ```bash
@@ -106,6 +108,13 @@ Health:
 Partsets (CSRF required on mutations):
 
 - `GET /api/v1/csrf-token`
+- `GET /api/v1/auth/me` — current user (session cookie)
+- `POST /api/v1/auth/google` — exchange Google ID token for session
+- `POST /api/v1/auth/dev-login` — development-only mock login
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/library` — signed-in user's saved partsets
+- `GET /api/v1/library/favorites/{access_id}` — favorite status
+- `POST /api/v1/library/favorites/{access_id}` — add/remove favorite
 - `POST /api/v1/partsets` — upload PDF, create partset
 - `GET /api/v1/imslp/{imslp_id}/info` — IMSLP metadata lookup
 - `POST /api/v1/partsets/imslp` — import score from IMSLP
@@ -127,7 +136,7 @@ Partsets (CSRF required on mutations):
 2. **Import + pipeline** — PDF upload + IMSLP import + workers done
 3. **Segment editor** — done
 4. **Preview + generation** — done
-5. **Supporting pages** — search done; library pending
+5. **Supporting pages** — search done; library + Google login done
 6. **Migration + cutover** — DB import, DNS, decommission Linode
 
 ## Production infra

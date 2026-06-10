@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
+import { CopyrightTip } from '../components/CopyrightTip'
 import { createPartsetFromImslp, createPartsetFromPdf, getCsrfToken, getImslpInfo, sha1File } from '../lib/api'
 import { guessCopyrightFromPublisher, normalizeImslpIdInput } from '../lib/imslpUtils'
 import type { CopyrightValue } from '../lib/imslpUtils'
@@ -260,7 +261,7 @@ export function HomePage() {
               edition &nbsp;
               <input type="text" className="score-input" id="pdf_publisher" />
             </div>
-            <div className="copyright-tip" />
+            <CopyrightTip />
             <div className="copyright">
               copyright<span className="asterisk">*</span>
             </div>
@@ -324,7 +325,7 @@ export function HomePage() {
                 onChange={(e) => setImslpPublisher(e.target.value)}
               />
             </div>
-            <div className="copyright-tip" />
+            <CopyrightTip />
             <div className="copyright">
               copyright<span className="asterisk">*</span>
             </div>

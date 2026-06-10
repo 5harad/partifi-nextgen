@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 import asyncio
 
 from app.config import get_settings
+from app.deps.auth import get_current_user_id
 from app.db import get_db
 from app.models import Partset
 from app.schemas.partset import (
@@ -97,6 +98,7 @@ async def create_partset(
     score: UploadFile = File(...),
     x_csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
     db: Session = Depends(get_db),
+    user_id: str | None = Depends(get_current_user_id),
 ) -> PartsetCreateResponse:
     verify_csrf(x_csrf_token)
 
@@ -113,6 +115,7 @@ async def create_partset(
             copyright=copyright,
             file_hash=file_hash.strip(),
             pdf_bytes=pdf_bytes,
+            user_id=user_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -157,6 +160,7 @@ def create_partset_from_imslp(
     body: CreateFromImslpRequest,
     x_csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
     db: Session = Depends(get_db),
+    user_id: str | None = Depends(get_current_user_id),
 ) -> PartsetCreateResponse:
     verify_csrf(x_csrf_token)
     if body.copyright not in COPYRIGHT_VALUES:
@@ -173,6 +177,7 @@ def create_partset_from_imslp(
             composer=composer,
             publisher=body.publisher.strip(),
             copyright=body.copyright,
+            user_id=user_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -184,6 +189,7 @@ def create_partset_from_library_score(
     body: CreateFromScoreRequest,
     x_csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
     db: Session = Depends(get_db),
+    user_id: str | None = Depends(get_current_user_id),
 ) -> PartsetCreateResponse:
     verify_csrf(x_csrf_token)
     if body.copyright not in COPYRIGHT_VALUES:
@@ -200,6 +206,7 @@ def create_partset_from_library_score(
             composer=composer,
             publisher=body.publisher.strip(),
             copyright=body.copyright,
+            user_id=user_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

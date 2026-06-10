@@ -7,6 +7,10 @@ import type {
 import type { SearchResponse } from '../types/search'
 import type { ImslpInfoResponse } from '../types/imslp'
 
+async function apiFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
+  return fetch(input, { ...init, credentials: 'include' })
+}
+
 export type PartsetCreateResponse = {
   status: string
   id: string
@@ -22,7 +26,7 @@ export type ImportProgressResponse = {
 }
 
 export async function getCsrfToken(): Promise<string> {
-  const res = await fetch('/api/v1/csrf-token')
+  const res = await apiFetch('/api/v1/csrf-token')
   if (!res.ok) throw new Error('Failed to fetch CSRF token')
   const data = await res.json()
   return data.csrf_token as string
@@ -45,7 +49,7 @@ export async function createPartsetFromPdf(params: {
   form.append('copyright', params.copyright)
   form.append('file_hash', params.fileHash)
 
-  const res = await fetch('/api/v1/partsets', {
+  const res = await apiFetch('/api/v1/partsets', {
     method: 'POST',
     headers: { 'X-CSRF-Token': params.csrfToken },
     body: form,
@@ -264,7 +268,7 @@ export async function createPartsetFromImslp(
   },
   csrfToken: string,
 ): Promise<PartsetCreateResponse> {
-  const res = await fetch('/api/v1/partsets/imslp', {
+  const res = await apiFetch('/api/v1/partsets/imslp', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -289,7 +293,7 @@ export async function createPartsetFromScore(
   },
   csrfToken: string,
 ): Promise<PartsetCreateResponse> {
-  const res = await fetch('/api/v1/partsets/from-score', {
+  const res = await apiFetch('/api/v1/partsets/from-score', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
