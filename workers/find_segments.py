@@ -8,12 +8,11 @@ import multiprocessing
 import db_conn
 import re
 
-def update_db(partset_id, imfile, rotation, margins, segments, num_tasks):
+def update_db(partset_id, imfile, rotation, margins, segments):
 	match = re.search(r"page-(\d+)", imfile)
 	if not match:
 		return
 	page = int(match.group(1))
-	progress = 100.0 / num_tasks
 	db_conn.execute(
 		"INSERT INTO pages (partset_id, page, left_margin, right_margin, rotation) "
 		"VALUES (:partset_id, :page, :left, :right, :rotation)",
@@ -25,10 +24,6 @@ def update_db(partset_id, imfile, rotation, margins, segments, num_tasks):
 				"INSERT INTO segments (partset_id, page, top, bottom) VALUES (:partset_id, :page, :top, :bottom)",
 				{"partset_id": partset_id, "page": page, "top": segments[ndx], "bottom": segments[ndx + 1]},
 			)
-	db_conn.execute(
-		"UPDATE partsets SET analysis_progress = analysis_progress + :progress WHERE id = :id",
-		{"progress": progress, "id": partset_id},
-	)
 
 # smooth the input x via a moving average with reflection at the boundries
 # window_len should be an odd integer
@@ -85,7 +80,7 @@ def find_skew(im, search_center=0, search_radius=5):
 	else:
 		return find_skew(im, argmax_var, 0.5)	
 		
-def find_segments(imfile, fixskew=False, partset_id=None, num_tasks=None):
+def find_segments(imfile, fixskew=False):
 	# convert image to grayscale
 	im = Image.open(imfile)
 	im.convert('L')
@@ -167,25 +162,32 @@ def find_segments(imfile, fixskew=False, partset_id=None, num_tasks=None):
 	# normalize segment positions and left/right margins as a percentage of height
 	norm_segments = [round(100*float(s)/height,1) for s in segments]
 	norm_margins = [round(100*float(m)/width,1) for m in margins]
-	
-	# if requested, update the database
-	if partset_id:
-		update_db(partset_id, imfile, -skew, norm_margins, norm_segments, num_tasks)
-	
+
 	return imfile, skew, norm_margins, norm_segments
 	
 # helper function to deal with a single tuple of arguments
 def find_segments_star(args):
 	return find_segments(*args)
 	
-# parallel segmentation
-def par_find_segments(imfiles, fixskew, partset_id):
-	args = zip(imfiles, [fixskew]*len(imfiles), [partset_id]*len(imfiles), [len(imfiles)]*len(imfiles))
+# parallel segmentation — workers compute only; DB writes stay in the parent process
+def par_find_segments(imfiles, fixskew, partset_id=None):
+	args = zip(imfiles, [fixskew] * len(imfiles))
 	pool = multiprocessing.Pool(max(multiprocessing.cpu_count() // 2, 1))
-	results = pool.map(find_segments_star, args)
-	pool.close()
-	pool.join()
-	
+	try:
+		results = pool.map(find_segments_star, args)
+	finally:
+		pool.close()
+		pool.join()
+
+	if partset_id:
+		num_tasks = len(imfiles)
+		for i, (imfile, skew, norm_margins, norm_segments) in enumerate(results):
+			update_db(partset_id, imfile, -skew, norm_margins, norm_segments)
+			db_conn.execute(
+				"UPDATE partsets SET analysis_progress = :progress WHERE id = :id",
+				{"progress": 100.0 * (i + 1) / num_tasks, "id": partset_id},
+			)
+
 	return results
 	
 def draw_segments(imfile, skew, segments, margins):
@@ -244,12 +246,14 @@ def main():
 	if args.partset_id:
 		db_conn.execute("UPDATE partsets SET status = 'analysis', analysis_start = NOW() WHERE id = :id", {"id": args.partset_id})
 		
-	# parallel segmentation
+	# parallel segmentation (DB updates happen inside par_find_segments when partset_id set)
 	results = par_find_segments(args.imfiles, args.fixskew, args.partset_id)
 
-	# update the database if requested
 	if args.partset_id:
-		db_conn.execute("UPDATE partsets SET analysis_complete = NOW() WHERE id = :id", {"id": args.partset_id})
+		db_conn.execute(
+			"UPDATE partsets SET analysis_complete = NOW(), analysis_progress = 100 WHERE id = :id",
+			{"id": args.partset_id},
+		)
 			
 	# output results
 	for (imfile, skew, margins, segments) in results:
