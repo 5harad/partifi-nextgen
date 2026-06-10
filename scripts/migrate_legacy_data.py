@@ -21,7 +21,7 @@ import os
 import sys
 
 import pymysql
-from pymysql.cursors import DictCursor
+from pymysql.cursors import DictCursor, SSDictCursor
 
 DIRECT_TABLES = (
     "scores",
@@ -259,13 +259,17 @@ def _insert_batches(
     if VERBOSE:
         _log(f"{table}: target rows before truncate = {target_count_before}")
 
-    with legacy.cursor() as src, target.cursor() as dst:
+    # SSDictCursor streams from legacy — default Cursor buffers the full SELECT
+    # in memory on execute(), which OOM-kills large tables (e.g. segments).
+    with legacy.cursor(SSDictCursor) as src, target.cursor() as dst:
         dst.execute("SET FOREIGN_KEY_CHECKS=0")
         dst.execute(f"TRUNCATE TABLE `{table}`")
         target_count_after_truncate = _count(target, table)
         if VERBOSE:
             _log(f"{table}: target rows after truncate = {target_count_after_truncate}")
 
+        if VERBOSE:
+            _log(f"{table}: starting legacy SELECT (streaming cursor)…")
         src.execute(select_sql)
         batch: list[tuple] = []
         copied = 0
@@ -411,7 +415,7 @@ def _copy_breaks(
     if VERBOSE:
         _log(f"breaks: target rows before truncate = {_count(target, 'breaks')}")
 
-    with legacy.cursor() as src, target.cursor() as dst:
+    with legacy.cursor(SSDictCursor) as src, target.cursor() as dst:
         dst.execute("SET FOREIGN_KEY_CHECKS=0")
         dst.execute("TRUNCATE TABLE breaks")
         if VERBOSE:
