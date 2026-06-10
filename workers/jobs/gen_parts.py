@@ -16,6 +16,7 @@ for root in (APP_ROOT, REPO_ROOT):
 
 from db_conn import execute, fetchall, fetchone
 from config import get_settings
+from jobs.errors import mark_partset_error
 from pipeline.cut_segments import cut_segment_tasks, default_pool_size
 from pipeline.cutpaste import (
     apply_combined_parts,
@@ -115,6 +116,18 @@ def _update_paste_progress(partset_id: str, increment: float) -> None:
 
 
 def run_gen_parts(partset_id: str) -> None:
+    workdir = Path(f"/tmp/partifi/{partset_id}/gen")
+    try:
+        _run_gen_parts(partset_id, workdir)
+    except Exception:
+        logger.exception("Part generation failed for partset %s", partset_id)
+        mark_partset_error(partset_id)
+        raise
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+def _run_gen_parts(partset_id: str, workdir: Path) -> None:
     partset = fetchone(
         "SELECT score_id, title, composer FROM partsets WHERE id = :id",
         {"id": partset_id},
@@ -124,7 +137,6 @@ def run_gen_parts(partset_id: str) -> None:
         return
 
     score_id = partset.score_id
-    workdir = Path(f"/tmp/partifi/{partset_id}/gen")
     if workdir.exists():
         shutil.rmtree(workdir)
     pages_dir = workdir / "pages"
@@ -253,5 +265,4 @@ def run_gen_parts(partset_id: str) -> None:
         {"id": partset_id},
     )
 
-    shutil.rmtree(workdir, ignore_errors=True)
     logger.info("Part generation complete for %s", partset_id)

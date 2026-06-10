@@ -16,6 +16,8 @@ from score_cache import (
     score_analysis_complete,
 )
 
+from jobs.errors import mark_partset_error
+
 import db_conn
 
 logger = logging.getLogger("partifi.import_pipeline")
@@ -105,5 +107,9 @@ def run_import_pipeline(partset_id: str, score_id: str) -> None:
             copy_partset_segs_to_score(partset_id, score_id)
 
         logger.info("Import pipeline complete for partset %s", partset_id)
+    except Exception:
+        logger.exception("Import pipeline failed for partset %s", partset_id)
+        mark_partset_error(partset_id)
+        raise
     finally:
         shutil.rmtree(workdir, ignore_errors=True)

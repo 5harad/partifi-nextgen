@@ -1,3 +1,27 @@
+x-worker-service: &worker-service
+  build:
+    context: .
+    dockerfile: workers/Dockerfile
+  restart: unless-stopped
+  env_file:
+    - .env
+  environment:
+    MYSQL_HOST: mysql
+    REDIS_URL: redis://redis:6379/0
+    S3_ENDPOINT_URL: http://minio:9000
+  volumes:
+    - ./workers:/app
+    - ./pipeline:/app/pipeline
+    - worker_venv:/app/.venv
+    - worker_tmp:/tmp/partifi
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    minio:
+      condition: service_started
+
 services:
   mysql:
     image: mysql:8.0
@@ -70,30 +94,13 @@ services:
         condition: service_started
 
   worker:
-    build:
-      context: .
-      dockerfile: workers/Dockerfile
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      MYSQL_HOST: mysql
-      REDIS_URL: redis://redis:6379/0
-      S3_ENDPOINT_URL: http://minio:9000
-    volumes:
-      - ./workers:/app
-      - ./pipeline:/app/pipeline
-      - worker_venv:/app/.venv
-      - worker_tmp:/tmp/partifi
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_started
-    deploy:
-      replicas: 1
+    <<: *worker-service
+
+  worker-2:
+    <<: *worker-service
+
+  worker-3:
+    <<: *worker-service
 
 volumes:
   mysql_data:

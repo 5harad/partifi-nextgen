@@ -10,6 +10,7 @@ import string
 from pathlib import Path
 
 from imslp_client import download_imslp_pdf
+from jobs.errors import mark_partset_error
 from jobs.import_pipeline import run_import_pipeline
 from s3_storage import upload_file
 
@@ -38,11 +39,7 @@ def _set_import_progress(partset_id: str, progress: float) -> None:
 
 
 def _mark_import_error(partset_id: str) -> None:
-    db_conn.execute(
-        "UPDATE partsets SET error = 'import' WHERE id = :id",
-        {"id": partset_id},
-    )
-
+    mark_partset_error(partset_id, "import")
 
 def run_imslp_import(partset_id: str, imslp_id: str) -> None:
     workdir = Path(f"/tmp/partifi/{partset_id}")

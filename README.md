@@ -64,10 +64,14 @@ Open http://localhost:5173 — upload a PDF to run the full workflow (import →
 
 For local library testing without Google credentials, click **Dev Sign In** in the header (development only). Creating a partset while signed in saves it to your library automatically.
 
-### 3. Scale workers (optional)
+### 3. Workers
+
+Compose starts **three worker containers** (`worker`, `worker-2`, `worker-3`) that share the Redis queue. Each job runs in an isolated subprocess with a wall-clock timeout (`JOB_TIMEOUT_SECONDS`, default 45 minutes). On failure or timeout the partset is marked with an `error` stage so progress pages stop spinning.
 
 ```bash
-docker compose up -d --scale worker=3
+docker compose up -d worker worker-2 worker-3
+# or recreate all services:
+docker compose up -d
 ```
 
 ### Python services (uv, outside Docker)
@@ -89,7 +93,7 @@ If you use Docker with the persisted `api_venv` / `worker_venv` volumes, refresh
 ```bash
 docker compose exec api uv sync --frozen --no-dev
 docker compose exec worker uv sync --frozen --no-dev
-docker compose restart api worker
+docker compose restart api worker worker-2 worker-3
 ```
 
 ### Tests
