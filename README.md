@@ -141,7 +141,20 @@ Partsets (CSRF required on mutations):
 3. **Segment editor** — done
 4. **Preview + generation** — done
 5. **Supporting pages** — search, library, Google login done
-6. **Production cutover** — EC2 deploy, fresh DB, DNS, decommission Linode
+6. **Production cutover** — see [docs/DEPLOY.md](docs/DEPLOY.md) (EC2, legacy partset import, DNS)
+
+## Production deploy
+
+Full cutover runbook: **[docs/DEPLOY.md](docs/DEPLOY.md)**
+
+Quick start on the server:
+
+```bash
+cp .env.production.example .env   # fill in secrets
+docker compose -f docker-compose.prod.yml up -d --build
+./scripts/import-legacy-partsets.sh --dry-run
+./scripts/import-legacy-partsets.sh --confirm
+```
 
 ## Production infra
 
