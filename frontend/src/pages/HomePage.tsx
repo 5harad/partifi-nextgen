@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
+import { ComposerInput } from '../components/ComposerInput'
 import { CopyrightTip } from '../components/CopyrightTip'
 import { createPartsetFromImslp, createPartsetFromPdf, getCsrfToken, getImslpInfo, sha1File } from '../lib/api'
 import { guessCopyrightFromPublisher, normalizeImslpIdInput } from '../lib/imslpUtils'
@@ -13,6 +14,7 @@ export function HomePage() {
   const [importMode, setImportMode] = useState<'pdf' | 'imslp'>('pdf')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [filename, setFilename] = useState('')
+  const [pdfComposer, setPdfComposer] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(() => {
     const err = searchParams.get('err')
@@ -136,7 +138,7 @@ export function HomePage() {
     setError('')
 
     const title = (document.getElementById('pdf_title') as HTMLInputElement).value.trim()
-    const composer = (document.getElementById('pdf_composer') as HTMLInputElement).value.trim()
+    const composer = pdfComposer.trim()
     const publisher = (document.getElementById('pdf_publisher') as HTMLInputElement).value.trim()
     const copyright = (document.getElementById('pdf_copyright') as HTMLSelectElement).value
 
@@ -259,7 +261,12 @@ export function HomePage() {
             </div>
             <div className="score-input-label composer-field">
               composer<span className="asterisk">*</span>
-              <input type="text" className="score-input" id="pdf_composer" />
+              <ComposerInput
+                id="pdf_composer"
+                className="score-input"
+                value={pdfComposer}
+                onChange={setPdfComposer}
+              />
             </div>
             <div className="score-input-label publisher-field">
               edition &nbsp;
