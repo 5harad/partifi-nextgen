@@ -11,6 +11,7 @@ Usage:
   cd api && uv run python ../scripts/migrate_legacy_data.py --dry-run
   cd api && uv run python ../scripts/migrate_legacy_data.py --confirm
   cd api && uv run python ../scripts/migrate_legacy_data.py --confirm --verbose
+  cd api && uv run python ../scripts/migrate_legacy_data.py --confirm --from-table original_pages
 """
 
 from __future__ import annotations
@@ -74,6 +75,33 @@ REQUIRED_BIN_COLUMNS = (
     ("partsets", "id"),
     ("partsets", "private_id"),
 )
+
+IMPORT_ORDER = (
+    "scores",
+    "partsets",
+    "original_pages",
+    "original_segments",
+    "pages",
+    "segments",
+    "parts",
+    "imslp_info",
+    "composers",
+    "breaks",
+)
+
+# Primary key column names per table (composite where applicable).
+TABLE_PK_COLUMNS: dict[str, tuple[str, ...]] = {
+    "scores": ("id",),
+    "partsets": ("id",),
+    "original_pages": ("score_id", "page"),
+    "original_segments": ("id",),
+    "pages": ("partset_id", "page"),
+    "segments": ("id",),
+    "parts": ("partset_id", "tag"),
+    "imslp_info": ("id",),
+    "composers": ("composer",),
+    "breaks": ("id",),
+}
 
 VERBOSE = False
 
@@ -172,10 +200,20 @@ def _shared_columns(
     return [c for c in _column_names(legacy, table) if c in target_cols]
 
 
-def _duplicate_keys_in_batch(batch: list[tuple], *, key_index: int = 0) -> dict[object, int]:
-    counts: dict[object, int] = {}
+def _pk_indices(cols: list[str], pk_col_names: tuple[str, ...]) -> tuple[int, ...]:
+    return tuple(cols.index(name) for name in pk_col_names)
+
+
+def _row_pk(batch_row: tuple, pk_indices: tuple[int, ...]) -> tuple:
+    return tuple(batch_row[i] for i in pk_indices)
+
+
+def _duplicate_keys_in_batch(
+    batch: list[tuple], *, pk_indices: tuple[int, ...]
+) -> dict[tuple, int]:
+    counts: dict[tuple, int] = {}
     for row in batch:
-        key = row[key_index]
+        key = _row_pk(row, pk_indices)
         counts[key] = counts.get(key, 0) + 1
     return {key: count for key, count in counts.items() if count > 1}
 
@@ -196,6 +234,14 @@ def _keys_already_on_target(
     return [row[key_col] for row in dst.fetchall()]
 
 
+def _pk_col_names(table: str, cols: list[str]) -> tuple[str, ...]:
+    names = TABLE_PK_COLUMNS.get(table, ("id",))
+    missing = [n for n in names if n not in cols]
+    if missing:
+        raise RuntimeError(f"{table}: PK columns {missing} not in import column list {cols}")
+    return names
+
+
 def _insert_batches(
     *,
     table: str,
@@ -204,10 +250,11 @@ def _insert_batches(
     select_sql: str,
     insert_sql: str,
     cols: list[str],
-    pk_index: int = 0,
+    pk_col_names: tuple[str, ...],
     legacy_count: int | None = None,
 ) -> int:
-    key_col = cols[pk_index]
+    pk_indices = _pk_indices(cols, pk_col_names)
+    single_pk_col = pk_col_names[0] if len(pk_col_names) == 1 else None
     target_count_before = _count(target, table)
     if VERBOSE:
         _log(f"{table}: target rows before truncate = {target_count_before}")
@@ -233,11 +280,11 @@ def _insert_batches(
                 for row in rows:
                     batch.append(tuple(row[c] for c in cols))
 
-                dupes = _duplicate_keys_in_batch(batch, key_index=pk_index)
+                dupes = _duplicate_keys_in_batch(batch, pk_indices=pk_indices)
                 if dupes:
                     sample = dict(list(dupes.items())[:5])
                     raise RuntimeError(
-                        f"duplicate keys within {table} batch {batch_num}: {sample}"
+                        f"duplicate PKs within {table} batch {batch_num}: {sample}"
                     )
 
                 log_batch = VERBOSE and (
@@ -246,15 +293,15 @@ def _insert_batches(
                     or (table in ("scores", "partsets") and batch_num <= 20)
                 )
                 if log_batch:
-                    sample_keys = [row[pk_index] for row in batch[:5]]
+                    sample_keys = [_row_pk(row, pk_indices) for row in batch[:5]]
                     _log(
                         f"{table} batch {batch_num}: size={len(batch)} "
-                        f"sample_{key_col}s={sample_keys}"
+                        f"sample_pks={sample_keys}"
                     )
 
-                if VERBOSE and batch_num == 1:
-                    batch_keys = [row[pk_index] for row in batch]
-                    already = _keys_already_on_target(dst, table, key_col, batch_keys)
+                if VERBOSE and batch_num == 1 and single_pk_col:
+                    batch_keys = [row[pk_indices[0]] for row in batch]
+                    already = _keys_already_on_target(dst, table, single_pk_col, batch_keys)
                     if already:
                         raise RuntimeError(
                             f"{table} batch 1: {len(already)} keys already on target "
@@ -269,13 +316,13 @@ def _insert_batches(
             _log(f"FAILED {table} at batch {batch_num}: {exc}")
             _log(f"{table}: target row count after rollback attempt = {current}")
             if batch:
-                dupes = _duplicate_keys_in_batch(batch, key_index=pk_index)
+                dupes = _duplicate_keys_in_batch(batch, pk_indices=pk_indices)
                 if dupes:
                     _log(f"{table} batch {batch_num} within-batch dupes: {dupes}")
                 if VERBOSE:
                     _log(
-                        f"{table} batch {batch_num} keys sample: "
-                        f"{[r[pk_index] for r in batch[:10]]}"
+                        f"{table} batch {batch_num} pk sample: "
+                        f"{[_row_pk(r, pk_indices) for r in batch[:10]]}"
                     )
             raise
 
@@ -317,7 +364,7 @@ def _copy_table(
         select_sql=f"SELECT {col_list} FROM `{table}`",
         insert_sql=insert_sql,
         cols=cols,
-        pk_index=0,
+        pk_col_names=_pk_col_names(table, cols),
         legacy_count=legacy_count,
     )
 
@@ -345,7 +392,7 @@ def _copy_partsets(
         select_sql=f"SELECT {col_list} FROM partsets",
         insert_sql=insert_sql,
         cols=cols,
-        pk_index=0,
+        pk_col_names=("id",),
         legacy_count=legacy_count,
     )
 
@@ -399,8 +446,15 @@ def main() -> int:
         action="store_true",
         help="Log connection info, truncate counts, and per-batch details",
     )
+    parser.add_argument(
+        "--from-table",
+        metavar="TABLE",
+        choices=IMPORT_ORDER,
+        help="Resume import at this table (skip earlier tables; e.g. original_pages)",
+    )
     args = parser.parse_args()
     VERBOSE = args.verbose
+    from_table = args.from_table
 
     if not args.dry_run and not args.confirm:
         print("Pass --dry-run to inspect counts or --confirm to import.", file=sys.stderr)
@@ -433,14 +487,27 @@ def main() -> int:
                     )
                     for row in groups:
                         _log(f"  {row['variants']}")
+        def _skip(table: str) -> bool:
+            if not from_table:
+                return False
+            if IMPORT_ORDER.index(table) < IMPORT_ORDER.index(from_table):
+                print(f"  {table}: skipped (--from-table {from_table})")
+                return True
+            return False
+
         total = 0
-        total += _copy_table(legacy, target, "scores", dry_run=dry_run)
-        total += _copy_partsets(legacy, target, dry_run=dry_run)
+        if not _skip("scores"):
+            total += _copy_table(legacy, target, "scores", dry_run=dry_run)
+        if not _skip("partsets"):
+            total += _copy_partsets(legacy, target, dry_run=dry_run)
         for table in DIRECT_TABLES:
             if table == "scores":
                 continue
+            if _skip(table):
+                continue
             total += _copy_table(legacy, target, table, dry_run=dry_run)
-        total += _copy_breaks(legacy, target, dry_run=dry_run)
+        if not _skip("breaks"):
+            total += _copy_breaks(legacy, target, dry_run=dry_run)
 
         if dry_run:
             print(f"Total rows to import: {total}")
