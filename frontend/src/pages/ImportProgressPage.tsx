@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getImportStatus } from '../lib/api'
+import { pipelineErrorMessage, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
 
 export function ImportProgressPage() {
   const { privateId } = useParams<{ privateId: string }>()
   const navigate = useNavigate()
   const [progress, setProgress] = useState(0)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
   useEffect(() => {
     if (!privateId) return
 
@@ -19,7 +22,7 @@ export function ImportProgressPage() {
         if (cancelled) return
 
         if (data.error) {
-          navigate(`/?err=${data.error}`)
+          setErrorMessage(pipelineErrorMessage(data.error))
           return
         }
 
@@ -32,6 +35,10 @@ export function ImportProgressPage() {
         }
       } catch {
         failedAttempts += 1
+        if (failedAttempts >= 20 && !cancelled) {
+          setErrorMessage(POLLING_FAILED_MESSAGE)
+          return
+        }
       }
 
       if (!cancelled && failedAttempts < 20) {
@@ -59,10 +66,25 @@ export function ImportProgressPage() {
         alt=""
       />
       <div id="transition">
-        <div id="transition-text">Please wait while we import the score</div>
-        <div id="progress-bar">
-          <div id="progress-ribbon" style={{ width: ribbonWidth }} />
-        </div>
+        {errorMessage ? (
+          <>
+            <div id="transition-text">
+              <p className="red">{errorMessage}</p>
+              <p style={{ marginTop: 24, fontSize: 16 }}>
+                <Link to="/" className="red">
+                  Return to home and try again
+                </Link>
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div id="transition-text">Please wait while we import the score</div>
+            <div id="progress-bar">
+              <div id="progress-ribbon" style={{ width: ribbonWidth }} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

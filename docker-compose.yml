@@ -93,7 +93,7 @@ services:
       minio:
         condition: service_started
 
-  worker:
+  worker-1:
     <<: *worker-service
 
   worker-2:

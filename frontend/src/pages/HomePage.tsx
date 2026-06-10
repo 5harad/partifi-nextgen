@@ -4,6 +4,7 @@ import { Layout } from '../components/Layout'
 import { CopyrightTip } from '../components/CopyrightTip'
 import { createPartsetFromImslp, createPartsetFromPdf, getCsrfToken, getImslpInfo, sha1File } from '../lib/api'
 import { guessCopyrightFromPublisher, normalizeImslpIdInput } from '../lib/imslpUtils'
+import { pipelineErrorMessage } from '../lib/pipelineErrors'
 import type { CopyrightValue } from '../lib/imslpUtils'
 
 export function HomePage() {
@@ -13,7 +14,10 @@ export function HomePage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [filename, setFilename] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState(searchParams.get('err') || '')
+  const [error, setError] = useState(() => {
+    const err = searchParams.get('err')
+    return err ? pipelineErrorMessage(err) : ''
+  })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [imslpId, setImslpId] = useState('')
