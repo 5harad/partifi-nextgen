@@ -94,6 +94,15 @@ curl -s http://localhost/health/ready
 
 The legacy MySQL server must be reachable from EC2 (VPN, SSH tunnel, or temporary security-group rule).
 
+**Before import:** target id columns must use `utf8mb4_bin` (case-sensitive) so legacy ids like `03mra` and `03mrA` remain distinct. On an existing database:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T mysql \
+  mysql -u root -p"$MYSQL_ROOT_PASSWORD" partifi < scripts/alter_case_sensitive_ids.sql
+```
+
+Fresh installs from current `docker/mysql/init.sql` already use the correct collations.
+
 ### Option A — SSH tunnel to legacy DB
 
 On your laptop:

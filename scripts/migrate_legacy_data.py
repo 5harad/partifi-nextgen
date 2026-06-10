@@ -4,6 +4,9 @@
 Imports content tables only (no users, favorites, donations, or downloads).
 Legacy editor/download links keep working because public/private ids are preserved.
 
+Requires case-sensitive string id columns (utf8mb4_bin) on the target database.
+Run scripts/alter_case_sensitive_ids.sql before import if upgrading an older schema.
+
 Usage:
   cd api && uv run python ../scripts/migrate_legacy_data.py --dry-run
   cd api && uv run python ../scripts/migrate_legacy_data.py --confirm
@@ -65,6 +68,13 @@ PARTSET_COLUMNS = (
     "paste_progress",
 )
 
+# Target columns that must use utf8mb4_bin so legacy ids differing only by case import.
+REQUIRED_BIN_COLUMNS = (
+    ("scores", "id"),
+    ("partsets", "id"),
+    ("partsets", "private_id"),
+)
+
 VERBOSE = False
 
 
@@ -96,6 +106,53 @@ def _count(conn: pymysql.connections.Connection, table: str) -> int:
         cur.execute(f"SELECT COUNT(*) AS n FROM `{table}`")
         row = cur.fetchone()
         return int(row["n"])
+
+
+def _column_collation(conn: pymysql.connections.Connection, table: str, column: str) -> str | None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT COLLATION_NAME
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = %s
+              AND COLUMN_NAME = %s
+            """,
+            (table, column),
+        )
+        row = cur.fetchone()
+        return row["COLLATION_NAME"] if row else None
+
+
+def _verify_target_bin_collations(target: pymysql.connections.Connection) -> None:
+    bad: list[str] = []
+    for table, column in REQUIRED_BIN_COLUMNS:
+        collation = _column_collation(target, table, column)
+        if collation != "utf8mb4_bin":
+            bad.append(f"{table}.{column} (got {collation!r})")
+    if bad:
+        raise RuntimeError(
+            "Target id columns must use utf8mb4_bin for case-sensitive legacy ids. "
+            f"Fix: scripts/alter_case_sensitive_ids.sql. Bad: {', '.join(bad)}"
+        )
+
+
+def _report_legacy_case_id_groups(
+    legacy: pymysql.connections.Connection, table: str, *, id_col: str = "id"
+) -> list[dict]:
+    with legacy.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT LOWER(`{id_col}`) AS norm, COUNT(*) AS c,
+                   GROUP_CONCAT(`{id_col}` SEPARATOR '|') AS variants
+            FROM `{table}`
+            GROUP BY LOWER(`{id_col}`)
+            HAVING COUNT(*) > 1
+            ORDER BY c DESC
+            LIMIT 10
+            """
+        )
+        return list(cur.fetchall())
 
 
 def _column_names(conn: pymysql.connections.Connection, table: str) -> list[str]:
@@ -148,6 +205,7 @@ def _insert_batches(
     insert_sql: str,
     cols: list[str],
     pk_index: int = 0,
+    legacy_count: int | None = None,
 ) -> int:
     key_col = cols[pk_index]
     target_count_before = _count(target, table)
@@ -171,6 +229,7 @@ def _insert_batches(
                 if not rows:
                     break
                 batch_num += 1
+                batch.clear()
                 for row in rows:
                     batch.append(tuple(row[c] for c in cols))
 
@@ -204,7 +263,6 @@ def _insert_batches(
 
                 dst.executemany(insert_sql, batch)
                 copied += len(batch)
-                batch.clear()
         except Exception as exc:
             target.rollback()
             current = _count(target, table)
@@ -215,11 +273,18 @@ def _insert_batches(
                 if dupes:
                     _log(f"{table} batch {batch_num} within-batch dupes: {dupes}")
                 if VERBOSE:
-                    _log(f"{table} batch {batch_num} keys sample: {[r[pk_index] for r in batch[:10]]}")
+                    _log(
+                        f"{table} batch {batch_num} keys sample: "
+                        f"{[r[pk_index] for r in batch[:10]]}"
+                    )
             raise
 
     target.commit()
     target_count_final = _count(target, table)
+    if legacy_count is not None and target_count_final != legacy_count:
+        raise RuntimeError(
+            f"{table}: legacy has {legacy_count} rows but target has {target_count_final}"
+        )
     if target_count_final != copied:
         raise RuntimeError(
             f"{table}: inserted {copied} rows but target count is {target_count_final}"
@@ -253,6 +318,7 @@ def _copy_table(
         insert_sql=insert_sql,
         cols=cols,
         pk_index=0,
+        legacy_count=legacy_count,
     )
 
 
@@ -280,6 +346,7 @@ def _copy_partsets(
         insert_sql=insert_sql,
         cols=cols,
         pk_index=0,
+        legacy_count=legacy_count,
     )
 
 
@@ -310,6 +377,9 @@ def _copy_breaks(
                 [(r["partset_id"], r["tag"], r["break"]) for r in rows],
             )
     target.commit()
+    final = _count(target, "breaks")
+    if final != legacy_count:
+        raise RuntimeError(f"breaks: legacy has {legacy_count} rows but target has {final}")
     print(f"  breaks: copied {legacy_count} rows")
     return legacy_count
 
@@ -351,6 +421,18 @@ def main() -> int:
 
     try:
         print("Import plan (content tables only; users/favorites skipped):")
+        if not dry_run:
+            _verify_target_bin_collations(target)
+            for table, id_col in (("scores", "id"), ("partsets", "id")):
+                groups = _report_legacy_case_id_groups(legacy, table, id_col=id_col)
+                if groups:
+                    _log(
+                        f"Note: legacy {table} has ids differing only by case "
+                        f"({len(groups)}+ groups; showing up to 10). "
+                        "All variants will be preserved (utf8mb4_bin)."
+                    )
+                    for row in groups:
+                        _log(f"  {row['variants']}")
         total = 0
         total += _copy_table(legacy, target, "scores", dry_run=dry_run)
         total += _copy_partsets(legacy, target, dry_run=dry_run)

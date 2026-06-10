@@ -1,12 +1,16 @@
 CREATE DATABASE IF NOT EXISTS partifi CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE partifi;
 
+-- String ids (scores, partsets, URL path segments) use utf8mb4_bin so legacy ids
+-- that differ only by case (e.g. 03mra vs 03mrA) remain distinct. Text search
+-- columns keep utf8mb4_unicode_ci.
+
 CREATE TABLE IF NOT EXISTS scores (
-    id VARCHAR(255) NOT NULL PRIMARY KEY,
+    id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL PRIMARY KEY,
     imslp_id VARCHAR(255),
     num_pages INT,
     file_size INT,
-    file_hash VARCHAR(255),
+    file_hash VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
     import_start DATETIME,
     import_complete DATETIME,
     convert_start DATETIME,
@@ -20,9 +24,9 @@ CREATE TABLE IF NOT EXISTS scores (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS partsets (
-    id VARCHAR(255) NOT NULL PRIMARY KEY,
-    private_id VARCHAR(255),
-    score_id VARCHAR(255),
+    id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL PRIMARY KEY,
+    private_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+    score_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
     imslp_id VARCHAR(255),
     tmpdir VARCHAR(255),
     create_ts DATETIME,
@@ -33,7 +37,7 @@ CREATE TABLE IF NOT EXISTS partsets (
     composer VARCHAR(255),
     publisher VARCHAR(255),
     copyright ENUM('before 1923', 'after 1923', 'unknown'),
-    user_id VARCHAR(255),
+    user_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
     num_downloads INT NOT NULL DEFAULT 0,
     status ENUM('import', 'convert', 'analysis', 'cut', 'paste'),
     error ENUM('import', 'convert', 'analysis', 'cut', 'paste'),
@@ -59,7 +63,7 @@ CREATE TABLE IF NOT EXISTS partsets (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS original_pages (
-    score_id VARCHAR(255) NOT NULL,
+    score_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
     page INT,
     left_margin FLOAT,
     right_margin FLOAT,
@@ -69,7 +73,7 @@ CREATE TABLE IF NOT EXISTS original_pages (
 
 CREATE TABLE IF NOT EXISTS original_segments (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    score_id VARCHAR(255) NOT NULL,
+    score_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
     page INT,
     top FLOAT,
     bottom FLOAT,
@@ -77,7 +81,7 @@ CREATE TABLE IF NOT EXISTS original_segments (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS pages (
-    partset_id VARCHAR(255) NOT NULL,
+    partset_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
     page INT,
     left_margin FLOAT,
     right_margin FLOAT,
@@ -87,11 +91,11 @@ CREATE TABLE IF NOT EXISTS pages (
 
 CREATE TABLE IF NOT EXISTS segments (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    partset_id VARCHAR(255) NOT NULL,
+    partset_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
     page INT,
     top FLOAT,
     bottom FLOAT,
-    tags VARCHAR(255),
+    tags VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
     tag_is_suggestion BOOLEAN NOT NULL DEFAULT 0,
     label VARCHAR(255),
     label_is_suggestion BOOLEAN NOT NULL DEFAULT 0,
@@ -100,15 +104,15 @@ CREATE TABLE IF NOT EXISTS segments (
 
 CREATE TABLE IF NOT EXISTS breaks (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    partset_id VARCHAR(255) NOT NULL,
-    tag VARCHAR(255),
+    partset_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+    tag VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
     break INT,
     INDEX idx_breaks_partset_id (partset_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS parts (
-    partset_id VARCHAR(255) NOT NULL,
-    tag VARCHAR(255),
+    partset_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+    tag VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
     spacing FLOAT,
     combined BOOLEAN,
     file_name VARCHAR(255),
@@ -116,10 +120,10 @@ CREATE TABLE IF NOT EXISTS parts (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS downloads (
-    score_id VARCHAR(255),
-    partset_id VARCHAR(255),
-    tag VARCHAR(255),
-    user_id VARCHAR(255),
+    score_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+    partset_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+    tag VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+    user_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
     bcookie VARCHAR(255),
     ts DATETIME,
     INDEX idx_downloads_score_id (score_id),
@@ -127,7 +131,7 @@ CREATE TABLE IF NOT EXISTS downloads (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS imslp_info (
-    id VARCHAR(255) NOT NULL PRIMARY KEY,
+    id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL PRIMARY KEY,
     title VARCHAR(255),
     composer VARCHAR(255),
     publisher VARCHAR(255),
@@ -137,22 +141,22 @@ CREATE TABLE IF NOT EXISTS imslp_info (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS favorites (
-    partset_id VARCHAR(255) NOT NULL,
-    user_id VARCHAR(255) NOT NULL,
+    partset_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+    user_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
     admin BOOLEAN,
     ts DATETIME,
     PRIMARY KEY (partset_id, user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS users (
-    id VARCHAR(255) NOT NULL PRIMARY KEY,
+    id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL PRIMARY KEY,
     name VARCHAR(255),
     ts DATETIME
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS friends (
-    u1 VARCHAR(255),
-    u2 VARCHAR(255),
+    u1 VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+    u2 VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
     PRIMARY KEY (u1, u2)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
