@@ -159,8 +159,8 @@ Partsets (CSRF required on mutations):
 Score PDF downloads (proxied from S3; no CSRF):
 
 - `GET /api/v1/scores/{score_id}/score.pdf`
-- `GET /api/v1/partsets/{private_id}/score-pdf`
-- `GET /api/v1/access/{access_id}/score-pdf`
+- `GET /api/v1/partsets/{private_id}/score.pdf`
+- `GET /api/v1/access/{access_id}/score.pdf`
 
 Cached assets (local cache; S3 read fallback only if legacy objects exist; no CSRF):
 

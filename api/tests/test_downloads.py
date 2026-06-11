@@ -13,11 +13,11 @@ def test_score_pdf_url_for_score() -> None:
 
 
 def test_score_pdf_url_for_access() -> None:
-    assert score_pdf_url_for_access("lkP8w") == "/api/v1/access/lkP8w/score-pdf"
+    assert score_pdf_url_for_access("lkP8w") == "/api/v1/access/lkP8w/score.pdf"
 
 
 def test_score_pdf_url_for_owner() -> None:
-    assert score_pdf_url_for_owner("s3VK6") == "/api/v1/partsets/s3VK6/score-pdf"
+    assert score_pdf_url_for_owner("s3VK6") == "/api/v1/partsets/s3VK6/score.pdf"
 
 
 def test_part_file_urls() -> None:
@@ -34,6 +34,6 @@ def test_part_file_urls() -> None:
 
 def test_score_pdf_url_for_partset_modes() -> None:
     partset = Partset(id="pub01", private_id="priv1", score_id="sc01")
-    assert score_pdf_url_for_partset(partset, mode="owner") == "/api/v1/partsets/priv1/score-pdf"
-    assert score_pdf_url_for_partset(partset, mode="public") == "/api/v1/access/pub01/score-pdf"
+    assert score_pdf_url_for_partset(partset, mode="owner") == "/api/v1/partsets/priv1/score.pdf"
+    assert score_pdf_url_for_partset(partset, mode="public") == "/api/v1/access/pub01/score.pdf"
     assert score_pdf_url_for_partset(Partset(id="pub02", score_id=None)) is None

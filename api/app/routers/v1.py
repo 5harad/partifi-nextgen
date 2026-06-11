@@ -183,7 +183,7 @@ def score_pdf(score_id: str) -> FileResponse:
     return _serve_score_pdf(score_id)
 
 
-@router.get("/access/{access_id}/score-pdf")
+@router.get("/access/{access_id}/score.pdf")
 def score_pdf_access(access_id: str, db: Session = Depends(get_db)) -> FileResponse:
     resolved = resolve_partset_access(db, access_id)
     if not resolved:
@@ -195,7 +195,7 @@ def score_pdf_access(access_id: str, db: Session = Depends(get_db)) -> FileRespo
     return _serve_score_pdf(partset.score_id)
 
 
-@router.get("/partsets/{private_id}/score-pdf")
+@router.get("/partsets/{private_id}/score.pdf")
 def score_pdf_owner(private_id: str, db: Session = Depends(get_db)) -> FileResponse:
     partset = get_partset_by_private_id(db, private_id)
     if not partset or not partset.score_id:

@@ -10,11 +10,11 @@ def score_pdf_url_for_score(score_id: str) -> str:
 
 
 def score_pdf_url_for_access(access_id: str) -> str:
-    return f"/api/v1/access/{access_id}/score-pdf"
+    return f"/api/v1/access/{access_id}/score.pdf"
 
 
 def score_pdf_url_for_owner(private_id: str) -> str:
-    return f"/api/v1/partsets/{private_id}/score-pdf"
+    return f"/api/v1/partsets/{private_id}/score.pdf"
 
 
 def part_file_url(partset: Partset, filename: str, *, mode: str = "public") -> str:
