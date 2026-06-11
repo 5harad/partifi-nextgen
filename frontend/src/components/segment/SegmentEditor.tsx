@@ -10,11 +10,14 @@ import { TagsInput } from './TagsInput'
 import {
   VIEWER_HEIGHT,
   VIEWER_WIDTH,
+  MIN_SEGMENT_GAP,
   buildPageData,
+  clampSegmentTopPx,
   computeRegionLayouts,
   marginPctToPx,
   marginPxToPct,
   materializeAllPagesWithSuggestions,
+  minDistanceToSegments,
   nextRegionId,
   pageDataAreEqual,
   regionsFromPageData,
@@ -64,6 +67,8 @@ export function SegmentEditor({ data }: Props) {
   const focusedTagsIdRef = useRef<string | null>(null)
   const tagInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const suppressTagBlurRef = useRef(false)
+  const suppressSegmenterClickRef = useRef(false)
+  const segmentDragStartYRef = useRef(0)
 
   const stateRef = useRef({
     regions,
@@ -281,7 +286,19 @@ export function SegmentEditor({ data }: Props) {
   }
 
   const handleSegmenterClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target !== e.currentTarget) return
+    if (suppressSegmenterClickRef.current) {
+      suppressSegmenterClickRef.current = false
+      return
+    }
+    const target = e.target as HTMLElement
+    if (
+      target.closest(
+        '.seg-handle, .seg-delete, .tag-delete, .rehearsal-nos-delete, input, textarea',
+      )
+    ) {
+      return
+    }
+
     const el = segmenterRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()
@@ -289,9 +306,7 @@ export function SegmentEditor({ data }: Props) {
     const y = e.clientY - rect.top
     if (y <= 1 || y >= 775 || x <= 0 || x >= 600) return
 
-    const dists = regions.map((r) => Math.abs(r.topPx - y))
-    const minDist = dists.length > 0 ? Math.min(...dists) : 1000
-    if (minDist <= 10) {
+    if (minDistanceToSegments(y, regions) <= MIN_SEGMENT_GAP) {
       window.alert('Please do not add a new segment so close to an existing one.')
       return
     }
@@ -312,12 +327,20 @@ export function SegmentEditor({ data }: Props) {
     const target = e.currentTarget as HTMLElement
     target.setPointerCapture(e.pointerId)
 
+    if (kind === 'segment' && regionId) {
+      segmentDragStartYRef.current = stateRef.current.regions.find((r) => r.id === regionId)?.topPx ?? 0
+    }
+
     const onMove = (ev: PointerEvent) => {
       if (kind === 'segment' && regionId && segmenterRef.current) {
         const rect = segmenterRef.current.getBoundingClientRect()
         const y = Math.max(0, Math.min(VIEWER_HEIGHT, ev.clientY - rect.top))
+        if (Math.abs(y - segmentDragStartYRef.current) > 3) {
+          suppressSegmenterClickRef.current = true
+        }
         setRegions((prev) => {
-          const updated = prev.map((r) => (r.id === regionId ? { ...r, topPx: y } : r))
+          const clamped = clampSegmentTopPx(y, regionId, prev)
+          const updated = prev.map((r) => (r.id === regionId ? { ...r, topPx: clamped } : r))
           stateRef.current.regions = updated
           return updated
         })
@@ -565,6 +588,9 @@ export function SegmentEditor({ data }: Props) {
                     onPointerDown={(e) => {
                       e.stopPropagation()
                       startDrag(e, 'segment', region.id)
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation()
                     }}
                   />
                 </div>

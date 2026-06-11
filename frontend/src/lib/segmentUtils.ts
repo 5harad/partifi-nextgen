@@ -3,6 +3,8 @@ import { applySuggestionsToRegions } from './segmentTagSuggestions'
 
 export const VIEWER_HEIGHT = 776
 export const VIEWER_WIDTH = 600
+/** Minimum px between segment divider lines (matches legacy region padding). */
+export const MIN_SEGMENT_GAP = 11
 
 export function pctToPx(pct: number): number {
   return Math.round((pct / 100) * VIEWER_HEIGHT)
@@ -104,6 +106,31 @@ export function computeRegionLayouts(regions: RegionState[]): Map<string, Region
   })
 
   return layouts
+}
+
+export function clampSegmentTopPx(
+  topPx: number,
+  regionId: string,
+  regions: RegionState[],
+): number {
+  const sorted = [...regions].sort((a, b) => a.topPx - b.topPx)
+  const idx = sorted.findIndex((r) => r.id === regionId)
+  if (idx < 0) return topPx
+
+  let minY = 2
+  let maxY = VIEWER_HEIGHT - 1
+  if (idx > 0) {
+    minY = sorted[idx - 1].topPx + MIN_SEGMENT_GAP
+  }
+  if (idx < sorted.length - 1) {
+    maxY = sorted[idx + 1].topPx - MIN_SEGMENT_GAP
+  }
+  return Math.max(minY, Math.min(maxY, topPx))
+}
+
+export function minDistanceToSegments(topPx: number, regions: RegionState[]): number {
+  if (regions.length === 0) return 1000
+  return Math.min(...regions.map((r) => Math.abs(r.topPx - topPx)))
 }
 
 export function marginPxToPct(px: number): number {
