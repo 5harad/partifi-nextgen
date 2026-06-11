@@ -10,7 +10,7 @@ ScoreImageKind = str
 
 
 def page_image_url(private_id: str, page: int, res: ScoreImageKind) -> str:
-    return f"/api/v1/partsets/{private_id}/page-image/{page}?res={res}"
+    return f"/api/v1/partsets/{private_id}/page-image/{page}.png?res={res}"
 
 
 def _sync_part_rows_from_tags(db: Session, partset_id: str) -> None:

@@ -126,20 +126,30 @@ class LocalCache:
         return True
 
     def write_preview(self, partset_id: str, fingerprint: str, segments_dir: Path) -> None:
-        parent = self.root / "preview"
-        parent.mkdir(parents=True, exist_ok=True)
-        staging = parent / f"{partset_id}.staging.{self._token()}"
-        staging.mkdir(parents=True)
+        """Publish preview PNGs in place so readers never see an empty directory."""
+        preview_dir = self.preview_dir(partset_id)
+        preview_dir.mkdir(parents=True, exist_ok=True)
 
-        try:
-            for png in sorted(segments_dir.glob("s*.png")):
-                shutil.copy2(png, staging / png.name)
-            # Fingerprint last — marks staging as complete for readers.
-            (staging / self.FINGERPRINT_NAME).write_text(fingerprint)
-            self._publish_dir(staging, self.preview_dir(partset_id))
-        except Exception:
-            shutil.rmtree(staging, ignore_errors=True)
-            raise
+        expected = {png.name for png in segments_dir.glob("s*.png")}
+        for png in sorted(segments_dir.glob("s*.png")):
+            dest = preview_dir / png.name
+            tmp = self._temp_path(dest)
+            try:
+                shutil.copy2(png, tmp)
+                self._replace_file(tmp, dest)
+            except Exception:
+                tmp.unlink(missing_ok=True)
+                if not dest.is_file():
+                    raise
+
+        for existing in preview_dir.glob("s*.png"):
+            if existing.name not in expected:
+                existing.unlink(missing_ok=True)
+
+        fp = preview_dir / self.FINGERPRINT_NAME
+        fp_tmp = self._temp_path(fp)
+        fp_tmp.write_text(fingerprint)
+        self._replace_file(fp_tmp, fp)
 
     def invalidate_preview(self, partset_id: str) -> None:
         parent = self.root / "preview"
@@ -263,6 +273,11 @@ class LocalCache:
             tmp.unlink(missing_ok=True)
             LocalCache._touch(dest)
             return
+        LocalCache._replace_file(tmp, dest)
+
+    @staticmethod
+    def _replace_file(tmp: Path, dest: Path) -> None:
+        dest.parent.mkdir(parents=True, exist_ok=True)
         os.replace(tmp, dest)
 
     @staticmethod

@@ -129,6 +129,26 @@ def page_image(
     res: str = Query("lowres"),
     db: Session = Depends(get_db),
 ) -> FileResponse:
+    return _page_image_response(private_id, page, res, db)
+
+
+@router.get("/partsets/{private_id}/page-image/{page}")
+def page_image_legacy(
+    private_id: str,
+    page: int,
+    res: str = Query("lowres"),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    """Backward-compatible path without .png suffix (pre-483c1d1 segment-data URLs)."""
+    return _page_image_response(private_id, page, res, db)
+
+
+def _page_image_response(
+    private_id: str,
+    page: int,
+    res: str,
+    db: Session,
+) -> FileResponse:
     if res not in PAGE_IMAGE_RES:
         raise HTTPException(status_code=400, detail="Invalid res")
     if page < 1:

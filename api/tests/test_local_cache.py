@@ -83,10 +83,15 @@ def test_write_preview_publishes_complete_dir(tmp_path: Path) -> None:
     assert (preview / ".fingerprint").read_text() == "fp123"
     assert (preview / "s0.png").read_bytes() == b"seg0"
     assert (preview / "s1.png").read_bytes() == b"seg1"
-    assert not any(tmp_path.joinpath("preview").glob("ps1.staging.*"))
 
 
-def test_write_preview_keeps_old_dir_visible_until_swap(tmp_path: Path) -> None:
+def test_page_image_url_includes_png_suffix() -> None:
+    from app.services.segments import page_image_url
+
+    assert page_image_url("priv1", 3, "lowres") == "/api/v1/partsets/priv1/page-image/3.png?res=lowres"
+
+
+def test_write_preview_replaces_existing_files(tmp_path: Path) -> None:
     cache = _cache(tmp_path)
     preview = cache.preview_dir("ps1")
     preview.mkdir(parents=True)
