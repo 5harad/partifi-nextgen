@@ -328,7 +328,7 @@ Layout:
   parts/{partset_id}/*.pdf
 ```
 
-S3 remains the source of truth; local files are evicted when cold or over the size cap.
+S3 remains the source of truth; local files are evicted when cold or over the size cap. The API serves cached files via `/page-image/`, `/preview-segment/`, and `/part-file/` routes (see README). Saving segments or layout invalidates that partset's preview and part PDF cache entries.
 
 **Check usage on the host:**
 

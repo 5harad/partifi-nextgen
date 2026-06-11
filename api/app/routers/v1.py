@@ -21,6 +21,7 @@ from app.schemas.partset import (
 from app.schemas.imslp import CreateFromImslpRequest, ImslpInfoResponse
 from app.schemas.search import CreateFromScoreRequest, SearchResponse
 from app.schemas.segment import (
+    SaveAllPageSegmentsRequest,
     SavePageSegmentsRequest,
     SavePageSegmentsResponse,
     SegmentDataResponse,
@@ -63,6 +64,7 @@ from app.services.partset_touch import touch_partset_access
 from app.services.segments import (
     get_partset_by_private_id,
     get_segments_data,
+    save_all_page_segments,
     save_page_segments,
 )
 
@@ -360,6 +362,31 @@ def segment_data(private_id: str, db: Session = Depends(get_db)) -> SegmentDataR
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return SegmentDataResponse(**payload)
+
+
+@router.put(
+    "/partsets/{private_id}/segments",
+    response_model=SavePageSegmentsResponse,
+)
+def save_all_segments(
+    private_id: str,
+    body: SaveAllPageSegmentsRequest,
+    x_csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+    db: Session = Depends(get_db),
+) -> SavePageSegmentsResponse:
+    verify_csrf(x_csrf_token)
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    try:
+        save_all_page_segments(
+            db,
+            partset,
+            {key: page.model_dump() for key, page in body.pages.items()},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return SavePageSegmentsResponse(status="success")
 
 
 @router.put(

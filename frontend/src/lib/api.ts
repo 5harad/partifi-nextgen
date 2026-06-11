@@ -113,6 +113,25 @@ export async function savePageSegments(
   }
 }
 
+export async function saveAllPageSegments(
+  privateId: string,
+  pages: Record<string, PageSegmentData>,
+  csrfToken: string,
+): Promise<void> {
+  const res = await fetch(`/api/v1/partsets/${privateId}/segments`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify({ pages }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to save segments')
+  }
+}
+
 export async function getPreviewData(privateId: string): Promise<PreviewDataResponse> {
   const res = await fetch(`/api/v1/partsets/${privateId}/preview-data`)
   if (!res.ok) {

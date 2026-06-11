@@ -32,5 +32,9 @@ class SavePageSegmentsRequest(BaseModel):
     segments: list[SegmentItem]
 
 
+class SaveAllPageSegmentsRequest(BaseModel):
+    pages: dict[str, PageSegmentData]
+
+
 class SavePageSegmentsResponse(BaseModel):
     status: str

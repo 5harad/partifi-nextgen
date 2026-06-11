@@ -124,7 +124,8 @@ Partsets (CSRF required on mutations):
 - `POST /api/v1/partsets/from-score` — partify from existing library score
 - `GET /api/v1/partsets/{private_id}/import-status`
 - `GET /api/v1/partsets/{private_id}/segment-data`
-- `PUT /api/v1/partsets/{private_id}/pages/{page}/segments`
+- `PUT /api/v1/partsets/{private_id}/pages/{page}/segments` — save one page while editing
+- `PUT /api/v1/partsets/{private_id}/segments` — save all pages (with propagated tags) on continue to preview
 - `GET /api/v1/partsets/{private_id}/preview-data`
 - `PUT /api/v1/partsets/{private_id}/layout`
 - `POST /api/v1/partsets/{private_id}/parts/combine`
@@ -132,6 +133,16 @@ Partsets (CSRF required on mutations):
 - `GET /api/v1/partsets/{private_id}/partgen-status`
 - `POST /api/v1/partsets/{private_id}/retry-pipeline` — re-enqueue failed import or partgen
 - `GET /api/v1/partsets/{private_id}/parts`
+- `GET /api/v1/access/{access_id}/parts`
+
+Cached assets (read-through local cache / S3; no CSRF):
+
+- `GET /api/v1/partsets/{private_id}/page-image/{page}.png?res=lowres|highres|thumbs`
+- `GET /api/v1/partsets/{private_id}/preview-segment/{ndx}.png`
+- `GET /api/v1/partsets/{private_id}/part-file/{filename}`
+- `GET /api/v1/access/{access_id}/part-file/{filename}`
+
+Segment or layout saves invalidate preview and part PDF cache entries for that partset.
 
 ## Production deploy
 

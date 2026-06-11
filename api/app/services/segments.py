@@ -138,12 +138,7 @@ def get_segments_data(db: Session, partset: Partset) -> dict:
     }
 
 
-def save_page_segments(
-    db: Session,
-    partset: Partset,
-    page: int,
-    payload: dict,
-) -> None:
+def _reset_partset_for_segment_edit(partset: Partset) -> None:
     partset.parts_ready = False
     partset.cut_start = None
     partset.cut_complete = None
@@ -153,7 +148,14 @@ def save_page_segments(
     partset.paste_progress = 0.0
     partset.status = "analysis"
 
-    db.query(Page).filter(Page.partset_id == partset.id, Page.page == page).update(
+
+def _apply_page_segment_payload(
+    db: Session,
+    partset_id: str,
+    page: int,
+    payload: dict,
+) -> None:
+    db.query(Page).filter(Page.partset_id == partset_id, Page.page == page).update(
         {
             Page.left_margin: payload["left_margin"],
             Page.right_margin: payload["right_margin"],
@@ -162,7 +164,7 @@ def save_page_segments(
     )
 
     db.query(Segment).filter(
-        Segment.partset_id == partset.id, Segment.page == page
+        Segment.partset_id == partset_id, Segment.page == page
     ).delete()
 
     for segment in payload["segments"]:
@@ -171,7 +173,7 @@ def save_page_segments(
         label = rm_space(segment.get("label", ""))
         db.add(
             Segment(
-                partset_id=partset.id,
+                partset_id=partset_id,
                 page=page,
                 top=segment["pos"][0],
                 bottom=segment["pos"][1],
@@ -182,8 +184,41 @@ def save_page_segments(
             )
         )
 
-    _sync_part_rows_from_tags(db, partset.id)
+
+def _finalize_segment_save(db: Session, partset_id: str) -> None:
+    _sync_part_rows_from_tags(db, partset_id)
     cache = get_local_cache()
-    cache.invalidate_preview(partset.id)
-    cache.invalidate_parts(partset.id)
+    cache.invalidate_preview(partset_id)
+    cache.invalidate_parts(partset_id)
     db.commit()
+
+
+def save_page_segments(
+    db: Session,
+    partset: Partset,
+    page: int,
+    payload: dict,
+) -> None:
+    _reset_partset_for_segment_edit(partset)
+    _apply_page_segment_payload(db, partset.id, page, payload)
+    _finalize_segment_save(db, partset.id)
+
+
+def save_all_page_segments(
+    db: Session,
+    partset: Partset,
+    pages: dict[str, dict],
+) -> None:
+    num_pages = get_num_pages(db, partset.id, partset.score_id)
+    if num_pages <= 0:
+        raise ValueError("Partset has no pages")
+
+    for page_num in range(1, num_pages + 1):
+        key = f"p{page_num}"
+        if key not in pages:
+            raise ValueError(f"Missing segment data for page {page_num}")
+
+    _reset_partset_for_segment_edit(partset)
+    for page_num in range(1, num_pages + 1):
+        _apply_page_segment_payload(db, partset.id, page_num, pages[f"p{page_num}"])
+    _finalize_segment_save(db, partset.id)

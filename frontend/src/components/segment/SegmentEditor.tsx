@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getCsrfToken, savePageSegments } from '../../lib/api'
+import { getCsrfToken, saveAllPageSegments, savePageSegments } from '../../lib/api'
 import {
   applySuggestionsToRegions,
   buildTagList,
@@ -409,12 +409,11 @@ export function SegmentEditor({ data }: Props) {
     }
     try {
       setSaving(true)
-      for (let p = 1; p <= data.num_pages; p++) {
-        await persistPage(p, allPages[`p${p}`]!)
-      }
+      const token = await getCsrfToken()
+      await saveAllPageSegments(data.private_id, allPages, token)
       navigate(`/${data.private_id}/preview`)
-    } catch {
-      /* error set */
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed')
     } finally {
       setSaving(false)
     }
