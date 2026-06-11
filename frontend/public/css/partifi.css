@@ -1666,12 +1666,21 @@ a.red:hover
 	z-index: 100;
 }
 
+#library-layout .library-empty {
+	position: relative;
+	left: 148px;
+	min-height: 480px;
+	padding: 200px 20px 40px;
+	box-sizing: border-box;
+}
+
 #no-parts {
-	margin-top: 210px;
+	margin: 0;
 	width: 100%;
-	text-align:center;
+	text-align: center;
 	font-family: 'IM Fell Great Primer', serif;
 	font-size: 28px;
+	line-height: 1.35;
 }
 
 #library-layout {

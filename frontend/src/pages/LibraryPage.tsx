@@ -308,7 +308,7 @@ export function LibraryPage() {
 
         <div id="library-layout">
           {items.length === 0 ? (
-            <div className="library-item" style={{ position: 'relative', left: 148 }}>
+            <div className="library-item library-empty">
               <div className="box-top" />
               <p id="no-parts">{emptyMessage}</p>
               <div className="box-bottom" />
