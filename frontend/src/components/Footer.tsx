@@ -2,6 +2,9 @@ import { Link } from 'react-router-dom'
 
 const CONTACT_EMAIL = 'support@partifi.org'
 const SOURCE_REPO_URL = 'https://github.com/5harad/partifi-nextgen'
+const SHARE_MAILTO = `mailto:?subject=${encodeURIComponent('Partifi')}&body=${encodeURIComponent(
+  'A free and automated tool for creating parts from music scores: https://partifi.org',
+)}`
 
 export function Footer() {
   const year = new Date().getFullYear()
@@ -13,7 +16,7 @@ export function Footer() {
           <div>
             <img src="/images/email_icon.gif" style={{ verticalAlign: 'middle' }} alt="" />{' '}
             <div className="share-text">
-              <a href="mailto:?subject=Partifi&body=A+free+and+automated+tool+for+creating+parts+from+music+scores:+http://partifi.org">
+              <a href={SHARE_MAILTO}>
                 share with a friend
               </a>
             </div>

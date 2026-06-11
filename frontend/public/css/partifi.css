@@ -1792,6 +1792,7 @@ a.red:hover
 	top: 5px;
 	left: 0px;
 	background-image: url('/images/box_middle.png');
+	overflow: visible;
 }
 
 .search-results {

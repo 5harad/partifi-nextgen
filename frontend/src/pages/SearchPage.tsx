@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { createPartsetFromScore, getCsrfToken, searchPartsets } from '../lib/api'
@@ -6,6 +6,24 @@ import type { SearchResultItem } from '../types/search'
 
 const RESULTS_PER_PAGE = 10
 const PAGE_WIDTH = 740
+const MIN_CARD_HEIGHT = 575
+
+function adjustSerpHeights(pagesContainer: HTMLElement | null): { wrapper: number; main: number } {
+  const pageEls = pagesContainer?.querySelectorAll<HTMLElement>('.search-results-page')
+  if (!pageEls?.length) {
+    return { wrapper: MIN_CARD_HEIGHT + 25, main: MIN_CARD_HEIGHT + 200 }
+  }
+
+  let contentHeight = MIN_CARD_HEIGHT
+  pageEls.forEach((el) => {
+    el.style.height = 'auto'
+    contentHeight = Math.max(contentHeight, el.offsetHeight)
+  })
+  pageEls.forEach((el) => {
+    el.style.height = `${contentHeight}px`
+  })
+  return { wrapper: contentHeight + 25, main: contentHeight + 200 }
+}
 
 function chunkResults(results: SearchResultItem[]): SearchResultItem[][] {
   const pages: SearchResultItem[][] = []
@@ -25,6 +43,11 @@ export function SearchPage() {
   const [searchError, setSearchError] = useState<string | null>(null)
   const [pageIndex, setPageIndex] = useState(0)
   const [cloning, setCloning] = useState(false)
+  const pagesContainerRef = useRef<HTMLDivElement>(null)
+  const [serpHeights, setSerpHeights] = useState({
+    wrapper: MIN_CARD_HEIGHT + 25,
+    main: MIN_CARD_HEIGHT + 200,
+  })
 
   const pages = useMemo(() => chunkResults(results), [results])
 
@@ -73,6 +96,13 @@ export function SearchPage() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [pageIndex, pages.length])
 
+  useEffect(() => {
+    const run = () => setSerpHeights(adjustSerpHeights(pagesContainerRef.current))
+    run()
+    const timer = window.setTimeout(run, 500)
+    return () => window.clearTimeout(timer)
+  }, [pages, loading, searchError, query, results])
+
   const handlePartifi = async (result: SearchResultItem) => {
     if (!result.title || !result.composer) return
     setCloning(true)
@@ -116,7 +146,7 @@ export function SearchPage() {
 
   return (
     <Layout>
-      <div id="main" style={{ height: 800 }}>
+      <div id="main" style={{ height: serpHeights.main }}>
         <img
           src="/images/notes_bg.jpg"
           width={1190}
@@ -157,7 +187,11 @@ export function SearchPage() {
           />
         )}
 
-        <div id="search-results-wrapper" style={{ zIndex: 1 }}>
+        <div
+          id="search-results-wrapper"
+          ref={pagesContainerRef}
+          style={{ zIndex: 1, height: serpHeights.wrapper }}
+        >
           <div
             id="search-results-pages"
             style={{
