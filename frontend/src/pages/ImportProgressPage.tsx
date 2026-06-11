@@ -9,12 +9,15 @@ export function ImportProgressPage() {
   const navigate = useNavigate()
   const [progress, setProgress] = useState(0)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [errorStage, setErrorStage] = useState<string | null>(null)
   const [retrying, setRetrying] = useState(false)
   const pollRef = useRef<(() => void) | null>(null)
   const previewError = import.meta.env.DEV ? searchParams.get('previewError') : null
+  const canRetry = errorStage !== 'import_size'
 
   useEffect(() => {
     if (previewError) {
+      setErrorStage(previewError)
       setErrorMessage(pipelineErrorMessage(previewError))
       return
     }
@@ -31,10 +34,12 @@ export function ImportProgressPage() {
         if (cancelled) return
 
         if (data.error) {
+          setErrorStage(data.error)
           setErrorMessage(pipelineErrorMessage(data.error))
           return
         }
 
+        setErrorStage(null)
         setProgress(data.total_progress)
         failedAttempts = 0
 
@@ -76,6 +81,7 @@ export function ImportProgressPage() {
 
     if (errorMessage === POLLING_FAILED_MESSAGE) {
       setErrorMessage(null)
+      setErrorStage(null)
       pollRef.current?.()
       return
     }
@@ -85,6 +91,7 @@ export function ImportProgressPage() {
       const csrf = await getCsrfToken()
       await retryPartsetPipeline(privateId, csrf)
       setErrorMessage(null)
+      setErrorStage(null)
       setProgress(0)
       pollRef.current?.()
     } catch {
@@ -110,15 +117,17 @@ export function ImportProgressPage() {
           <>
             <div id="transition-text">{errorMessage}</div>
             <div id="transition-actions">
-              <div
-                className={`copy-button${retrying ? ' is-disabled' : ''}`}
-                onClick={retrying ? undefined : handleRetry}
-                onKeyDown={() => {}}
-                role="button"
-                tabIndex={retrying ? -1 : 0}
-              >
-                {retrying ? 'Retrying…' : 'Try again'}
-              </div>
+              {canRetry ? (
+                <div
+                  className={`copy-button${retrying ? ' is-disabled' : ''}`}
+                  onClick={retrying ? undefined : handleRetry}
+                  onKeyDown={() => {}}
+                  role="button"
+                  tabIndex={retrying ? -1 : 0}
+                >
+                  {retrying ? 'Retrying…' : 'Try again'}
+                </div>
+              ) : null}
               <div
                 className="copy-button"
                 onClick={() => navigate('/')}

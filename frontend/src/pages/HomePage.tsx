@@ -293,6 +293,11 @@ export function HomePage() {
                 <option value="unknown">Unknown</option>
               </select>
             </div>
+            {error ? (
+              <div id="import-error" role="alert">
+                {error}
+              </div>
+            ) : null}
             <div
               id="pdf-submit"
               className="banner-button import-next-button"
@@ -361,6 +366,11 @@ export function HomePage() {
                 <option value="unknown">Unknown</option>
               </select>
             </div>
+            {error ? (
+              <div id="import-error" role="alert">
+                {error}
+              </div>
+            ) : null}
             <div
               id="imslp-submit"
               className="banner-button import-next-button"
@@ -373,8 +383,6 @@ export function HomePage() {
             </div>
           </form>
         )}
-
-        {error ? <div id="import-error">{error}</div> : null}
       </div>
     </Layout>
   )
