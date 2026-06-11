@@ -389,6 +389,9 @@ export function SegmentEditor({ data }: Props) {
   }
 
   const thumbsOffset = -(previewerStart - 1) * 120
+  const canGoPrev = pageNum > 1
+  const canGoNext = pageNum < data.num_pages
+  const navDisabledStyle = { color: 'gray', cursor: 'default' as const }
 
   return (
     <div id="main">
@@ -673,42 +676,46 @@ export function SegmentEditor({ data }: Props) {
             {saving ? ' (saving…)' : ''}
           </div>
           <div id="prev-page">
-            <a
-              href="#"
-              className="red"
-              onClick={(e) => {
-                e.preventDefault()
-                if (pageNum > 1) {
+            {canGoPrev ? (
+              <a
+                href="#"
+                className="red"
+                onClick={(e) => {
+                  e.preventDefault()
                   if (pageNum <= previewerStart) {
                     setPreviewerStart((s) => s - 6)
                     void changePage(pageNum - 1)
                   } else {
                     void changePage(pageNum - 1)
                   }
-                }
-              }}
-            >
-              &laquo; previous
-            </a>
+                }}
+              >
+                &laquo; previous
+              </a>
+            ) : (
+              <span style={navDisabledStyle}>&laquo; previous</span>
+            )}
           </div>
           <div id="next-page">
-            <a
-              href="#"
-              className="red"
-              onClick={(e) => {
-                e.preventDefault()
-                if (pageNum < data.num_pages) {
+            {canGoNext ? (
+              <a
+                href="#"
+                className="red"
+                onClick={(e) => {
+                  e.preventDefault()
                   if (pageNum >= previewerStart + 5) {
                     setPreviewerStart((s) => s + 6)
                     void changePage(pageNum + 1)
                   } else {
                     void changePage(pageNum + 1)
                   }
-                }
-              }}
-            >
-              next &raquo;
-            </a>
+                }}
+              >
+                next &raquo;
+              </a>
+            ) : (
+              <span style={navDisabledStyle}>next &raquo;</span>
+            )}
           </div>
         </div>
       </div>

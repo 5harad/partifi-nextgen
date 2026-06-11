@@ -3,10 +3,10 @@ import { Layout } from '../components/Layout'
 const CONTACT = 'support@partifi.org'
 
 const VIDEOS = [
-  { title: 'Step I. Importing the Score', src: 'http://fast.wistia.com/embed/iframe/lb47zbh0cv?controlsVisibleOnLoad=true&endVideoBehavior=reset&version=v1&videoHeight=374&videoWidth=640', height: 374 },
-  { title: 'Step II. Labeling the Segments', src: 'http://fast.wistia.com/embed/iframe/kxv41f7lg6?controlsVisibleOnLoad=true&endVideoBehavior=reset&version=v1&videoHeight=372&videoWidth=640', height: 372 },
-  { title: 'Step III. Previewing the Parts', src: 'http://fast.wistia.com/embed/iframe/dq5h55u26e?controlsVisibleOnLoad=true&endVideoBehavior=reset&version=v1&videoHeight=373&videoWidth=640', height: 373 },
-  { title: 'Step IV. Downloading & Sharing the Parts', src: 'http://fast.wistia.com/embed/iframe/cf2gnfjek2?controlsVisibleOnLoad=true&endVideoBehavior=reset&version=v1&videoHeight=374&videoWidth=640', height: 374 },
+  { title: 'Step I. Importing the Score', src: 'https://fast.wistia.com/embed/iframe/lb47zbh0cv?controlsVisibleOnLoad=true&endVideoBehavior=reset&version=v1&videoHeight=374&videoWidth=640', height: 374 },
+  { title: 'Step II. Labeling the Segments', src: 'https://fast.wistia.com/embed/iframe/kxv41f7lg6?controlsVisibleOnLoad=true&endVideoBehavior=reset&version=v1&videoHeight=372&videoWidth=640', height: 372 },
+  { title: 'Step III. Previewing the Parts', src: 'https://fast.wistia.com/embed/iframe/dq5h55u26e?controlsVisibleOnLoad=true&endVideoBehavior=reset&version=v1&videoHeight=373&videoWidth=640', height: 373 },
+  { title: 'Step IV. Downloading & Sharing the Parts', src: 'https://fast.wistia.com/embed/iframe/cf2gnfjek2?controlsVisibleOnLoad=true&endVideoBehavior=reset&version=v1&videoHeight=374&videoWidth=640', height: 374 },
 ]
 
 export function HowToPage() {
@@ -39,7 +39,7 @@ export function HowToPage() {
                 className="vid-iframe"
                 src={video.src}
                 title={video.title}
-                allowTransparency
+                allow="fullscreen"
                 frameBorder={0}
                 scrolling="no"
                 width={640}
