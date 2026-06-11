@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 const CONTACT_EMAIL = 'support@partifi.org'
 const SOURCE_REPO_URL = 'https://github.com/5harad/partifi-nextgen'
 const SHARE_MAILTO = `mailto:?subject=${encodeURIComponent('Partifi')}&body=${encodeURIComponent(
-  'A free and automated tool for creating parts from music scores: https://partifi.org',
+  'A free and automated tool for creating parts from music scores: https://partifi.org\n',
 )}`
 
 export function Footer() {
