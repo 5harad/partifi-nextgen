@@ -35,16 +35,34 @@ section() {
   echo "=== $1 ==="
 }
 
-check_health() {
-  local site="${SITE_ADDRESS:-partifi.org}"
-  curl -sf -H "Host: ${site}" "http://127.0.0.1/health/ready"
+check_health_api() {
+  compose exec -T api python -c "
+import json, urllib.request
+with urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=10) as r:
+    print(json.dumps(json.load(r), indent=2))
+"
 }
 
-section "Health (/health/ready via Caddy)"
-if check_health | python3 -m json.tool 2>/dev/null; then
+check_health_caddy() {
+  local site="${SITE_ADDRESS:-partifi.org}"
+  # Caddy serves this site on HTTPS; plain HTTP gets a redirect, not JSON.
+  curl -sk --max-time 10 -H "Host: ${site}" "https://127.0.0.1/health/ready"
+}
+
+section "Health (API /health/ready)"
+if check_health_api 2>/dev/null; then
   :
 else
-  echo "health/ready request failed (Caddy routes by Host; using SITE_ADDRESS=${SITE_ADDRESS:-partifi.org})"
+  echo "API health/ready request failed (is the api container up?)"
+fi
+
+section "Health (via Caddy HTTPS /health/ready)"
+if check_health_caddy | python3 -m json.tool 2>/dev/null; then
+  :
+else
+  echo "Caddy health/ready request failed (Host: ${SITE_ADDRESS:-partifi.org}, https://127.0.0.1)"
+  echo "Raw response:"
+  check_health_caddy 2>/dev/null || echo "(no response)"
 fi
 
 section "Cache (/data/partifi)"

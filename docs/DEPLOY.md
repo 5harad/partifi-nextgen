@@ -96,10 +96,16 @@ This starts:
 
 Production compose sets **MySQL `innodb_buffer_pool_size = 4G`** (`docker/mysql/prod.cnf`) and **4 GB Docker memory limits** on each worker so a runaway PDF job is killed in its container instead of taking down the host.
 
-Verify health (on the EC2 host):
+Verify health (on the EC2 host; Caddy redirects HTTP→HTTPS, so use HTTPS locally or hit the API directly):
 
 ```bash
-curl -s -H "Host: ${SITE_ADDRESS:-partifi.org}" http://127.0.0.1/health/ready
+docker compose -f docker-compose.prod.yml exec -T api python -c "
+import json, urllib.request
+with urllib.request.urlopen('http://127.0.0.1:8000/health/ready') as r:
+    print(json.dumps(json.load(r), indent=2))
+"
+
+curl -sk -H "Host: ${SITE_ADDRESS:-partifi.org}" https://127.0.0.1/health/ready
 ```
 
 ---
@@ -289,7 +295,7 @@ After reboot, verify:
 
 ```bash
 docker compose -f docker-compose.prod.yml ps
-curl -s -H "Host: ${SITE_ADDRESS:-partifi.org}" http://127.0.0.1/health/ready
+curl -sk -H "Host: ${SITE_ADDRESS:-partifi.org}" https://127.0.0.1/health/ready
 ```
 
 ### Restart after deploy
@@ -308,7 +314,7 @@ git pull
 docker compose -f docker-compose.prod.yml up -d --build --force-recreate web api worker-1 worker-2 worker-3
 
 docker compose -f docker-compose.prod.yml ps
-curl -s -H "Host: ${SITE_ADDRESS:-partifi.org}" http://127.0.0.1/health/ready
+curl -sk -H "Host: ${SITE_ADDRESS:-partifi.org}" https://127.0.0.1/health/ready
 ```
 
 **One-time on existing databases** (adds `import_size` to `partsets.error` for oversize import failures):
