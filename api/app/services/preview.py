@@ -16,6 +16,7 @@ from app.services.partset_touch import touch_partset_access
 from app.services.gen_parts_lock import try_acquire_gen_parts_lock
 from app.services.queue import enqueue_job
 from app.services.s3 import presigned_get_url, presigned_score_pdf_url
+from app.services.score_pages import ensure_score_pages_warming
 from app.services.segments import ensure_import_complete, get_partset_by_private_id, sync_part_rows_from_tags
 from app.utils.strings import tag_to_filename
 
@@ -184,6 +185,26 @@ def get_preview_data(db: Session, partset: Partset) -> dict:
     if not partset.score_id:
         raise ValueError("Partset has no score")
 
+    image_status = ensure_score_pages_warming(partset.score_id)
+    if not image_status["images_ready"]:
+        return {
+            "partset_id": partset.id,
+            "private_id": partset.private_id or "",
+            "title": partset.title,
+            "composer": partset.composer,
+            "part_names": [],
+            "combined_part_names": [],
+            "part_segments": {},
+            "segment_heights": [],
+            "segment_widths": [],
+            "segment_labels": [],
+            "breaks": {},
+            "spacings": {},
+            "left_margin": 0,
+            "segment_urls": {},
+            **image_status,
+        }
+
     segment_rows = _fetch_segment_rows(db, partset.id)
     segments_map, heights_pct, widths_pct, labels = build_part_segment_map(segment_rows)
 
@@ -239,6 +260,8 @@ def get_preview_data(db: Session, partset: Partset) -> dict:
         "spacings": spacings,
         "left_margin": preview_left_margin(widths_pct),
         "segment_urls": segment_urls,
+        "images_ready": True,
+        "images_warming": False,
     }
 
 

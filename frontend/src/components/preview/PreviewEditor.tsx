@@ -48,10 +48,26 @@ export function PreviewEditor({ privateId }: Props) {
 
   useEffect(() => {
     let cancelled = false
-    ;(async () => {
+    let timeoutId: number
+    let pollCount = 0
+
+    const load = async () => {
       try {
         const preview = await getPreviewData(privateId)
         if (cancelled) return
+
+        if (!preview.images_ready) {
+          pollCount += 1
+          if (pollCount >= 300) {
+            setError(
+              'Score images are taking longer than expected. Please refresh the page in a few minutes.',
+            )
+            return
+          }
+          timeoutId = window.setTimeout(load, 2000)
+          return
+        }
+
         setData(preview)
         setBreaks(preview.breaks)
         setSpacings(preview.spacings)
@@ -69,9 +85,12 @@ export function PreviewEditor({ privateId }: Props) {
           }
         }
       }
-    })()
+    }
+
+    load()
     return () => {
       cancelled = true
+      window.clearTimeout(timeoutId)
     }
   }, [privateId, navigate])
 
@@ -229,7 +248,10 @@ export function PreviewEditor({ privateId }: Props) {
     return (
       <div id="main" style={{ height: '750px' }}>
         <div id="transition">
-          <div id="transition-text">Preparing preview…</div>
+          <div id="transition-text">Please wait while we prepare the score images</div>
+          <div id="progress-bar">
+            <div id="progress-ribbon" style={{ width: 120 }} />
+          </div>
         </div>
       </div>
     )

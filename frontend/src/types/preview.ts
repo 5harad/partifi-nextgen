@@ -13,6 +13,8 @@ export type PreviewDataResponse = {
   spacings: Record<string, number>
   left_margin: number
   segment_urls: Record<string, string>
+  images_ready: boolean
+  images_warming: boolean
 }
 
 export type PartgenProgressResponse = {

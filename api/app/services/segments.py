@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models import Page, Part, Partset, Score, Segment
 from app.services.local_cache import get_local_cache
 from app.services.partset_touch import touch_partset_access
+from app.services.score_pages import ensure_score_pages_warming
 from app.utils.strings import rm_space, tag_to_filename
 
 ScoreImageKind = str
@@ -123,6 +124,7 @@ def get_segments_data(db: Session, partset: Partset) -> dict:
 
     num_pages = get_num_pages(db, partset.id, partset.score_id)
     private_id = partset.private_id or ""
+    image_status = ensure_score_pages_warming(partset.score_id)
     image_urls: dict[str, dict[str, str]] = {"lowres": {}, "thumbs": {}}
     for page in range(1, num_pages + 1):
         image_urls["lowres"][str(page)] = page_image_url(private_id, page, "lowres")
@@ -135,6 +137,7 @@ def get_segments_data(db: Session, partset: Partset) -> dict:
         "num_pages": num_pages,
         "pages": data,
         "image_urls": image_urls,
+        **image_status,
     }
 
 

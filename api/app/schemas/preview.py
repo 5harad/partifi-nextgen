@@ -16,6 +16,8 @@ class PreviewDataResponse(BaseModel):
     spacings: dict[str, float]
     left_margin: int
     segment_urls: dict[str, str]
+    images_ready: bool = True
+    images_warming: bool = False
 
 
 class SaveLayoutRequest(BaseModel):

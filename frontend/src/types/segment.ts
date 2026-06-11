@@ -23,6 +23,8 @@ export type SegmentDataResponse = {
     lowres: Record<string, string>
     thumbs: Record<string, string>
   }
+  images_ready: boolean
+  images_warming: boolean
 }
 
 export type RegionState = {

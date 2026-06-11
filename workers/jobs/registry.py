@@ -7,6 +7,7 @@ from typing import Any, Callable
 from jobs.gen_parts import run_gen_parts
 from jobs.imslp_import import run_imslp_import
 from jobs.import_pipeline import run_import_pipeline
+from jobs.warm_score_pages import run_warm_score_pages
 
 JobHandler = Callable[[dict[str, Any]], None]
 
@@ -19,6 +20,9 @@ JOB_HANDLERS: dict[str, JobHandler] = {
     ),
     "gen_parts": lambda payload: run_gen_parts(
         payload["partset_id"], job_id=payload.get("job_id")
+    ),
+    "warm_score_pages": lambda payload: run_warm_score_pages(
+        payload["score_id"], job_id=payload.get("job_id")
     ),
 }
 

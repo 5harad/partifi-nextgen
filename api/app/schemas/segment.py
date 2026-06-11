@@ -23,6 +23,8 @@ class SegmentDataResponse(BaseModel):
     num_pages: int
     pages: dict[str, PageSegmentData]
     image_urls: dict[str, dict[str, str]]
+    images_ready: bool = True
+    images_warming: bool = False
 
 
 class SavePageSegmentsRequest(BaseModel):
