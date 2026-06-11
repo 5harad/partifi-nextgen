@@ -253,7 +253,7 @@ export async function searchPartsets(query: string): Promise<SearchResponse> {
 export async function getImslpInfo(
   imslpId: string,
   signal?: AbortSignal,
-): Promise<ImslpInfoResponse | null> {
+): Promise<ImslpInfoResponse> {
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), 20000)
 
