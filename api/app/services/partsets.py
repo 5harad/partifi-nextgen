@@ -12,9 +12,9 @@ from app.services.score_cache import (
     mark_import_pipeline_complete,
     score_analysis_complete,
 )
+from app.score_limits import MAX_SCORE_BYTES, ScoreTooLargeError
 from app.utils.ids import gen_partset_ids, gen_score_id
 
-MAX_UPLOAD_BYTES = 60_000_000
 PDF_MAGIC = b"%PDF"
 
 
@@ -61,8 +61,8 @@ def create_pdf_partset(
 ) -> tuple[Partset, str]:
     if not pdf_bytes.startswith(PDF_MAGIC):
         raise ValueError("File is not a valid PDF")
-    if len(pdf_bytes) > MAX_UPLOAD_BYTES:
-        raise ValueError("File exceeds 60 MB limit")
+    if len(pdf_bytes) > MAX_SCORE_BYTES:
+        raise ScoreTooLargeError(len(pdf_bytes))
 
     public_id, private_id = gen_partset_ids(db)
     now = datetime.utcnow()
@@ -140,6 +140,7 @@ def create_imslp_partset(
     user_id: str | None = None,
 ) -> tuple[Partset, str]:
     from app.services.imslp import lookup_imslp_info, normalize_imslp_id
+    from app.services.imslp_pdf import check_imslp_pdf_size
 
     normalized = normalize_imslp_id(imslp_id)
     if not normalized:
@@ -148,6 +149,13 @@ def create_imslp_partset(
     info = lookup_imslp_info(db, normalized)
     if not info:
         raise ValueError("IMSLP score not found or not a PDF")
+
+    existing_score = db.query(Score).filter(Score.imslp_id == normalized).first()
+    if existing_score:
+        if existing_score.file_size and existing_score.file_size > MAX_SCORE_BYTES:
+            raise ScoreTooLargeError(existing_score.file_size)
+    else:
+        check_imslp_pdf_size(normalized)
 
     public_id, private_id = gen_partset_ids(db)
     now = datetime.utcnow()
@@ -171,9 +179,8 @@ def create_imslp_partset(
     db.add(partset)
     db.flush()
 
-    existing = db.query(Score).filter(Score.imslp_id == normalized).first()
-    if existing:
-        partset.score_id = existing.id
+    if existing_score:
+        partset.score_id = existing_score.id
         partset.status = "import"
         partset.import_start = now
         partset.import_complete = now
@@ -185,7 +192,7 @@ def create_imslp_partset(
         if try_acquire_import_lock(public_id):
             enqueue_job(
                 "import_pipeline",
-                {"partset_id": public_id, "score_id": existing.id},
+                {"partset_id": public_id, "score_id": existing_score.id},
             )
         return partset, "continue"
 

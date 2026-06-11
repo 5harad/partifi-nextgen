@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import db_conn
 
-ERROR_STAGES = frozenset({"import", "convert", "analysis", "cut", "paste"})
+ERROR_STAGES = frozenset({"import", "import_size", "convert", "analysis", "cut", "paste"})
 
 
 def mark_partset_error(partset_id: str, stage: str | None = None) -> None:

@@ -6,6 +6,7 @@ import { CopyrightTip } from '../components/CopyrightTip'
 import { createPartsetFromImslp, createPartsetFromPdf, getCsrfToken, getImslpInfo, sha1File } from '../lib/api'
 import { guessCopyrightFromPublisher, normalizeImslpIdInput } from '../lib/imslpUtils'
 import { pipelineErrorMessage } from '../lib/pipelineErrors'
+import { MAX_SCORE_BYTES, scoreTooLargeMessage } from '../lib/scoreLimits'
 import type { CopyrightValue } from '../lib/imslpUtils'
 
 export function HomePage() {
@@ -47,8 +48,8 @@ export function HomePage() {
       setError('Please select a PDF file.')
       return
     }
-    if (file.size > 60_000_000) {
-      setError('Please select a file no larger than 60 MB.')
+    if (file.size > MAX_SCORE_BYTES) {
+      setError(scoreTooLargeMessage(file.size))
       return
     }
 

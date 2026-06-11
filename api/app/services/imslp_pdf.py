@@ -1,15 +1,13 @@
-"""Download PDFs from IMSLP."""
+"""Resolve IMSLP edition PDF URLs and check file size."""
 
 from __future__ import annotations
 
 import html
 import re
-from collections.abc import Callable
-from pathlib import Path
 
 import httpx
 
-from score_limits import MAX_SCORE_BYTES, ScoreTooLargeError
+from app.score_limits import MAX_SCORE_BYTES, ScoreTooLargeError
 
 IMSLP_INDEX_URL = "https://imslp.org/wiki/Special:ImagefromIndex/{imslp_id}"
 IMSLP_COOKIES = {
@@ -22,11 +20,10 @@ IMSLP_HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     ),
 }
-TIMEOUT = 120.0
+REQUEST_TIMEOUT = 30.0
 
 
 def _pdf_response_from_redirect(response: httpx.Response) -> tuple[str, bytes] | None:
-    """IMSLP sometimes 302s ImagefromIndex straight to a mirror PDF (no HTML wrapper)."""
     url = str(response.url)
     if not url.lower().endswith(".pdf"):
         content_type = response.headers.get("content-type", "").lower()
@@ -56,41 +53,30 @@ def resolve_imslp_pdf_url(imslp_id: str, client: httpx.Client) -> tuple[str, byt
     return pdf_url, None
 
 
-def download_imslp_pdf(
-    imslp_id: str,
-    dest: Path,
-    *,
-    on_progress: Callable[[float], None] | None = None,
-) -> int:
-    downloaded = 0
+def check_imslp_pdf_size(imslp_id: str, *, client: httpx.Client | None = None) -> None:
+    """Raise ScoreTooLargeError when the IMSLP edition PDF exceeds the limit."""
+    owns_client = client is None
+    if owns_client:
+        client = httpx.Client(
+            follow_redirects=True,
+            timeout=REQUEST_TIMEOUT,
+            cookies=IMSLP_COOKIES,
+            headers=IMSLP_HEADERS,
+        )
 
-    with httpx.Client(
-        follow_redirects=True,
-        timeout=TIMEOUT,
-        cookies=IMSLP_COOKIES,
-        headers=IMSLP_HEADERS,
-    ) as client:
+    try:
+        assert client is not None
         pdf_url, cached = resolve_imslp_pdf_url(imslp_id, client)
         if cached is not None:
             if len(cached) > MAX_SCORE_BYTES:
                 raise ScoreTooLargeError(len(cached))
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(cached)
-            if on_progress:
-                on_progress(100.0)
-            return len(cached)
+            return
 
-        with client.stream("GET", pdf_url) as response:
-            response.raise_for_status()
-            total = int(response.headers.get("content-length", 0) or 0)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            with dest.open("wb") as handle:
-                for chunk in response.iter_bytes():
-                    downloaded += len(chunk)
-                    if downloaded > MAX_SCORE_BYTES:
-                        raise ScoreTooLargeError(downloaded)
-                    handle.write(chunk)
-                    if on_progress and total > 0:
-                        on_progress(round(downloaded / total * 100))
-
-    return downloaded
+        head = client.head(pdf_url, follow_redirects=True)
+        head.raise_for_status()
+        content_length = head.headers.get("content-length")
+        if content_length and int(content_length) > MAX_SCORE_BYTES:
+            raise ScoreTooLargeError(int(content_length))
+    finally:
+        if owns_client:
+            client.close()
