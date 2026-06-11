@@ -25,6 +25,7 @@ class SegmentDataResponse(BaseModel):
     image_urls: dict[str, dict[str, str]]
     images_ready: bool = True
     images_warming: bool = False
+    image_progress: float = 100.0
 
 
 class SavePageSegmentsRequest(BaseModel):

@@ -34,6 +34,7 @@ type Props = {
 export function PreviewEditor({ privateId }: Props) {
   const navigate = useNavigate()
   const [data, setData] = useState<PreviewDataResponse | null>(null)
+  const [warmProgress, setWarmProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<Mode>('spacing')
   const [part, setPart] = useState<string>('')
@@ -58,6 +59,7 @@ export function PreviewEditor({ privateId }: Props) {
         if (cancelled) return
 
         if (!preview.images_ready) {
+          setWarmProgress(preview.image_progress)
           pollCount += 1
           if (pollCount >= 300) {
             setError(
@@ -246,7 +248,12 @@ export function PreviewEditor({ privateId }: Props) {
   }
 
   if (!data) {
-    return <TransitionWait message="Please wait while we prepare the score images" />
+    return (
+      <TransitionWait
+        message="Please wait while we prepare the score images"
+        progress={warmProgress}
+      />
+    )
   }
 
   const spacingPx = spacingLowres(spacings[part] ?? 0.1)

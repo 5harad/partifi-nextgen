@@ -16,6 +16,7 @@ export function SegmentPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [warming, setWarming] = useState(false)
+  const [warmProgress, setWarmProgress] = useState(0)
 
   useEffect(() => {
     if (!privateId) return
@@ -31,6 +32,7 @@ export function SegmentPage() {
         setData(payload)
         setLoading(false)
         setWarming(!payload.images_ready)
+        setWarmProgress(payload.image_progress)
 
         if (!payload.images_ready) {
           pollCount += 1
@@ -69,7 +71,10 @@ export function SegmentPage() {
           Loading segment editor…
         </div>
       ) : warming ? (
-        <TransitionWait message="Please wait while we prepare the score images" />
+        <TransitionWait
+          message="Please wait while we prepare the score images"
+          progress={warmProgress}
+        />
       ) : error ? (
         <div id="main" style={{ padding: '40px', textAlign: 'center' }}>
           <p className="red">{error}</p>

@@ -262,6 +262,7 @@ def get_preview_data(db: Session, partset: Partset) -> dict:
         "segment_urls": segment_urls,
         "images_ready": True,
         "images_warming": False,
+        "image_progress": 100.0,
     }
 
 

@@ -16,7 +16,13 @@ from PIL import Image
 import db_conn
 
 
-def pdf2png(pdffile: str, outdir: str, partset_id: str | None, num_tasks: int) -> None:
+def pdf2png(
+    pdffile: str,
+    outdir: str,
+    partset_id: str | None,
+    num_tasks: int,
+    score_id: str | None = None,
+) -> None:
     outfile = os.path.basename(pdffile).rsplit(".", 1)[0] + ".png"
     highres_file = os.path.join(outdir, "highres", outfile)
     gs_cmd = [
@@ -43,19 +49,29 @@ def pdf2png(pdffile: str, outdir: str, partset_id: str | None, num_tasks: int) -
     thumb_file = os.path.join(outdir, "thumbs", outfile)
     thumb_im.save(thumb_file)
 
+    progress = 100.0 / num_tasks
     if partset_id:
-        progress = 100.0 / num_tasks
         db_conn.execute(
             "UPDATE partsets SET convert_progress = convert_progress + :progress WHERE id = :id",
             {"progress": progress, "id": partset_id},
         )
+    elif score_id:
+        from warm_progress import add_warm_progress
+
+        add_warm_progress(score_id, progress)
 
 
 def pdf2png_star(args):
     return pdf2png(*args)
 
 
-def par_pdf2png(pdffile: str, outdir: str, partset_id: str | None) -> None:
+def par_pdf2png(
+    pdffile: str,
+    outdir: str,
+    partset_id: str | None,
+    *,
+    score_id: str | None = None,
+) -> None:
     pdffile = os.path.abspath(pdffile)
     outdir = os.path.abspath(outdir)
     tempdir = tempfile.mkdtemp(dir="/tmp/partifi")
@@ -73,7 +89,7 @@ def par_pdf2png(pdffile: str, outdir: str, partset_id: str | None) -> None:
 
     pdfpages = glob.glob(os.path.join(tempdir, "page*.pdf"))
     num_tasks = max(len(pdfpages), 1)
-    params = [(pdfpage, outdir, partset_id, num_tasks) for pdfpage in pdfpages]
+    params = [(pdfpage, outdir, partset_id, num_tasks, score_id) for pdfpage in pdfpages]
 
     workers = max(multiprocessing.cpu_count() // 2, 1)
     with multiprocessing.Pool(workers) as pool:

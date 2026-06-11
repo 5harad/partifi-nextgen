@@ -10,6 +10,7 @@ from local_cache import get_local_cache
 from pdf2png import par_pdf2png
 from s3_storage import download_file, download_prefix, score_images_exist, score_pdf_s3_key
 from score_pages_lock import release_score_pages_lock
+from warm_progress import reset_warm_progress, set_warm_progress
 
 logger = logging.getLogger("partifi.warm_score_pages")
 
@@ -37,9 +38,13 @@ def run_warm_score_pages(score_id: str, *, job_id: str | None = None) -> None:
             logger.info("Score %s page images already cached", score_id)
             return
 
+        reset_warm_progress(score_id)
+
         if score_images_exist(score_id):
             logger.info("Hydrating score %s page images from S3", score_id)
+            set_warm_progress(score_id, 50.0)
             _hydrate_from_s3(score_id)
+            set_warm_progress(score_id, 100.0)
             return
 
         pdf_path = workdir / "score.pdf"
@@ -48,8 +53,9 @@ def run_warm_score_pages(score_id: str, *, job_id: str | None = None) -> None:
 
         pages_dir = workdir / "pages"
         pages_dir.mkdir(parents=True, exist_ok=True)
-        par_pdf2png(str(pdf_path), str(pages_dir), None)
+        par_pdf2png(str(pdf_path), str(pages_dir), None, score_id=score_id)
         cache.copy_pages_tree(score_id, pages_dir)
+        set_warm_progress(score_id, 100.0)
         logger.info("Score %s page images ready in local cache", score_id)
     except Exception:
         logger.exception("Failed to warm page images for score %s", score_id)

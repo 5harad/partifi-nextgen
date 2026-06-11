@@ -15,6 +15,7 @@ export type PreviewDataResponse = {
   segment_urls: Record<string, string>
   images_ready: boolean
   images_warming: boolean
+  image_progress: number
 }
 
 export type PartgenProgressResponse = {

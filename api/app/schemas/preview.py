@@ -18,6 +18,7 @@ class PreviewDataResponse(BaseModel):
     segment_urls: dict[str, str]
     images_ready: bool = True
     images_warming: bool = False
+    image_progress: float = 100.0
 
 
 class SaveLayoutRequest(BaseModel):
