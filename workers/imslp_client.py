@@ -2,58 +2,22 @@
 
 from __future__ import annotations
 
-import html
-import re
 from collections.abc import Callable
 from pathlib import Path
 
 import httpx
 
+from pipeline.imslp_download import (
+    IMSLP_COOKIES,
+    IMSLP_HEADERS,
+    mirror_request_cookies,
+    resolve_imslp_pdf_url,
+)
 from score_limits import MAX_SCORE_BYTES, ScoreTooLargeError
 
-IMSLP_INDEX_URL = "https://imslp.org/wiki/Special:ImagefromIndex/{imslp_id}"
-IMSLP_COOKIES = {
-    "imslpdisclaimeraccepted": "yes",
-    "redirectPassed": "1",
-}
-IMSLP_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    ),
-}
 TIMEOUT = 120.0
 
-
-def _pdf_response_from_redirect(response: httpx.Response) -> tuple[str, bytes] | None:
-    """IMSLP sometimes 302s ImagefromIndex straight to a mirror PDF (no HTML wrapper)."""
-    url = str(response.url)
-    if not url.lower().endswith(".pdf"):
-        content_type = response.headers.get("content-type", "").lower()
-        if "application/pdf" not in content_type and response.content[:4] != b"%PDF":
-            return None
-    return url, response.content
-
-
-def resolve_imslp_pdf_url(imslp_id: str, client: httpx.Client) -> tuple[str, bytes | None]:
-    page_url = IMSLP_INDEX_URL.format(imslp_id=imslp_id)
-    response = client.get(page_url)
-    response.raise_for_status()
-
-    direct = _pdf_response_from_redirect(response)
-    if direct:
-        return direct
-
-    match = re.search(r'id="sm_dl_wait"\s+data-id="([^"]+)"', response.text)
-    if not match:
-        match = re.search(r'data-id="(https?://[^"]+\.pdf[^"]*)"', response.text, re.I)
-    if not match:
-        raise ValueError(f"Could not resolve PDF URL for IMSLP {imslp_id}")
-
-    pdf_url = html.unescape(match.group(1))
-    if not pdf_url.lower().endswith(".pdf"):
-        raise ValueError(f"Resolved URL is not a PDF for IMSLP {imslp_id}")
-    return pdf_url, None
+__all__ = ["download_imslp_pdf", "resolve_imslp_pdf_url"]
 
 
 def download_imslp_pdf(
@@ -80,7 +44,11 @@ def download_imslp_pdf(
                 on_progress(100.0)
             return len(cached)
 
-        with client.stream("GET", pdf_url) as response:
+        with client.stream(
+            "GET",
+            pdf_url,
+            cookies=mirror_request_cookies(pdf_url),
+        ) as response:
             response.raise_for_status()
             total = int(response.headers.get("content-length", 0) or 0)
             dest.parent.mkdir(parents=True, exist_ok=True)

@@ -8,11 +8,14 @@ from unittest.mock import MagicMock
 
 import httpx
 
-WORKERS_ROOT = Path(__file__).resolve().parents[2] / "workers"
-if str(WORKERS_ROOT) not in sys.path:
-    sys.path.insert(0, str(WORKERS_ROOT))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+WORKERS_ROOT = REPO_ROOT / "workers"
+for root in (str(REPO_ROOT), str(WORKERS_ROOT)):
+    if root not in sys.path:
+        sys.path.insert(0, root)
 
-from imslp_client import resolve_imslp_pdf_url  # noqa: E402
+from imslp_client import download_imslp_pdf  # noqa: E402
+from pipeline.imslp_download import resolve_imslp_pdf_url  # noqa: E402
 
 
 def _mock_response(

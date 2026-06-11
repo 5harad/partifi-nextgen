@@ -4,7 +4,8 @@ import httpx
 import pytest
 
 from app.score_limits import ScoreTooLargeError
-from app.services.imslp_pdf import check_imslp_pdf_size, resolve_imslp_pdf_url
+from app.services.imslp_pdf import check_imslp_pdf_size
+from pipeline.imslp_download import resolve_imslp_pdf_url
 
 
 def _mock_response(
