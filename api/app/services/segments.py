@@ -138,6 +138,10 @@ def get_segments_data(db: Session, partset: Partset) -> dict:
     }
 
 
+def sync_part_rows_from_tags(db: Session, partset_id: str) -> None:
+    _sync_part_rows_from_tags(db, partset_id)
+
+
 def _reset_partset_for_segment_edit(partset: Partset) -> None:
     partset.parts_ready = False
     partset.cut_start = None
@@ -186,6 +190,7 @@ def _apply_page_segment_payload(
 
 
 def _finalize_segment_save(db: Session, partset_id: str) -> None:
+    db.flush()
     _sync_part_rows_from_tags(db, partset_id)
     cache = get_local_cache()
     cache.invalidate_preview(partset_id)

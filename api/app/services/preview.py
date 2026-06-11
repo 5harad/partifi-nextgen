@@ -16,7 +16,7 @@ from app.services.partset_touch import touch_partset_access
 from app.services.gen_parts_lock import try_acquire_gen_parts_lock
 from app.services.queue import enqueue_job
 from app.services.s3 import presigned_get_url, presigned_score_pdf_url
-from app.services.segments import ensure_import_complete, get_partset_by_private_id
+from app.services.segments import ensure_import_complete, get_partset_by_private_id, sync_part_rows_from_tags
 from app.utils.strings import tag_to_filename
 
 APP_ROOT = Path(__file__).resolve().parents[2]
@@ -320,16 +320,16 @@ def start_part_generation(db: Session, partset: Partset) -> str | None:
     if partset.parts_ready:
         return None
 
+    sync_part_rows_from_tags(db, partset.id)
+    db.flush()
+
     num_parts = (
         db.query(Part)
         .filter(Part.partset_id == partset.id, Part.combined.is_(False))
         .count()
     )
     if num_parts == 0:
-        partset.parts_ready = True
-        partset.error = None
-        db.commit()
-        return None
+        raise ValueError("No parts tagged for generation")
 
     if partset.status in ("cut", "paste"):
         partset.error = None

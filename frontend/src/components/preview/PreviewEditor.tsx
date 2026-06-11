@@ -153,10 +153,14 @@ export function PreviewEditor({ privateId }: Props) {
   }, [part])
 
   const handlePartifi = async () => {
-    const csrf = await getCsrfToken()
-    await saveLayout(privateId, { breaks, spacings }, csrf)
-    await startPartGeneration(privateId, csrf)
-    navigate(`/${privateId}/partgen`)
+    try {
+      const csrf = await getCsrfToken()
+      await saveLayout(privateId, { breaks, spacings }, csrf)
+      await startPartGeneration(privateId, csrf)
+      navigate(`/${privateId}/partgen`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start part generation')
+    }
   }
 
   const handleEditSegments = async () => {
