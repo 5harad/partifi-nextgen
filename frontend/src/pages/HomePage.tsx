@@ -136,7 +136,12 @@ export function HomePage() {
 
   const handlePdfSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
+
+    const pendingFile = fileInputRef.current?.files?.[0]
+    if (pendingFile && pendingFile.size > MAX_SCORE_BYTES) {
+      setError(scoreTooLargeMessage(pendingFile.size))
+      return
+    }
 
     const title = (document.getElementById('pdf_title') as HTMLInputElement).value.trim()
     const composer = pdfComposer.trim()
@@ -147,6 +152,13 @@ export function HomePage() {
       setError('Please complete the form before continuing.')
       return
     }
+
+    if (selectedFile.size > MAX_SCORE_BYTES) {
+      setError(scoreTooLargeMessage(selectedFile.size))
+      return
+    }
+
+    setError('')
 
     setSubmitting(true)
     try {
@@ -169,7 +181,6 @@ export function HomePage() {
 
   const handleImslpSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
 
     const normalized = normalizeImslpIdInput(imslpId)
     if (!normalized || !imslpTitle || !imslpComposer || !imslpCopyright) {
@@ -177,6 +188,7 @@ export function HomePage() {
       return
     }
 
+    setError('')
     setSubmitting(true)
     try {
       const csrfToken = await getCsrfToken()
@@ -209,10 +221,6 @@ export function HomePage() {
           alt=""
         />
         <img src="/images/musicstand.gif" height={640} width={774} alt="" />
-
-        {error && (
-          <div style={{ color: '#ff9999', padding: '10px 40px' }}>{error}</div>
-        )}
 
         <div id="step">STEP 1. &nbsp; Import sheet music</div>
 
@@ -365,6 +373,8 @@ export function HomePage() {
             </div>
           </form>
         )}
+
+        {error ? <div id="import-error">{error}</div> : null}
       </div>
     </Layout>
   )

@@ -6,6 +6,7 @@ import type {
 } from '../types/preview'
 import type { SearchResponse } from '../types/search'
 import type { ImslpInfoResponse } from '../types/imslp'
+import { apiErrorDetail } from './apiErrors'
 
 async function apiFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
   return fetch(input, { ...init, credentials: 'include' })
@@ -57,7 +58,7 @@ export async function createPartsetFromPdf(params: {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || 'Upload failed')
+    throw new Error(apiErrorDetail(err, 'Upload failed'))
   }
 
   return res.json()
@@ -303,7 +304,7 @@ export async function createPartsetFromImslp(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || 'Failed to import from IMSLP')
+    throw new Error(apiErrorDetail(err, 'Failed to import from IMSLP'))
   }
   return res.json()
 }
