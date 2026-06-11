@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { getCsrfToken, getImportStatus, getPartgenStatus, retryPartsetPipeline } from '../lib/api'
+import { getCsrfToken, getPartgenStatus, retryPartsetPipeline } from '../lib/api'
 import { pipelineErrorMessage, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
 
 export function PartgenProgressPage() {
