@@ -99,7 +99,7 @@ Production compose sets **MySQL `innodb_buffer_pool_size = 4G`** (`docker/mysql/
 Verify health (on the EC2 host):
 
 ```bash
-curl -s http://localhost/health/ready
+curl -s -H "Host: ${SITE_ADDRESS:-partifi.org}" http://127.0.0.1/health/ready
 ```
 
 ---
@@ -289,7 +289,7 @@ After reboot, verify:
 
 ```bash
 docker compose -f docker-compose.prod.yml ps
-curl -s http://localhost/health/ready
+curl -s -H "Host: ${SITE_ADDRESS:-partifi.org}" http://127.0.0.1/health/ready
 ```
 
 ### Restart after deploy
@@ -308,7 +308,7 @@ git pull
 docker compose -f docker-compose.prod.yml up -d --build --force-recreate web api worker-1 worker-2 worker-3
 
 docker compose -f docker-compose.prod.yml ps
-curl -s http://localhost/health/ready
+curl -s -H "Host: ${SITE_ADDRESS:-partifi.org}" http://127.0.0.1/health/ready
 ```
 
 **One-time on existing databases** (adds `import_size` to `partsets.error` for oversize import failures):

@@ -35,11 +35,16 @@ section() {
   echo "=== $1 ==="
 }
 
-section "Health (localhost)"
-if curl -sf http://localhost/health/ready | python3 -m json.tool 2>/dev/null; then
+check_health() {
+  local site="${SITE_ADDRESS:-partifi.org}"
+  curl -sf -H "Host: ${site}" "http://127.0.0.1/health/ready"
+}
+
+section "Health (/health/ready via Caddy)"
+if check_health | python3 -m json.tool 2>/dev/null; then
   :
 else
-  echo "health/ready request failed"
+  echo "health/ready request failed (Caddy routes by Host; using SITE_ADDRESS=${SITE_ADDRESS:-partifi.org})"
 fi
 
 section "Cache (/data/partifi)"
