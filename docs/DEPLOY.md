@@ -351,15 +351,16 @@ chmod +x scripts/diagnostics.sh   # once
 ./scripts/diagnostics.sh
 ```
 
-Optional: `HOURS=24 ./scripts/diagnostics.sh` for a longer log window.
+Optional: `HOURS=24 ./scripts/diagnostics.sh` for a longer log window; `DAYS=30` for activity stats (default 7 days).
 
 The script prints:
 
 1. **Readiness** — local `/health/ready`
 2. **Cache size** — total and by `scores/` / `preview/` / `parts/`
-3. **Failed partsets** — MySQL rows with `error` set or imports stuck &gt; 1 hour
-4. **Recent errors** — journald (or docker logs fallback) from api + workers + web
-5. **Container status** — `docker compose ps`
+3. **Activity** — partsets with parts, part PDFs produced, imports completed, downloads (last 7 days by default)
+4. **Failed partsets** — MySQL rows with `error` set or imports stuck &gt; 1 hour
+5. **Recent errors** — journald (or docker logs fallback) from api + workers + web
+6. **Container status** — `docker compose ps`
 
 **What each layer tells you:**
 

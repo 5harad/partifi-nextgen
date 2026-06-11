@@ -4,6 +4,7 @@
 # Usage (on EC2, from repo root):
 #   ./scripts/diagnostics.sh
 #   HOURS=24 ./scripts/diagnostics.sh
+#   DAYS=7 ./scripts/diagnostics.sh
 #
 # Requires .env with MYSQL_PASSWORD (same as docker compose prod).
 set -euo pipefail
@@ -13,6 +14,7 @@ cd "$ROOT"
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 HOURS="${HOURS:-6}"
+DAYS="${DAYS:-7}"
 
 if [[ -f .env ]]; then
   set -a
@@ -74,6 +76,40 @@ if [[ -f .env ]]; then
   section "Cache cap (.env)"
   grep -E '^PARTIFI_CACHE' .env || echo "(no PARTIFI_CACHE_* vars set — using defaults)"
 fi
+
+section "Activity (last ${DAYS} days)"
+compose exec -T mysql mysql -u partifi -p"$MYSQL_PASSWORD" partifi -e "
+SELECT
+  (SELECT COUNT(*)
+   FROM partsets
+   WHERE parts_ready = 1
+     AND paste_complete >= NOW() - INTERVAL ${DAYS} DAY) AS partsets_with_parts,
+  (SELECT COUNT(*)
+   FROM parts p
+   JOIN partsets ps ON ps.id = p.partset_id
+   WHERE ps.parts_ready = 1
+     AND ps.paste_complete >= NOW() - INTERVAL ${DAYS} DAY) AS part_pdfs_produced,
+  (SELECT COUNT(*)
+   FROM partsets
+   WHERE analysis_complete IS NOT NULL
+     AND import_complete IS NOT NULL
+     AND error IS NULL
+     AND analysis_complete >= NOW() - INTERVAL ${DAYS} DAY) AS imports_completed,
+  (SELECT COUNT(*)
+   FROM downloads
+   WHERE ts >= NOW() - INTERVAL ${DAYS} DAY) AS part_downloads;
+"
+
+section "Recent part generation (last ${DAYS} days)"
+compose exec -T mysql mysql -u partifi -p"$MYSQL_PASSWORD" partifi -e "
+SELECT p.id, p.title, p.paste_complete,
+       (SELECT COUNT(*) FROM parts pt WHERE pt.partset_id = p.id) AS num_parts
+FROM partsets p
+WHERE p.parts_ready = 1
+  AND p.paste_complete >= NOW() - INTERVAL ${DAYS} DAY
+ORDER BY p.paste_complete DESC
+LIMIT 10;
+"
 
 section "Failed / stuck partsets (MySQL)"
 compose exec -T mysql mysql -u partifi -p"$MYSQL_PASSWORD" partifi -e "
