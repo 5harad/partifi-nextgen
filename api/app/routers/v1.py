@@ -33,7 +33,7 @@ from app.services.partsets import (
     create_pdf_partset,
     import_progress_payload,
 )
-from app.services.imslp import lookup_imslp_info_remote
+from app.services.imslp import ImslpLookupError, lookup_imslp_info_remote
 from app.services.search import search_partsets
 from app.services.partset_admin import (
     delete_partset,
@@ -291,8 +291,11 @@ async def imslp_info(imslp_id: str) -> ImslpInfoResponse:
             status_code=504,
             detail="IMSLP lookup timed out. Try again in a moment.",
         ) from exc
-    if not info:
-        raise HTTPException(status_code=404, detail="IMSLP score not found or not a PDF")
+    except ImslpLookupError as exc:
+        raise HTTPException(
+            status_code=400 if exc.not_pdf else 404,
+            detail=str(exc),
+        ) from exc
     return ImslpInfoResponse(**info)
 
 

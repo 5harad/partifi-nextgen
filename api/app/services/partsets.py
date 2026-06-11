@@ -139,22 +139,22 @@ def create_imslp_partset(
     copyright: str,
     user_id: str | None = None,
 ) -> tuple[Partset, str]:
-    from app.services.imslp import lookup_imslp_info, normalize_imslp_id
+    from app.services.imslp import ImslpLookupError, lookup_imslp_info, normalize_imslp_id
     from app.services.imslp_pdf import check_imslp_pdf_size
 
     normalized = normalize_imslp_id(imslp_id)
     if not normalized:
         raise ValueError("Invalid IMSLP id")
 
-    info = lookup_imslp_info(db, normalized)
-    if not info:
-        raise ValueError("IMSLP score not found or not a PDF")
+    try:
+        lookup_imslp_info(db, normalized)
+    except ImslpLookupError as exc:
+        raise ValueError(str(exc)) from exc
 
     existing_score = db.query(Score).filter(Score.imslp_id == normalized).first()
-    if existing_score:
-        if existing_score.file_size and existing_score.file_size > MAX_SCORE_BYTES:
-            raise ScoreTooLargeError(existing_score.file_size)
-    else:
+    if existing_score and existing_score.file_size and existing_score.file_size > MAX_SCORE_BYTES:
+        raise ScoreTooLargeError(existing_score.file_size)
+    if not existing_score or not existing_score.file_size:
         check_imslp_pdf_size(normalized)
 
     public_id, private_id = gen_partset_ids(db)

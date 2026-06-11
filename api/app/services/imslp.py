@@ -22,6 +22,21 @@ IMSLP_HEADERS = {
 }
 REQUEST_TIMEOUT = 15.0
 
+IMSLP_ERROR_NOT_FOUND = "Edition not found."
+IMSLP_ERROR_NOT_PDF = "Not a PDF score."
+
+
+class ImslpLookupError(ValueError):
+    def __init__(self, message: str, *, not_pdf: bool = False) -> None:
+        super().__init__(message)
+        self.not_pdf = not_pdf
+
+
+def _fail_lookup(row: ImslpInfo | None) -> None:
+    if row and row.file_type and row.file_type.upper() != "PDF":
+        raise ImslpLookupError(IMSLP_ERROR_NOT_PDF, not_pdf=True)
+    raise ImslpLookupError(IMSLP_ERROR_NOT_FOUND)
+
 
 def normalize_imslp_id(raw: str) -> str | None:
     text = raw.strip().lstrip("#")
@@ -130,7 +145,7 @@ def _fetch_imslp_page(client: httpx.Client, imslp_id: str) -> tuple[str, str] | 
     return None
 
 
-def lookup_imslp_info_remote(raw_id: str) -> dict[str, str] | None:
+def lookup_imslp_info_remote(raw_id: str) -> dict[str, str]:
     """Thread-safe lookup using a fresh DB session (for async API handlers)."""
     from app.db import SessionLocal
 
@@ -174,14 +189,17 @@ def _upsert_cache(db: Session, imslp_id: str, data: dict[str, str], imslp_url: s
     db.commit()
 
 
-def lookup_imslp_info(db: Session, raw_id: str, *, client: httpx.Client | None = None) -> dict[str, str] | None:
+def lookup_imslp_info(db: Session, raw_id: str, *, client: httpx.Client | None = None) -> dict[str, str]:
     imslp_id = normalize_imslp_id(raw_id)
     if not imslp_id:
-        return None
+        _fail_lookup(None)
 
     row = db.get(ImslpInfo, imslp_id)
     if row and _cache_row_complete(row):
-        return _row_to_result(row)
+        result = _row_to_result(row)
+        if result:
+            return result
+        _fail_lookup(row)
 
     owns_client = client is None
     if owns_client:
@@ -191,18 +209,34 @@ def lookup_imslp_info(db: Session, raw_id: str, *, client: httpx.Client | None =
         assert client is not None
         fetched = _fetch_imslp_page(client, imslp_id)
         if not fetched:
-            return _row_to_result(row) if row else None
+            if row:
+                result = _row_to_result(row)
+                if result:
+                    return result
+            _fail_lookup(row)
+
         page_html, imslp_url = fetched
         parsed = parse_imslp_page_html(page_html, imslp_id)
         if not parsed.get("title") and not parsed.get("composer"):
-            return _row_to_result(row) if row else None
+            if row:
+                result = _row_to_result(row)
+                if result:
+                    return result
+            _fail_lookup(row)
+
         _upsert_cache(db, imslp_id, parsed, imslp_url)
         row = db.get(ImslpInfo, imslp_id)
-        return _row_to_result(row) if row else None
+        if row:
+            result = _row_to_result(row)
+            if result:
+                return result
+        _fail_lookup(row)
     finally:
         if owns_client:
             client.close()
 
+    raise AssertionError("unreachable")
 
-def lookup_imslp_info_for_api(db: Session, raw_id: str) -> dict[str, Any] | None:
+
+def lookup_imslp_info_for_api(db: Session, raw_id: str) -> dict[str, Any]:
     return lookup_imslp_info(db, raw_id)

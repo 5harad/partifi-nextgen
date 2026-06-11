@@ -367,28 +367,34 @@ a.red:hover
 }
 
 
-.import-next-button 
+.import-action
 {
 	position: absolute;
-	left:727px;
-	top:520px;
+	left: 727px;
+	top: 520px;
+	width: 201px;
+}
+
+.import-action .import-next-button
+{
+	position: static;
 }
 
 #import-error
 {
 	position: absolute;
-	left: 727px;
-	top: 465px;
-	width: 280px;
+	left: 4px;
+	bottom: calc(100% + 12px);
+	width: 185px;
 	z-index: 10;
-	padding: 10px 12px;
+	padding: 8px 10px;
 	box-sizing: border-box;
 	background: #F8F0E8;
 	border: 1px solid #E00000;
 	border-radius: 4px;
 	font-family: 'IM Fell Great Primer', serif;
-	font-size: 15px;
-	line-height: 1.4;
+	font-size: 14px;
+	line-height: 1.35;
 	color: #E00000;
 	text-align: left;
 }

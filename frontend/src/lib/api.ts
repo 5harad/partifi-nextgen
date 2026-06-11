@@ -264,13 +264,16 @@ export async function getImslpInfo(
     const res = await apiFetch(`/api/v1/imslp/${encodeURIComponent(imslpId)}/info`, {
       signal: controller.signal,
     })
-    if (res.status === 404) return null
+    if (res.status === 404 || res.status === 400) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(apiErrorDetail(err, 'Edition not found.'))
+    }
     if (res.status === 504) {
       throw new Error('IMSLP lookup timed out. Try again in a moment.')
     }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      throw new Error(err.detail || 'IMSLP lookup failed')
+      throw new Error(apiErrorDetail(err, 'IMSLP lookup failed'))
     }
     return res.json()
   } catch (err) {

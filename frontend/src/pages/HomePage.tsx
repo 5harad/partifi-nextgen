@@ -15,12 +15,16 @@ export function HomePage() {
   const [importMode, setImportMode] = useState<'pdf' | 'imslp'>('pdf')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [filename, setFilename] = useState('')
+  const [pdfTitle, setPdfTitle] = useState('')
   const [pdfComposer, setPdfComposer] = useState('')
+  const [pdfPublisher, setPdfPublisher] = useState('')
+  const [pdfCopyright, setPdfCopyright] = useState<CopyrightValue | ''>('')
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState(() => {
+  const [pdfError, setPdfError] = useState(() => {
     const err = searchParams.get('err')
     return err ? pipelineErrorMessage(err) : ''
   })
+  const [imslpError, setImslpError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [imslpId, setImslpId] = useState('')
@@ -37,7 +41,7 @@ export function HomePage() {
   const openFilePicker = () => fileInputRef.current?.click()
 
   const handleFileChange = async (file: File | undefined) => {
-    setError('')
+    setPdfError('')
     if (!file) {
       setSelectedFile(null)
       setFilename('')
@@ -45,11 +49,11 @@ export function HomePage() {
     }
 
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-      setError('Please select a PDF file.')
+      setPdfError('Please select a PDF file.')
       return
     }
     if (file.size > MAX_SCORE_BYTES) {
-      setError(scoreTooLargeMessage(file.size))
+      setPdfError(scoreTooLargeMessage(file.size))
       return
     }
 
@@ -81,6 +85,7 @@ export function HomePage() {
     abortRef.current = controller
     const gen = ++lookupGenRef.current
     setImslpLookupPending(true)
+    setImslpError('')
     setImslpTitle('')
     setImslpComposer('')
     setImslpPublisher('')
@@ -89,11 +94,6 @@ export function HomePage() {
     try {
       const info = await getImslpInfo(normalized, controller.signal)
       if (gen !== lookupGenRef.current) return
-      if (!info) {
-        setError('IMSLP score not found or not a PDF.')
-        return
-      }
-      setError('')
       setImslpTitle(info.title)
       setImslpComposer(info.composer)
       setImslpPublisher(info.publisher)
@@ -105,7 +105,7 @@ export function HomePage() {
       }
     } catch (err) {
       if (gen !== lookupGenRef.current || controller.signal.aborted) return
-      setError(err instanceof Error ? err.message : 'IMSLP lookup failed')
+      setImslpError(err instanceof Error ? err.message : 'IMSLP lookup failed')
     } finally {
       if (gen === lookupGenRef.current) {
         setImslpLookupPending(false)
@@ -139,26 +139,26 @@ export function HomePage() {
 
     const pendingFile = fileInputRef.current?.files?.[0]
     if (pendingFile && pendingFile.size > MAX_SCORE_BYTES) {
-      setError(scoreTooLargeMessage(pendingFile.size))
+      setPdfError(scoreTooLargeMessage(pendingFile.size))
       return
     }
 
-    const title = (document.getElementById('pdf_title') as HTMLInputElement).value.trim()
+    const title = pdfTitle.trim()
     const composer = pdfComposer.trim()
-    const publisher = (document.getElementById('pdf_publisher') as HTMLInputElement).value.trim()
-    const copyright = (document.getElementById('pdf_copyright') as HTMLSelectElement).value
+    const publisher = pdfPublisher.trim()
+    const copyright = pdfCopyright
 
     if (!selectedFile || !filename || !title || !composer || !copyright) {
-      setError('Please complete the form before continuing.')
+      setPdfError('Please complete the form before continuing.')
       return
     }
 
     if (selectedFile.size > MAX_SCORE_BYTES) {
-      setError(scoreTooLargeMessage(selectedFile.size))
+      setPdfError(scoreTooLargeMessage(selectedFile.size))
       return
     }
 
-    setError('')
+    setPdfError('')
 
     setSubmitting(true)
     try {
@@ -174,7 +174,8 @@ export function HomePage() {
       })
       navigate(`/${result.id}/import`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed')
+      setPdfError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
       setSubmitting(false)
     }
   }
@@ -184,11 +185,14 @@ export function HomePage() {
 
     const normalized = normalizeImslpIdInput(imslpId)
     if (!normalized || !imslpTitle || !imslpComposer || !imslpCopyright) {
-      setError('Please complete the form before continuing.')
+      setImslpError('Please complete the form before continuing.')
       return
     }
 
-    setError('')
+    abortRef.current?.abort()
+    abortRef.current = null
+    setImslpLookupPending(false)
+    setImslpError('')
     setSubmitting(true)
     try {
       const csrfToken = await getCsrfToken()
@@ -204,7 +208,8 @@ export function HomePage() {
       )
       navigate(`/${result.id}/import`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Import failed')
+      setImslpError(err instanceof Error ? err.message : 'Import failed')
+    } finally {
       setSubmitting(false)
     }
   }
@@ -266,7 +271,13 @@ export function HomePage() {
             </div>
             <div className="score-input-label title-field">
               title<span className="asterisk">*</span>
-              <input type="text" className="score-input" id="pdf_title" />
+              <input
+                type="text"
+                className="score-input"
+                id="pdf_title"
+                value={pdfTitle}
+                onChange={(e) => setPdfTitle(e.target.value)}
+              />
             </div>
             <div className="score-input-label composer-field">
               composer<span className="asterisk">*</span>
@@ -279,34 +290,46 @@ export function HomePage() {
             </div>
             <div className="score-input-label publisher-field">
               edition &nbsp;
-              <input type="text" className="score-input" id="pdf_publisher" />
+              <input
+                type="text"
+                className="score-input"
+                id="pdf_publisher"
+                value={pdfPublisher}
+                onChange={(e) => setPdfPublisher(e.target.value)}
+              />
             </div>
             <CopyrightTip />
             <div className="copyright">
               copyright<span className="asterisk">*</span>
             </div>
             <div className="copyright-options">
-              <select id="pdf_copyright" defaultValue="">
+              <select
+                id="pdf_copyright"
+                value={pdfCopyright}
+                onChange={(e) => setPdfCopyright(e.target.value as CopyrightValue | '')}
+              >
                 <option value="" />
                 <option value="before 1923">Published before 1923</option>
                 <option value="after 1923">Published in or after 1923</option>
                 <option value="unknown">Unknown</option>
               </select>
             </div>
-            {error ? (
-              <div id="import-error" role="alert">
-                {error}
+            <div className="import-action">
+              {pdfError ? (
+                <div id="import-error" role="alert">
+                  {pdfError}
+                </div>
+              ) : null}
+              <div
+                id="pdf-submit"
+                className="banner-button import-next-button"
+                onClick={submitting ? undefined : handlePdfSubmit}
+                role="button"
+                tabIndex={0}
+                style={{ opacity: submitting ? 0.6 : 1 }}
+              >
+                {submitting ? 'Uploading...' : 'Import score »'}
               </div>
-            ) : null}
-            <div
-              id="pdf-submit"
-              className="banner-button import-next-button"
-              onClick={submitting ? undefined : handlePdfSubmit}
-              role="button"
-              tabIndex={0}
-              style={{ opacity: submitting ? 0.6 : 1 }}
-            >
-              {submitting ? 'Uploading...' : 'Import score »'}
             </div>
           </form>
         ) : (
@@ -366,20 +389,22 @@ export function HomePage() {
                 <option value="unknown">Unknown</option>
               </select>
             </div>
-            {error ? (
-              <div id="import-error" role="alert">
-                {error}
+            <div className="import-action">
+              {imslpError ? (
+                <div id="import-error" role="alert">
+                  {imslpError}
+                </div>
+              ) : null}
+              <div
+                id="imslp-submit"
+                className="banner-button import-next-button"
+                onClick={submitting || imslpLookupPending ? undefined : handleImslpSubmit}
+                role="button"
+                tabIndex={0}
+                style={{ opacity: submitting || imslpLookupPending ? 0.6 : 1 }}
+              >
+                {submitting ? 'Importing...' : imslpLookupPending ? 'Looking up…' : 'Import score »'}
               </div>
-            ) : null}
-            <div
-              id="imslp-submit"
-              className="banner-button import-next-button"
-              onClick={submitting || imslpLookupPending ? undefined : handleImslpSubmit}
-              role="button"
-              tabIndex={0}
-              style={{ opacity: submitting || imslpLookupPending ? 0.6 : 1 }}
-            >
-              {submitting ? 'Importing...' : imslpLookupPending ? 'Looking up…' : 'Import score »'}
             </div>
           </form>
         )}
