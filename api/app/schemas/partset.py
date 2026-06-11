@@ -27,3 +27,9 @@ class UpdateMetadataResponse(BaseModel):
 
 class DeletePartsetResponse(BaseModel):
     status: str = "success"
+
+
+class RetryPipelineResponse(BaseModel):
+    status: str = "success"
+    stage: str
+    job_id: str | None = None

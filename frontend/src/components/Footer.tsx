@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 
 const CONTACT_EMAIL = 'support@partifi.org'
+const SOURCE_REPO_URL = 'https://github.com/5harad/partifi-nextgen'
 
 export function Footer() {
   const year = new Date().getFullYear()
@@ -24,12 +25,16 @@ export function Footer() {
           maintaining a publicly accessible library of user-contributed scores, we seek to support
           the study and performance of historical music.
           <div id="fine-print">
-            &copy; {year} Partifi &nbsp; | &nbsp; <Link to="/terms">Terms of Service</Link> &nbsp; | &nbsp;{' '}
-            <Link to="/privacy">Privacy Policy</Link> &nbsp; | &nbsp;{' '}
+            &copy; {year} Partifi &nbsp;|&nbsp;{' '}
             <Link id="about-link" to="/about">
               About
             </Link>{' '}
-            &nbsp; | &nbsp; <a href={`mailto:${CONTACT_EMAIL}`} className="contact">Contact</a>
+            &nbsp;|&nbsp; <a href={`mailto:${CONTACT_EMAIL}`} className="contact">Contact</a>{' '}
+            &nbsp;|&nbsp; <Link to="/privacy">Privacy</Link> &nbsp;|&nbsp; <Link to="/terms">Terms</Link>{' '}
+            &nbsp;|&nbsp;{' '}
+            <a href={SOURCE_REPO_URL} rel="noopener noreferrer">
+              Source
+            </a>
           </div>
         </div>
       </div>

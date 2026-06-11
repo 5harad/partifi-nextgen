@@ -19,7 +19,7 @@ Legacy **public download links** (`https://partifi.org/{publicId}`) and **editor
 ### AWS & DNS
 
 - [ ] EC2 instance in the **same region** as the S3 bucket (`cdn.partifi.org`)
-- [ ] Instance type: **t4g.medium** (2 vCPU, 4 GB) or larger
+- [ ] Instance type: **t4g.xlarge** (4 vCPU, 16 GB) recommended for the full corpus; **t4g.medium** only for smoke tests
 - [ ] Elastic IP allocated and associated
 - [ ] Security group: **22** (your IP), **80**, **443**
 - [ ] IAM user or instance role: `s3:GetObject`, `s3:PutObject`, `s3:ListBucket`, `s3:DeleteObject` on `cdn.partifi.org`
@@ -48,6 +48,18 @@ In [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services
 sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 git
 sudo usermod -aG docker "$USER"
 # log out and back in
+```
+
+### Host memory (recommended on 16 GB instances)
+
+Add **2–4 GB swap** so rare spikes (three heavy jobs + MySQL) swap instead of OOM-killing the kernel:
+
+```bash
+sudo fallocate -l 4G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
 Clone the repo:
@@ -80,7 +92,9 @@ This starts:
 | `api` | FastAPI (2 workers) |
 | `mysql` | Fresh schema from `docker/mysql/init.sql` |
 | `redis` | Job queue |
-| `worker-1` … `worker-3` | Background jobs |
+| `worker-1` … `worker-3` | Background jobs (4 GB memory cap each) |
+
+Production compose sets **MySQL `innodb_buffer_pool_size = 4G`** (`docker/mysql/prod.cnf`) and **4 GB Docker memory limits** on each worker so a runaway PDF job is killed in its container instead of taking down the host.
 
 Verify health (on the EC2 host):
 
@@ -93,6 +107,19 @@ curl -s http://localhost/health/ready
 ## 4. Import legacy partsets
 
 The legacy MySQL server must be reachable from EC2 (VPN, SSH tunnel, or temporary security-group rule).
+
+**During bulk import or long `CREATE INDEX` runs:** stop workers (and optionally the API) so they do not compete with MySQL for RAM and disk I/O:
+
+```bash
+docker compose -f docker-compose.prod.yml stop worker-1 worker-2 worker-3
+# optional: docker compose -f docker-compose.prod.yml stop api
+```
+
+Start them again after import and index builds:
+
+```bash
+docker compose -f docker-compose.prod.yml start api worker-1 worker-2 worker-3
+```
 
 **Before import:** target id columns must use `utf8mb4_bin` (case-sensitive) so legacy ids like `03mra` and `03mrA` remain distinct. On an existing database:
 
@@ -203,6 +230,64 @@ docker compose -f docker-compose.prod.yml logs -f web api worker-1
 
 ## Operations
 
+### Memory and workers
+
+| Setting | Value | Where |
+|---------|-------|--------|
+| Worker container cap | **4 GB** each | `docker-compose.prod.yml` |
+| MySQL buffer pool | **4 GB** | `docker/mysql/prod.cnf` |
+| Worker count | **3** | compose services |
+| Job timeout | **45 min** | `JOB_TIMEOUT_SECONDS` in `.env` |
+| Page workers per job | **auto** (half of CPU) | `PARTGEN_POOL_SIZE=0` in `.env` |
+
+On a **16 GB** host the budget is roughly: ~1 GB OS, ~4 GB MySQL buffer pool, ~0.5–1 GB API/Caddy/Redis, up to **12 GB** if all three workers peak at once (rare). Swap covers that edge case.
+
+If you routinely run **three large PDF imports at the same time**, set `PARTGEN_POOL_SIZE=1` in `.env` and recreate workers, or reduce to two worker containers.
+
+After changing `prod.cnf` or memory limits, recreate affected containers:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d mysql worker-1 worker-2 worker-3
+```
+
+Confirm MySQL picked up the buffer pool size:
+
+```bash
+docker compose -f docker-compose.prod.yml exec mysql \
+  mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "SHOW VARIABLES LIKE 'innodb_buffer_pool_size';"
+```
+
+### Reboot behavior
+
+All prod services use **`restart: unless-stopped`** in `docker-compose.prod.yml` (`web`, `api`, `mysql`, `redis`, `worker-1` … `worker-3`). After an EC2 reboot:
+
+1. The **Docker daemon** must start (Ubuntu: `systemctl is-enabled docker` → `enabled`).
+2. Docker restarts any container that was **running** before shutdown.
+3. Named volumes (`mysql_data`, `caddy_data`, etc.) persist — data is not lost.
+
+**Containers you manually stopped** (e.g. `docker compose … stop worker-1 worker-2 worker-3` during import) **stay stopped** after reboot until you start them again:
+
+```bash
+docker compose -f docker-compose.prod.yml start api worker-1 worker-2 worker-3
+```
+
+On boot, containers start in parallel (compose `depends_on` does not serialize a host reboot). MySQL may take 10–30 seconds to accept connections; the API and workers usually recover on their own once Redis and MySQL are up.
+
+**Does not survive reboot:** SSH tunnels to the legacy Linode DB, one-off shell sessions, anything outside Docker unless configured separately (cron, etc.).
+
+One-time check that Docker starts on boot:
+
+```bash
+sudo systemctl enable docker
+```
+
+After reboot, verify:
+
+```bash
+docker compose -f docker-compose.prod.yml ps
+curl -s http://localhost/health/ready
+```
+
 ### Restart after deploy
 
 ```bash
@@ -232,6 +317,8 @@ MySQL data lives in the `mysql_data` volume. Back up regularly; S3 files are alr
 
 | Symptom | Check |
 |---------|--------|
+| Worker OOM / exit 137 | `docker compose … logs worker-1`; score may be very large — retry; lower concurrency or raise cap in compose |
+| Host sluggish / OOM | `free -h`; swap enabled? three heavy jobs at once? stop workers during maintenance |
 | Jobs never run | `docker compose -f docker-compose.prod.yml ps` — all three workers up? Redis healthy? |
 | Import stuck | Worker logs; `partsets.error` column; `JOB_TIMEOUT_SECONDS` |
 | S3 403 | IAM policy, `S3_BUCKET`, region |

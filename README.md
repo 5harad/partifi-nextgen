@@ -2,8 +2,6 @@
 
 Greenfield rewrite of [Partifi](https://github.com/5harad/partifi) — automated score-to-parts workflow with modern infrastructure and UI parity.
 
-Legacy reference: `../partifi` (PHP + jQuery + Python 2).
-
 ## Stack
 
 | Layer | Tech |
@@ -132,30 +130,14 @@ Partsets (CSRF required on mutations):
 - `POST /api/v1/partsets/{private_id}/parts/combine`
 - `POST /api/v1/partsets/{private_id}/generate`
 - `GET /api/v1/partsets/{private_id}/partgen-status`
+- `POST /api/v1/partsets/{private_id}/retry-pipeline` — re-enqueue failed import or partgen
 - `GET /api/v1/partsets/{private_id}/parts`
-
-## Phase roadmap
-
-1. **Foundation** — done (monorepo, CSS parity, Docker, uv)
-2. **Import + pipeline** — PDF upload + IMSLP import + workers done
-3. **Segment editor** — done
-4. **Preview + generation** — done
-5. **Supporting pages** — search, library, Google login done
-6. **Production cutover** — see [docs/DEPLOY.md](docs/DEPLOY.md) (EC2, legacy partset import, DNS)
 
 ## Production deploy
 
-Full cutover runbook: **[docs/DEPLOY.md](docs/DEPLOY.md)**
-
-Quick start on the server:
+Full runbook: **[docs/DEPLOY.md](docs/DEPLOY.md)** (EC2, Docker Compose, legacy data import, DNS).
 
 ```bash
 cp .env.production.example .env   # fill in secrets
 docker compose -f docker-compose.prod.yml up -d --build
-./scripts/import-legacy-partsets.sh --dry-run
-./scripts/import-legacy-partsets.sh --confirm
 ```
-
-## Production infra
-
-One EC2 instance (Docker Compose) + existing S3 bucket (~1.38 TB). See the project plan for details.

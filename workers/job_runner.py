@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import multiprocessing as mp
+import time
 from typing import Any
 
 import db_conn
@@ -13,6 +14,18 @@ from jobs.registry import run_job
 
 logger = logging.getLogger("partifi.worker")
 
+_shutdown_requested = False
+_active_proc: mp.Process | None = None
+
+
+def request_job_abort() -> None:
+    """Stop the in-flight job subprocess (called on worker shutdown)."""
+    global _shutdown_requested
+    _shutdown_requested = True
+    proc = _active_proc
+    if proc and proc.is_alive():
+        proc.terminate()
+
 
 def _partset_has_error(partset_id: str) -> bool:
     row = db_conn.fetchone(
@@ -20,6 +33,16 @@ def _partset_has_error(partset_id: str) -> bool:
         {"id": partset_id},
     )
     return bool(row and row.error)
+
+
+def _terminate_proc(proc: mp.Process) -> None:
+    if not proc.is_alive():
+        return
+    proc.terminate()
+    proc.join(10)
+    if proc.is_alive():
+        proc.kill()
+        proc.join()
 
 
 def _child_entry(job_type: str, payload: dict[str, Any]) -> None:
@@ -35,10 +58,14 @@ def _child_entry(job_type: str, payload: dict[str, Any]) -> None:
 
 
 def run_job_with_timeout(job: dict[str, Any]) -> None:
+    global _active_proc, _shutdown_requested
+
     job_type = job.get("type", "unknown")
     payload = job.get("payload", {})
     partset_id = payload.get("partset_id")
     timeout = get_settings().job_timeout_seconds
+
+    _shutdown_requested = False
 
     ctx = mp.get_context("spawn")
     proc = ctx.Process(
@@ -46,8 +73,30 @@ def run_job_with_timeout(job: dict[str, Any]) -> None:
         args=(job_type, payload),
         name=f"partifi-job-{job.get('id', '?')}-{job_type}",
     )
+    _active_proc = proc
     proc.start()
-    proc.join(timeout=timeout)
+
+    deadline = time.monotonic() + timeout
+    try:
+        while proc.is_alive():
+            if _shutdown_requested:
+                logger.warning(
+                    "Job %s aborted during shutdown (type=%s partset=%s)",
+                    job.get("id"),
+                    job_type,
+                    partset_id,
+                )
+                _terminate_proc(proc)
+                if partset_id:
+                    mark_partset_error(partset_id)
+                return
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            proc.join(timeout=min(1.0, remaining))
+    finally:
+        _active_proc = None
 
     if proc.is_alive():
         logger.error(
@@ -57,11 +106,7 @@ def run_job_with_timeout(job: dict[str, Any]) -> None:
             job_type,
             partset_id,
         )
-        proc.terminate()
-        proc.join(10)
-        if proc.is_alive():
-            proc.kill()
-            proc.join()
+        _terminate_proc(proc)
         if partset_id:
             mark_partset_error(partset_id)
         return

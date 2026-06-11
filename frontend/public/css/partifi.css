@@ -458,6 +458,55 @@ a.red:hover
 	background: url('/images/progress_box.png');
 }
 
+#transition.transition-error {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 28px;
+	padding: 36px 32px;
+	box-sizing: border-box;
+	font-family: 'IM Fell Great Primer', serif;
+	font-size: 18px;
+}
+
+#transition.transition-error #transition-text {
+	position: static;
+	top: auto;
+	width: auto;
+	max-width: 480px;
+	font-family: 'IM Fell Great Primer', serif;
+	font-size: 18px;
+	color: black;
+	line-height: 1.45;
+}
+
+#transition.transition-error #transition-actions {
+	position: static;
+	top: auto;
+	width: auto;
+}
+
+#transition.transition-error #transition-actions .copy-button {
+	position: static;
+	display: inline-block;
+	width: auto;
+	min-width: auto;
+	margin: 0 10px;
+	top: auto;
+	left: auto;
+	white-space: nowrap;
+	line-height: 30px;
+	vertical-align: middle;
+	color: black;
+}
+
+#transition.transition-error #transition-actions .copy-button.is-disabled {
+	opacity: 0.6;
+	cursor: wait;
+	pointer-events: none;
+}
+
 #transition-text {
 	position: absolute;
 	top: 50px;

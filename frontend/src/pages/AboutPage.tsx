@@ -1,6 +1,7 @@
 import { Layout } from '../components/Layout'
 
 const CONTACT = 'support@partifi.org'
+const SOURCE_REPO_URL = 'https://github.com/5harad/partifi-nextgen'
 
 export function AboutPage() {
   return (
@@ -40,8 +41,11 @@ export function AboutPage() {
             </p>
 
             <p>
-              We&apos;re constantly working to improve Partifi, and we would love to hear your comments and
-              suggestions &mdash; you can reach us at{' '}
+              Partifi is{' '}
+              <a href={SOURCE_REPO_URL} className="red" rel="noopener noreferrer">
+                open source
+              </a>
+              . Contributions, bug reports, and feedback are welcome on GitHub or by email at{' '}
               <a className="contact red" href={`mailto:${CONTACT}?subject=Partifi%20Feedback`}>
                 {CONTACT}
               </a>

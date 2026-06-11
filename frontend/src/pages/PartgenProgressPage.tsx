@@ -1,15 +1,24 @@
-import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { getCsrfToken, getPartgenStatus, startPartGeneration } from '../lib/api'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { getCsrfToken, getPartgenStatus, retryPartsetPipeline, startPartGeneration } from '../lib/api'
 import { pipelineErrorMessage, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
 
 export function PartgenProgressPage() {
   const { privateId } = useParams<{ privateId: string }>()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [progress, setProgress] = useState(0)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [retrying, setRetrying] = useState(false)
+  const pollRef = useRef<(() => void) | null>(null)
+  const previewError = import.meta.env.DEV ? searchParams.get('previewError') : null
 
   useEffect(() => {
+    if (previewError) {
+      setErrorMessage(pipelineErrorMessage(previewError))
+      return
+    }
+
     if (!privateId) return
 
     let cancelled = false
@@ -46,6 +55,13 @@ export function PartgenProgressPage() {
       }
     }
 
+    pollRef.current = () => {
+      cancelled = false
+      failedAttempts = 0
+      window.clearTimeout(timeoutId)
+      poll()
+    }
+
     ;(async () => {
       try {
         const csrf = await getCsrfToken()
@@ -53,14 +69,33 @@ export function PartgenProgressPage() {
       } catch {
         /* job may already be running */
       }
-      poll()
+      if (!cancelled) {
+        poll()
+      }
     })()
 
     return () => {
       cancelled = true
       window.clearTimeout(timeoutId)
     }
-  }, [privateId, navigate])
+  }, [privateId, navigate, previewError])
+
+  const handleRetry = async () => {
+    if (previewError) return
+    if (!privateId || retrying) return
+    setRetrying(true)
+    try {
+      const csrf = await getCsrfToken()
+      await retryPartsetPipeline(privateId, csrf)
+      setErrorMessage(null)
+      setProgress(0)
+      pollRef.current?.()
+    } catch {
+      setErrorMessage('Could not restart part generation. Please try again.')
+    } finally {
+      setRetrying(false)
+    }
+  }
 
   const ribbonWidth = progress * 4 + 20
 
@@ -73,16 +108,29 @@ export function PartgenProgressPage() {
         style={{ position: 'absolute', left: 0, top: 200, zIndex: -1, opacity: 0.3 }}
         alt=""
       />
-      <div id="transition">
+      <div id="transition" className={errorMessage ? 'transition-error' : undefined}>
         {errorMessage ? (
           <>
-            <div id="transition-text">
-              <p className="red">{errorMessage}</p>
-              <p style={{ marginTop: 24, fontSize: 16 }}>
-                <Link to="/" className="red">
-                  Return to home and try again
-                </Link>
-              </p>
+            <div id="transition-text">{errorMessage}</div>
+            <div id="transition-actions">
+              <div
+                className={`copy-button${retrying ? ' is-disabled' : ''}`}
+                onClick={retrying ? undefined : handleRetry}
+                onKeyDown={() => {}}
+                role="button"
+                tabIndex={retrying ? -1 : 0}
+              >
+                {retrying ? 'Retrying…' : 'Try again'}
+              </div>
+              <div
+                className="copy-button"
+                onClick={() => privateId && navigate(`/${privateId}/preview`)}
+                onKeyDown={() => {}}
+                role="button"
+                tabIndex={0}
+              >
+                Back to preview
+              </div>
             </div>
           </>
         ) : (

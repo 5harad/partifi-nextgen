@@ -12,6 +12,7 @@ from app.schemas.partset import (
     DeletePartsetResponse,
     ImportProgressResponse,
     PartsetCreateResponse,
+    RetryPipelineResponse,
     UpdateMetadataRequest,
     UpdateMetadataResponse,
 )
@@ -22,6 +23,7 @@ from app.schemas.segment import (
     SavePageSegmentsResponse,
     SegmentDataResponse,
 )
+from app.services.retry import retry_partset_pipeline
 from app.services.partsets import (
     create_imslp_partset,
     create_partset_from_score,
@@ -223,6 +225,26 @@ def import_status(private_id: str, db: Session = Depends(get_db)) -> ImportProgr
         raise HTTPException(status_code=404, detail="Partset not found")
 
     return ImportProgressResponse(**import_progress_payload(partset))
+
+
+@router.post(
+    "/partsets/{private_id}/retry-pipeline",
+    response_model=RetryPipelineResponse,
+)
+def retry_pipeline(
+    private_id: str,
+    x_csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+    db: Session = Depends(get_db),
+) -> RetryPipelineResponse:
+    verify_csrf(x_csrf_token)
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    try:
+        stage, job_id = retry_partset_pipeline(db, partset)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RetryPipelineResponse(stage=stage, job_id=job_id)
 
 
 @router.get(

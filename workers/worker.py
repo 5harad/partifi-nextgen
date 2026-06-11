@@ -10,7 +10,7 @@ import sys
 import redis
 
 from config import get_settings
-from job_runner import run_job_with_timeout
+from job_runner import request_job_abort, run_job_with_timeout
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("partifi.worker")
@@ -23,6 +23,7 @@ def _handle_signal(_signum, _frame) -> None:
     global RUNNING
     RUNNING = False
     logger.info("Shutdown requested")
+    request_job_abort()
 
 
 signal.signal(signal.SIGINT, _handle_signal)

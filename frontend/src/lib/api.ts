@@ -69,6 +69,21 @@ export async function getImportStatus(privateId: string): Promise<ImportProgress
   return res.json()
 }
 
+export async function retryPartsetPipeline(
+  privateId: string,
+  csrfToken: string,
+): Promise<{ status: string; stage: string; job_id: string | null }> {
+  const res = await apiFetch(`/api/v1/partsets/${privateId}/retry-pipeline`, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': csrfToken },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to retry')
+  }
+  return res.json()
+}
+
 export async function getSegmentData(privateId: string): Promise<SegmentDataResponse> {
   const res = await fetch(`/api/v1/partsets/${privateId}/segment-data`)
   if (!res.ok) {

@@ -10,6 +10,10 @@ x-worker-service: &worker-service
     REDIS_URL: redis://redis:6379/0
   volumes:
     - worker_tmp:/tmp/partifi
+  deploy:
+    resources:
+      limits:
+        memory: 4G
   depends_on:
     mysql:
       condition: service_healthy
@@ -75,6 +79,7 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./docker/mysql/prod.cnf:/etc/mysql/conf.d/99-prod.cnf:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s

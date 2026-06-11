@@ -1,0 +1,3 @@
+[mysqld]
+# Sized for t4g.xlarge (16 GB host): leave headroom for 3 workers (4G cap each) + OS.
+innodb_buffer_pool_size = 4G

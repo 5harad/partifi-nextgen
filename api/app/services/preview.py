@@ -43,7 +43,7 @@ def _partgen_total_progress(status: str | None, progress: float) -> float:
 
 
 def partgen_progress_payload(partset: Partset) -> dict:
-    is_complete = bool(partset.parts_ready)
+    is_complete = bool(partset.parts_ready) and not partset.error
     progress = 0.0
     if partset.status == "cut":
         progress = partset.cut_progress or 0.0
