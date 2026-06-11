@@ -7,7 +7,7 @@ import re
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.services.s3 import presigned_score_pdf_url
+from app.services.downloads import score_pdf_url_for_score
 
 _MAX_RAW_ROWS = 500
 _MAX_RESULTS = 100
@@ -67,7 +67,7 @@ def search_partsets(db: Session, query: str) -> list[dict]:
                 "title": row["title"],
                 "composer": row["composer"],
                 "publisher": row["publisher"],
-                "score_pdf_url": presigned_score_pdf_url(score_id),
+                "score_pdf_url": score_pdf_url_for_score(score_id),
             }
         )
         if len(results) >= _MAX_RESULTS:

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Favorite, Part, Partset
 from app.services.partset_admin import resolve_partset_access
-from app.services.s3 import presigned_get_url, presigned_score_pdf_url
+from app.services.downloads import part_file_url, score_pdf_url_for_partset
 
 
 def resolve_public_partset_id(db: Session, access_id: str) -> str | None:
@@ -56,6 +56,7 @@ def list_library(db: Session, user_id: str) -> list[dict]:
     for favorite, partset in rows:
         parts_payload: list[dict] = []
         score_pdf_url = None
+        link_mode = "owner" if favorite.admin and partset.private_id else "public"
         if partset.parts_ready:
             parts = (
                 db.query(Part)
@@ -70,18 +71,11 @@ def list_library(db: Session, user_id: str) -> list[dict]:
                     {
                         "tag": part.tag,
                         "file_name": part.file_name or "",
-                        "letter_url": presigned_get_url(
-                            f"parts/{partset.id}/{letter_name}",
-                            download_name=letter_name,
-                        ),
-                        "a4_url": presigned_get_url(
-                            f"parts/{partset.id}/{a4_name}",
-                            download_name=a4_name,
-                        ),
+                        "letter_url": part_file_url(partset, letter_name, mode=link_mode),
+                        "a4_url": part_file_url(partset, a4_name, mode=link_mode),
                     }
                 )
-        if partset.score_id:
-            score_pdf_url = presigned_score_pdf_url(partset.score_id)
+        score_pdf_url = score_pdf_url_for_partset(partset, mode=link_mode)
 
         items.append(
             {

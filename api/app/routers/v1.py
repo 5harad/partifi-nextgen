@@ -72,6 +72,7 @@ router = APIRouter(prefix="/api/v1", tags=["v1"])
 
 COPYRIGHT_VALUES = {"before 1923", "after 1923", "unknown"}
 PART_FILE_PATTERN = re.compile(r"^[A-Za-z0-9._-]+\.pdf$")
+SCORE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 PAGE_IMAGE_RES = {"lowres", "thumbs"}
 
 
@@ -102,6 +103,20 @@ def _serve_cached_part(partset: Partset, filename: str) -> FileResponse:
     if not path:
         raise HTTPException(status_code=404, detail="Part file not found")
     return FileResponse(path, media_type="application/pdf", filename=filename)
+
+
+def _serve_score_pdf(score_id: str) -> FileResponse:
+    if not SCORE_ID_PATTERN.match(score_id):
+        raise HTTPException(status_code=400, detail="Invalid score id")
+    try:
+        path = get_local_cache().ensure_score_pdf(score_id)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail="Score PDF not found") from exc
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=f"{score_id}_score.pdf",
+    )
 
 
 @router.get("/partsets/{private_id}/preview-segment/{ndx}.png")
@@ -161,6 +176,32 @@ def _page_image_response(
     except Exception as exc:
         raise HTTPException(status_code=404, detail="Page image not found") from exc
     return FileResponse(path, media_type="image/png")
+
+
+@router.get("/scores/{score_id}/score.pdf")
+def score_pdf(score_id: str) -> FileResponse:
+    return _serve_score_pdf(score_id)
+
+
+@router.get("/access/{access_id}/score-pdf")
+def score_pdf_access(access_id: str, db: Session = Depends(get_db)) -> FileResponse:
+    resolved = resolve_partset_access(db, access_id)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    partset, _mode = resolved
+    if not partset.score_id:
+        raise HTTPException(status_code=404, detail="Score PDF not found")
+    touch_partset_access(db, partset)
+    return _serve_score_pdf(partset.score_id)
+
+
+@router.get("/partsets/{private_id}/score-pdf")
+def score_pdf_owner(private_id: str, db: Session = Depends(get_db)) -> FileResponse:
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset or not partset.score_id:
+        raise HTTPException(status_code=404, detail="Score PDF not found")
+    touch_partset_access(db, partset)
+    return _serve_score_pdf(partset.score_id)
 
 
 @router.get("/partsets/{private_id}/part-file/{filename}")

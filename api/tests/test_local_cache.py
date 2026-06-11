@@ -85,6 +85,23 @@ def test_write_preview_publishes_complete_dir(tmp_path: Path) -> None:
     assert (preview / "s1.png").read_bytes() == b"seg1"
 
 
+def test_ensure_score_pdf_downloads_when_missing(tmp_path: Path) -> None:
+    cache = _cache(tmp_path)
+    dest = cache.score_pdf_path("abc")
+    calls: list[str] = []
+
+    def download(key: str, path: Path) -> None:
+        calls.append(key)
+        path.write_bytes(b"%PDF-fake")
+
+    cache.download = download
+    result = cache.ensure_score_pdf("abc")
+
+    assert result == dest
+    assert dest.read_bytes() == b"%PDF-fake"
+    assert calls == ["scores/abc_score.pdf"]
+
+
 def test_page_image_url_includes_png_suffix() -> None:
     from app.services.segments import page_image_url
 

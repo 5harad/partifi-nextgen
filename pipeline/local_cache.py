@@ -39,6 +39,33 @@ class LocalCache:
     def score_page_s3_key(self, score_id: str, kind: ScoreKind, page: int) -> str:
         return f"scores/{score_id}/{kind}/page-{page}.png"
 
+    def score_pdf_path(self, score_id: str) -> Path:
+        return self.score_root(score_id) / "score.pdf"
+
+    def score_pdf_s3_key(self, score_id: str) -> str:
+        return f"scores/{score_id}_score.pdf"
+
+    def ensure_score_pdf(self, score_id: str) -> Path:
+        path = self.score_pdf_path(score_id)
+        if path.is_file():
+            self._touch(path)
+            return path
+
+        key = self.score_pdf_s3_key(score_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self._temp_path(path)
+        try:
+            self.download(key, tmp)
+            self._install_file(tmp, path)
+        except Exception:
+            tmp.unlink(missing_ok=True)
+            if path.is_file():
+                self._touch(path)
+                return path
+            raise
+        self._touch(path)
+        return path
+
     def score_has_kind(self, score_id: str, kind: ScoreKind) -> bool:
         directory = self.score_kind_dir(score_id, kind)
         return directory.is_dir() and any(directory.glob("page-*.png"))

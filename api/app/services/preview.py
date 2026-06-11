@@ -15,7 +15,7 @@ from app.services.local_cache import get_local_cache
 from app.services.partset_touch import touch_partset_access
 from app.services.gen_parts_lock import try_acquire_gen_parts_lock
 from app.services.queue import enqueue_job
-from app.services.s3 import presigned_get_url, presigned_score_pdf_url
+from app.services.downloads import part_file_url, score_pdf_url_for_partset
 from app.services.score_pages import ensure_score_pages_warming
 from app.services.segments import ensure_import_complete, get_partset_by_private_id, sync_part_rows_from_tags
 from app.utils.strings import tag_to_filename
@@ -371,12 +371,6 @@ def start_part_generation(db: Session, partset: Partset) -> str | None:
     return job_id
 
 
-def _part_file_url(partset: Partset, filename: str, *, mode: str) -> str:
-    if mode == "owner" and partset.private_id:
-        return f"/api/v1/partsets/{partset.private_id}/part-file/{filename}"
-    return f"/api/v1/access/{partset.id}/part-file/{filename}"
-
-
 def get_parts_data(db: Session, partset: Partset, *, mode: str = "owner") -> dict:
     ensure_import_complete(partset)
     touch_partset_access(db, partset)
@@ -391,15 +385,9 @@ def get_parts_data(db: Session, partset: Partset, *, mode: str = "owner") -> dic
     for part in parts:
         letter_name = f"{partset.id}_{part.file_name}"
         a4_name = f"{partset.id}_a4_{part.file_name}"
-        letter_key = f"parts/{partset.id}/{letter_name}"
-        a4_key = f"parts/{partset.id}/{a4_name}"
 
-        if partset.parts_ready:
-            letter_url = _part_file_url(partset, letter_name, mode=mode)
-            a4_url = _part_file_url(partset, a4_name, mode=mode)
-        else:
-            letter_url = presigned_get_url(letter_key, download_name=letter_name)
-            a4_url = presigned_get_url(a4_key, download_name=a4_name)
+        letter_url = part_file_url(partset, letter_name, mode=mode)
+        a4_url = part_file_url(partset, a4_name, mode=mode)
 
         download_items.append(
             {
@@ -410,9 +398,7 @@ def get_parts_data(db: Session, partset: Partset, *, mode: str = "owner") -> dic
             }
         )
 
-    score_pdf_url = None
-    if partset.score_id:
-        score_pdf_url = presigned_score_pdf_url(partset.score_id)
+    score_pdf_url = score_pdf_url_for_partset(partset, mode=mode)
 
     payload = {
         "partset_id": partset.id,
