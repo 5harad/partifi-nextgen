@@ -24,10 +24,24 @@ MAX_BYTES = 60_000_000
 TIMEOUT = 120.0
 
 
-def resolve_imslp_pdf_url(imslp_id: str, client: httpx.Client) -> str:
+def _pdf_response_from_redirect(response: httpx.Response) -> tuple[str, bytes] | None:
+    """IMSLP sometimes 302s ImagefromIndex straight to a mirror PDF (no HTML wrapper)."""
+    url = str(response.url)
+    if not url.lower().endswith(".pdf"):
+        content_type = response.headers.get("content-type", "").lower()
+        if "application/pdf" not in content_type and response.content[:4] != b"%PDF":
+            return None
+    return url, response.content
+
+
+def resolve_imslp_pdf_url(imslp_id: str, client: httpx.Client) -> tuple[str, bytes | None]:
     page_url = IMSLP_INDEX_URL.format(imslp_id=imslp_id)
     response = client.get(page_url)
     response.raise_for_status()
+
+    direct = _pdf_response_from_redirect(response)
+    if direct:
+        return direct
 
     match = re.search(r'id="sm_dl_wait"\s+data-id="([^"]+)"', response.text)
     if not match:
@@ -38,7 +52,7 @@ def resolve_imslp_pdf_url(imslp_id: str, client: httpx.Client) -> str:
     pdf_url = html.unescape(match.group(1))
     if not pdf_url.lower().endswith(".pdf"):
         raise ValueError(f"Resolved URL is not a PDF for IMSLP {imslp_id}")
-    return pdf_url
+    return pdf_url, None
 
 
 def download_imslp_pdf(
@@ -55,7 +69,16 @@ def download_imslp_pdf(
         cookies=IMSLP_COOKIES,
         headers=IMSLP_HEADERS,
     ) as client:
-        pdf_url = resolve_imslp_pdf_url(imslp_id, client)
+        pdf_url, cached = resolve_imslp_pdf_url(imslp_id, client)
+        if cached is not None:
+            if len(cached) > MAX_BYTES:
+                raise ValueError("File exceeds 60 MB limit")
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(cached)
+            if on_progress:
+                on_progress(100.0)
+            return len(cached)
+
         with client.stream("GET", pdf_url) as response:
             response.raise_for_status()
             total = int(response.headers.get("content-length", 0) or 0)

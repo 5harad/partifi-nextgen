@@ -17,6 +17,7 @@ from score_cache import (
     score_analysis_complete,
 )
 
+from import_lock import release_import_lock
 from jobs.errors import mark_partset_error
 
 import db_conn
@@ -81,8 +82,9 @@ def _run_convert(partset_id: str, score_id: str, workdir: Path) -> int:
     return num_pages
 
 
-def run_import_pipeline(partset_id: str, score_id: str) -> None:
-    workdir = Path(f"/tmp/partifi/{partset_id}")
+def run_import_pipeline(partset_id: str, score_id: str, *, job_id: str | None = None) -> None:
+    suffix = job_id or "unknown"
+    workdir = Path(f"/tmp/partifi/{partset_id}/import-{suffix}")
     if workdir.exists():
         shutil.rmtree(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
@@ -114,3 +116,4 @@ def run_import_pipeline(partset_id: str, score_id: str) -> None:
         raise
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
+        release_import_lock(partset_id)

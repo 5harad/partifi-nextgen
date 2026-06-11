@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Partset
 from app.services.gen_parts_lock import try_acquire_gen_parts_lock
+from app.services.import_lock import try_acquire_import_lock
 from app.services.queue import enqueue_job
 
 
@@ -23,6 +24,9 @@ def retry_partset_pipeline(db: Session, partset: Partset) -> tuple[str, str | No
 
     if not import_pipeline_complete(partset):
         if partset.score_id:
+            if not try_acquire_import_lock(partset.id):
+                db.commit()
+                return "import", None
             job_id = enqueue_job(
                 "import_pipeline",
                 {"partset_id": partset.id, "score_id": partset.score_id},
@@ -30,6 +34,9 @@ def retry_partset_pipeline(db: Session, partset: Partset) -> tuple[str, str | No
             db.commit()
             return "import", job_id
         if partset.imslp_id:
+            if not try_acquire_import_lock(partset.id):
+                db.commit()
+                return "import", None
             job_id = enqueue_job(
                 "imslp_import",
                 {"partset_id": partset.id, "imslp_id": partset.imslp_id},

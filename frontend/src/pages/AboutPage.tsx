@@ -33,7 +33,7 @@ export function AboutPage() {
 
             <p>
               We&apos;re working with the online music library{' '}
-              <a href="http://imslp.org/wiki" className="red">
+              <a href="https://imslp.org/" className="red">
                 IMSLP
               </a>{' '}
               so you can partifi scores directly from IMSLP via the home page or the

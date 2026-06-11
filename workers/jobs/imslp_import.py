@@ -9,6 +9,7 @@ import shutil
 import string
 from pathlib import Path
 
+from import_lock import release_import_lock
 from imslp_client import download_imslp_pdf
 from jobs.errors import mark_partset_error
 from jobs.import_pipeline import run_import_pipeline
@@ -41,8 +42,9 @@ def _set_import_progress(partset_id: str, progress: float) -> None:
 def _mark_import_error(partset_id: str) -> None:
     mark_partset_error(partset_id, "import")
 
-def run_imslp_import(partset_id: str, imslp_id: str) -> None:
-    workdir = Path(f"/tmp/partifi/{partset_id}")
+def run_imslp_import(partset_id: str, imslp_id: str, *, job_id: str | None = None) -> None:
+    suffix = job_id or "unknown"
+    workdir = Path(f"/tmp/partifi/{partset_id}/import-{suffix}")
     if workdir.exists():
         shutil.rmtree(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
@@ -107,3 +109,4 @@ def run_imslp_import(partset_id: str, imslp_id: str) -> None:
         _mark_import_error(partset_id)
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
+        release_import_lock(partset_id)

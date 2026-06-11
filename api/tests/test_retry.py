@@ -35,8 +35,9 @@ def test_import_pipeline_complete() -> None:
     assert import_pipeline_complete(complete)
 
 
+@patch("app.services.retry.try_acquire_import_lock", return_value=True)
 @patch("app.services.retry.enqueue_job", return_value="42")
-def test_retry_import_pipeline(_mock_enqueue: patch) -> None:
+def test_retry_import_pipeline(_mock_enqueue: patch, _mock_lock: patch) -> None:
     db = Mock()
     partset = _partset(error="analysis")
     stage, job_id = retry_partset_pipeline(db, partset)
@@ -50,8 +51,9 @@ def test_retry_import_pipeline(_mock_enqueue: patch) -> None:
     db.commit.assert_called_once()
 
 
+@patch("app.services.retry.try_acquire_import_lock", return_value=True)
 @patch("app.services.retry.enqueue_job", return_value="99")
-def test_retry_imslp_import(_mock_enqueue: patch) -> None:
+def test_retry_imslp_import(_mock_enqueue: patch, _mock_lock: patch) -> None:
     db = Mock()
     partset = _partset(score_id=None, imslp_id="IMSLP123", error="import")
     stage, job_id = retry_partset_pipeline(db, partset)
@@ -61,6 +63,17 @@ def test_retry_imslp_import(_mock_enqueue: patch) -> None:
         "imslp_import",
         {"partset_id": "pub01", "imslp_id": "IMSLP123"},
     )
+
+
+@patch("app.services.retry.try_acquire_import_lock", return_value=False)
+@patch("app.services.retry.enqueue_job")
+def test_retry_import_skips_when_lock_held(_mock_enqueue: patch, _mock_lock: patch) -> None:
+    db = Mock()
+    partset = _partset(score_id=None, imslp_id="IMSLP123", error="import")
+    stage, job_id = retry_partset_pipeline(db, partset)
+    assert stage == "import"
+    assert job_id is None
+    _mock_enqueue.assert_not_called()
 
 
 @patch("app.services.retry.try_acquire_gen_parts_lock", return_value=True)

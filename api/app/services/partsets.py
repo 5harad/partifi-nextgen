@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Partset, Score
 from app.services.library import claim_partset_for_user
+from app.services.import_lock import try_acquire_import_lock
 from app.services.queue import enqueue_job
 from app.services.s3 import score_pdf_s3_key, upload_bytes
 from app.services.score_cache import (
@@ -119,10 +120,11 @@ def create_pdf_partset(
     db.commit()
     db.refresh(partset)
 
-    enqueue_job(
-        "import_pipeline",
-        {"partset_id": public_id, "score_id": score_id},
-    )
+    if try_acquire_import_lock(public_id):
+        enqueue_job(
+            "import_pipeline",
+            {"partset_id": public_id, "score_id": score_id},
+        )
 
     return partset, action
 
@@ -180,10 +182,11 @@ def create_imslp_partset(
             claim_partset_for_user(db, partset, user_id)
         db.commit()
         db.refresh(partset)
-        enqueue_job(
-            "import_pipeline",
-            {"partset_id": public_id, "score_id": existing.id},
-        )
+        if try_acquire_import_lock(public_id):
+            enqueue_job(
+                "import_pipeline",
+                {"partset_id": public_id, "score_id": existing.id},
+            )
         return partset, "continue"
 
     partset.status = "import"
@@ -192,10 +195,11 @@ def create_imslp_partset(
         claim_partset_for_user(db, partset, user_id)
     db.commit()
     db.refresh(partset)
-    enqueue_job(
-        "imslp_import",
-        {"partset_id": public_id, "imslp_id": normalized},
-    )
+    if try_acquire_import_lock(public_id):
+        enqueue_job(
+            "imslp_import",
+            {"partset_id": public_id, "imslp_id": normalized},
+        )
     return partset, "continue"
 
 
@@ -253,8 +257,9 @@ def create_partset_from_score(
     db.commit()
     db.refresh(partset)
 
-    enqueue_job(
-        "import_pipeline",
-        {"partset_id": public_id, "score_id": score_id},
-    )
+    if try_acquire_import_lock(public_id):
+        enqueue_job(
+            "import_pipeline",
+            {"partset_id": public_id, "score_id": score_id},
+        )
     return partset

@@ -12,10 +12,10 @@ JobHandler = Callable[[dict[str, Any]], None]
 
 JOB_HANDLERS: dict[str, JobHandler] = {
     "import_pipeline": lambda payload: run_import_pipeline(
-        payload["partset_id"], payload["score_id"]
+        payload["partset_id"], payload["score_id"], job_id=payload.get("job_id")
     ),
     "imslp_import": lambda payload: run_imslp_import(
-        payload["partset_id"], payload["imslp_id"]
+        payload["partset_id"], payload["imslp_id"], job_id=payload.get("job_id")
     ),
     "gen_parts": lambda payload: run_gen_parts(
         payload["partset_id"], job_id=payload.get("job_id")

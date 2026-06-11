@@ -73,6 +73,13 @@ export function ImportProgressPage() {
   const handleRetry = async () => {
     if (previewError) return
     if (!privateId || retrying) return
+
+    if (errorMessage === POLLING_FAILED_MESSAGE) {
+      setErrorMessage(null)
+      pollRef.current?.()
+      return
+    }
+
     setRetrying(true)
     try {
       const csrf = await getCsrfToken()

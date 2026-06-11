@@ -1,0 +1,64 @@
+"""Tests for workers/imslp_client.py (IMSLP PDF resolution)."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+from unittest.mock import MagicMock
+
+import httpx
+
+WORKERS_ROOT = Path(__file__).resolve().parents[2] / "workers"
+if str(WORKERS_ROOT) not in sys.path:
+    sys.path.insert(0, str(WORKERS_ROOT))
+
+from imslp_client import resolve_imslp_pdf_url  # noqa: E402
+
+
+def _mock_response(
+    *,
+    url: str,
+    text: str = "",
+    content: bytes = b"",
+    content_type: str = "text/html",
+) -> httpx.Response:
+    request = httpx.Request("GET", url)
+    return httpx.Response(
+        200,
+        request=request,
+        headers={"content-type": content_type},
+        content=content or text.encode(),
+        text=text if text else None,
+    )
+
+
+def test_resolve_pdf_url_when_redirect_lands_on_pdf() -> None:
+    pdf_url = (
+        "https://ks15.imslp.org/files/imglnks/usimg/0/0a/"
+        "IMSLP930226-PMLP1460139-Bax_-_Aspiration.pdf"
+    )
+    pdf_bytes = b"%PDF-1.4 fake pdf body"
+    client = MagicMock()
+    client.get.return_value = _mock_response(url=pdf_url, content=pdf_bytes, content_type="application/pdf")
+
+    url, cached = resolve_imslp_pdf_url("930226", client)
+
+    assert url == pdf_url
+    assert cached == pdf_bytes
+    client.get.assert_called_once()
+
+
+def test_resolve_pdf_url_from_html_data_id() -> None:
+    html = (
+        '<div id="sm_dl_wait" data-id="https://vmirror.imslp.org/files/foo.pdf"></div>'
+    )
+    client = MagicMock()
+    client.get.return_value = _mock_response(
+        url="https://imslp.org/wiki/Special:ImagefromIndex/930226",
+        text=html,
+    )
+
+    url, cached = resolve_imslp_pdf_url("930226", client)
+
+    assert url == "https://vmirror.imslp.org/files/foo.pdf"
+    assert cached is None
