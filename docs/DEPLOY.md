@@ -315,20 +315,25 @@ docker compose -f docker-compose.prod.yml exec mysql \
 
 MySQL data lives in the `mysql_data` volume. Back up regularly; S3 files are already durable separately.
 
-### Local file cache
+### S3 vs local cache
 
-Score page PNGs, preview segment cuts, and generated part PDFs are mirrored on disk at **`PARTIFI_CACHE_ROOT`** (default `/data/partifi`) inside the **`partifi_cache`** Docker volume. The API and all workers share this volume so repeat preview/segment/partgen work avoids S3 round-trips.
+**S3 (`cdn.partifi.org`)** stores **score PDFs only**: `scores/{score_id}_score.pdf`. That matches legacy `s3_push` — durable archive for the ~1.4 TB corpus.
+
+**EC2 local cache** (`PARTIFI_CACHE_ROOT`, default `/data/partifi`) holds everything else: page PNGs, preview segment cuts, and generated part PDFs. The API and all workers share the **`partifi_cache`** Docker volume.
 
 Layout:
 
 ```text
+S3:
+  scores/{score_id}_score.pdf
+
 /data/partifi/
   scores/{score_id}/lowres|highres|thumbs/
   preview/{partset_id}/s0.png …
   parts/{partset_id}/*.pdf
 ```
 
-S3 remains the source of truth; local files are evicted when cold or over the size cap. The API serves cached files via `/page-image/`, `/preview-segment/`, and `/part-file/` routes (see README). Saving segments or layout invalidates that partset's preview and part PDF cache entries.
+Import and partgen write PNGs/parts to local cache only (not S3). Legacy scores without cached PNGs are warmed from the S3 PDF on first segment/preview visit. Local files are evicted when cold or over the size cap. The API serves cache via `/page-image/`, `/preview-segment/`, and `/part-file/` routes (see README). Saving segments or layout invalidates that partset's preview and part PDF cache entries.
 
 **Check usage on the host:**
 

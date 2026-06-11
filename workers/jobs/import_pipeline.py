@@ -10,7 +10,7 @@ from pathlib import Path
 from find_segments import analyze_score
 from local_cache import ensure_lowres_files, get_local_cache
 from pdf2png import convert_score
-from s3_storage import download_file, score_images_exist, score_pdf_s3_key, upload_directory
+from s3_storage import download_file, score_images_exist, score_pdf_s3_key
 from score_cache import (
     copy_partset_segs_to_score,
     copy_score_segs_to_partset,
@@ -68,8 +68,7 @@ def _run_convert(partset_id: str, score_id: str, workdir: Path) -> int:
     logger.info("Converting PDF for partset %s", partset_id)
     convert_score(partset_id, pdf_path, pages_dir)
 
-    logger.info("Uploading page images for score %s", score_id)
-    upload_directory(pages_dir, f"scores/{score_id}")
+    logger.info("Caching page images for score %s", score_id)
     get_local_cache().copy_pages_tree(score_id, pages_dir)
 
     lowres_files = sorted(glob.glob(str(pages_dir / "lowres" / "*.png")))

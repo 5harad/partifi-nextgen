@@ -11,8 +11,29 @@ Greenfield rewrite of [Partifi](https://github.com/5harad/partifi) — automated
 | Workers | Python 3.12 + Redis queue |
 | Pipeline | Shared cut/paste Python package |
 | Database | MySQL 8 |
-| Files | S3 (`cdn.partifi.org`; MinIO locally) |
+| Files | S3 score PDFs (`cdn.partifi.org`; MinIO locally); EC2 cache for PNGs/parts |
 | Deploy | Docker Compose on EC2 |
+
+## File storage
+
+**S3** (`cdn.partifi.org` in production; MinIO locally) stores **score PDFs only**:
+
+```text
+scores/{score_id}_score.pdf
+```
+
+**Local cache** (`PARTIFI_CACHE_ROOT`, default `/data/partifi`) holds page PNGs, preview segment cuts, and generated part PDFs. Import and partgen write here only — not to S3.
+
+```text
+/data/partifi/
+  scores/{score_id}/lowres|highres|thumbs/
+  preview/{partset_id}/s0.png …
+  parts/{partset_id}/*.pdf
+```
+
+Legacy scores that have a PDF on S3 but no cached PNGs are warmed on first segment/preview visit (`warm_score_pages`: PDF → local PNGs). The API serves cache hits via `/page-image/`, `/preview-segment/`, and `/part-file/` routes. Cold entries are evicted by `jobs.clean_cache` (TTL + size cap); evicting parts sets `parts_ready = 0` so downloads regenerate from layout.
+
+See **[docs/DEPLOY.md](docs/DEPLOY.md)** for cache sizing, cron, and optional S3 cleanup of test PNGs/parts.
 
 ## Project layout
 
@@ -135,7 +156,13 @@ Partsets (CSRF required on mutations):
 - `GET /api/v1/partsets/{private_id}/parts`
 - `GET /api/v1/access/{access_id}/parts`
 
-Cached assets (read-through local cache / S3; no CSRF):
+Score PDF downloads (proxied from S3; no CSRF):
+
+- `GET /api/v1/scores/{score_id}/score.pdf`
+- `GET /api/v1/partsets/{private_id}/score-pdf`
+- `GET /api/v1/access/{access_id}/score-pdf`
+
+Cached assets (local cache; S3 read fallback only if legacy objects exist; no CSRF):
 
 - `GET /api/v1/partsets/{private_id}/page-image/{page}.png?res=lowres|highres|thumbs`
 - `GET /api/v1/partsets/{private_id}/preview-segment/{ndx}.png`

@@ -28,7 +28,6 @@ from pipeline.cutpaste import (
 from pipeline.paste_segments import create_parts
 from gen_parts_lock import release_gen_parts_lock
 from local_cache import get_local_cache
-from s3_storage import upload_file
 
 logger = logging.getLogger("partifi.gen_parts")
 
@@ -263,9 +262,7 @@ def _run_gen_parts(partset_id: str, workdir: Path) -> None:
     )
 
     for path in outdir.glob("*.pdf"):
-        key = f"parts/{partset_id}/{path.name}"
         cache.store_part_file(partset_id, path)
-        upload_file(path, key, "application/pdf")
 
     execute(
         "UPDATE partsets SET paste_complete = NOW(), parts_ready = 1, mod_ts = NOW(), error = NULL "
