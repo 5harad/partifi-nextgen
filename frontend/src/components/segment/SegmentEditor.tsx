@@ -67,8 +67,6 @@ export function SegmentEditor({ data }: Props) {
   const focusedTagsIdRef = useRef<string | null>(null)
   const tagInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const suppressTagBlurRef = useRef(false)
-  const suppressSegmenterClickRef = useRef(false)
-  const segmentDragStartYRef = useRef(0)
 
   const stateRef = useRef({
     regions,
@@ -286,10 +284,6 @@ export function SegmentEditor({ data }: Props) {
   }
 
   const handleSegmenterClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (suppressSegmenterClickRef.current) {
-      suppressSegmenterClickRef.current = false
-      return
-    }
     const target = e.target as HTMLElement
     if (
       target.closest(
@@ -327,16 +321,19 @@ export function SegmentEditor({ data }: Props) {
     const target = e.currentTarget as HTMLElement
     target.setPointerCapture(e.pointerId)
 
+    let segmentDragMoved = false
+    let segmentDragStartY = 0
     if (kind === 'segment' && regionId) {
-      segmentDragStartYRef.current = stateRef.current.regions.find((r) => r.id === regionId)?.topPx ?? 0
+      segmentDragStartY =
+        stateRef.current.regions.find((r) => r.id === regionId)?.topPx ?? 0
     }
 
     const onMove = (ev: PointerEvent) => {
       if (kind === 'segment' && regionId && segmenterRef.current) {
         const rect = segmenterRef.current.getBoundingClientRect()
         const y = Math.max(0, Math.min(VIEWER_HEIGHT, ev.clientY - rect.top))
-        if (Math.abs(y - segmentDragStartYRef.current) > 3) {
-          suppressSegmenterClickRef.current = true
+        if (Math.abs(y - segmentDragStartY) > 3) {
+          segmentDragMoved = true
         }
         setRegions((prev) => {
           const clamped = clampSegmentTopPx(y, regionId, prev)
@@ -367,6 +364,17 @@ export function SegmentEditor({ data }: Props) {
       target.releasePointerCapture(e.pointerId)
       target.removeEventListener('pointermove', onMove)
       target.removeEventListener('pointerup', onUp)
+
+      if (kind === 'segment' && segmentDragMoved && segmenterRef.current) {
+        const el = segmenterRef.current
+        const blockClick = (ev: MouseEvent) => {
+          el.removeEventListener('click', blockClick, true)
+          ev.stopPropagation()
+          ev.preventDefault()
+        }
+        el.addEventListener('click', blockClick, true)
+      }
+
       const {
         regions: latestRegions,
         leftMarginPx: latestLeft,
