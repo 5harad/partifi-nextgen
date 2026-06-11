@@ -39,7 +39,7 @@ export function PartgenProgressPage() {
         failedAttempts = 0
 
         if (data.is_complete) {
-          navigate(`/${privateId}/parts`)
+          navigate(`/${privateId}`)
           return
         }
       } catch {

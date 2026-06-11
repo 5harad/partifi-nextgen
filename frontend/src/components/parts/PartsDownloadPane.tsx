@@ -46,7 +46,7 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
     void fetchFavoriteStatus(accessId).then(setFavorite)
   }, [user, accessId])
 
-  const editorLink = partsetUrl(`/${privateId}/parts`)
+  const editorLink = partsetUrl(`/${privateId}`)
   const downloadLink = partsetUrl(`/${publicId}`)
 
   const startEdit = useCallback(() => {
@@ -222,34 +222,36 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
             <br />
           </>
         )}
-        {data.parts.map((part) => (
-          <span key={part.tag}>
-            {part.tag}:{' '}
-            <a
-              className="red"
-              href={part.letter_url}
-              download={`${data.partset_id}_${part.file_name}`}
-            >
-              letter size
-            </a>{' '}
-            /{' '}
-            <a
-              className="red"
-              href={part.a4_url}
-              download={`${data.partset_id}_a4_${part.file_name}`}
-            >
-              a4
-            </a>
-            <br />
-          </span>
-        ))}
+        {!data.parts_ready && <span>Parts are not ready for download yet.</span>}
+        {data.parts_ready &&
+          data.parts.map((part) => (
+            <span key={part.tag}>
+              {part.tag}:{' '}
+              <a
+                className="red"
+                href={part.letter_url}
+                download={`${data.partset_id}_${part.file_name}`}
+              >
+                letter size
+              </a>{' '}
+              /{' '}
+              <a
+                className="red"
+                href={part.a4_url}
+                download={`${data.partset_id}_a4_${part.file_name}`}
+              >
+                a4
+              </a>
+              <br />
+            </span>
+          ))}
       </div>
       <div className="partset-links">
         {isOwner && (
           <div className="partset-link">
             <div className="partset-link-label">editor link</div>
             <div className="partset-link-link">
-              <Link className="red" to={`/${privateId}/parts`}>
+              <Link className="red" to={`/${privateId}`}>
                 {editorLink}
               </Link>
             </div>

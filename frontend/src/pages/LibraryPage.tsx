@@ -26,7 +26,7 @@ function LibraryItemPane({
   const [error, setError] = useState<string | null>(null)
 
   const privateId = item.private_id ?? ''
-  const editorLink = privateId ? partsetUrl(`/${privateId}/parts`) : ''
+  const editorLink = privateId ? partsetUrl(`/${privateId}`) : ''
   const downloadLink = partsetUrl(`/${item.partset_id}`)
 
   const saveMetadata = async () => {
@@ -193,7 +193,7 @@ function LibraryItemPane({
           <div className="partset-link">
             <div className="partset-link-label">editor link</div>
             <div className="partset-link-link">
-              <Link className="red" to={`/${privateId}/parts`}>
+              <Link className="red" to={`/${privateId}`}>
                 {editorLink}
               </Link>
             </div>

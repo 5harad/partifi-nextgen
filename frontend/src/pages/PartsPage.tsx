@@ -1,38 +1,22 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { PartsDownloadPane } from '../components/parts/PartsDownloadPane'
-import { getCsrfToken, getPartsByAccessId, startPartGeneration } from '../lib/api'
+import { getPartsByAccessId } from '../lib/api'
 import type { PartsDataResponse } from '../types/preview'
 
 export function PartsPage() {
-  const { privateId, accessId } = useParams<{ privateId?: string; accessId?: string }>()
-  const id = privateId ?? accessId
-  const navigate = useNavigate()
+  const { accessId } = useParams<{ accessId: string }>()
   const [data, setData] = useState<PartsDataResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!id) return
+    if (!accessId) return
     let cancelled = false
     ;(async () => {
       try {
-        const parts = await getPartsByAccessId(id)
+        const parts = await getPartsByAccessId(accessId)
         if (cancelled) return
-        if (!parts.parts_ready) {
-          if (parts.mode === 'owner' && parts.private_id) {
-            try {
-              const csrf = await getCsrfToken()
-              await startPartGeneration(parts.private_id, csrf)
-            } catch {
-              /* job may already be running */
-            }
-            navigate(`/${parts.private_id}/partgen`)
-            return
-          }
-          setError('Parts are not ready for download yet.')
-          return
-        }
         setData(parts)
       } catch (err) {
         if (!cancelled) {
@@ -43,7 +27,7 @@ export function PartsPage() {
     return () => {
       cancelled = true
     }
-  }, [id, navigate])
+  }, [accessId])
 
   if (error) {
     return (
