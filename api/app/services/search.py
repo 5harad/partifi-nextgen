@@ -7,7 +7,7 @@ import re
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.services.s3 import presigned_get_url
+from app.services.s3 import presigned_score_pdf_url
 
 _MAX_RAW_ROWS = 500
 _MAX_RESULTS = 100
@@ -59,7 +59,6 @@ def search_partsets(db: Session, query: str) -> list[dict]:
         if not score_id or score_id in seen_scores:
             continue
         seen_scores.add(score_id)
-        score_name = f"{score_id}_score.pdf"
         results.append(
             {
                 "public_id": row["id"],
@@ -68,10 +67,7 @@ def search_partsets(db: Session, query: str) -> list[dict]:
                 "title": row["title"],
                 "composer": row["composer"],
                 "publisher": row["publisher"],
-                "score_pdf_url": presigned_get_url(
-                    f"scores/{score_id}/score.pdf",
-                    download_name=score_name,
-                ),
+                "score_pdf_url": presigned_score_pdf_url(score_id),
             }
         )
         if len(results) >= _MAX_RESULTS:

@@ -6,6 +6,16 @@ from botocore.exceptions import ClientError
 
 from app.config import get_settings
 
+def score_pdf_s3_key(score_id: str) -> str:
+    return f"scores/{score_id}_score.pdf"
+
+
+def presigned_score_pdf_url(score_id: str, *, download_name: str | None = None) -> str:
+    return presigned_get_url(
+        score_pdf_s3_key(score_id),
+        download_name=download_name or f"{score_id}_score.pdf",
+    )
+
 
 @lru_cache
 def get_s3_client():

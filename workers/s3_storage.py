@@ -7,6 +7,10 @@ from botocore.client import Config
 from config import get_settings
 
 
+def score_pdf_s3_key(score_id: str) -> str:
+    return f"scores/{score_id}_score.pdf"
+
+
 @lru_cache
 def get_s3_client():
     settings = get_settings()

@@ -12,7 +12,7 @@ from pathlib import Path
 from imslp_client import download_imslp_pdf
 from jobs.errors import mark_partset_error
 from jobs.import_pipeline import run_import_pipeline
-from s3_storage import upload_file
+from s3_storage import score_pdf_s3_key, upload_file
 
 import db_conn
 
@@ -93,7 +93,7 @@ def run_imslp_import(partset_id: str, imslp_id: str) -> None:
                     "size": file_size,
                 },
             )
-            upload_file(pdf_path, f"scores/{score_id}/score.pdf", "application/pdf")
+            upload_file(pdf_path, score_pdf_s3_key(score_id), "application/pdf")
 
         db_conn.execute(
             "UPDATE partsets SET score_id = :score_id, import_complete = NOW(), import_progress = 100 "

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Favorite, Part, Partset
 from app.services.partset_admin import resolve_partset_access
-from app.services.s3 import presigned_get_url
+from app.services.s3 import presigned_get_url, presigned_score_pdf_url
 
 
 def resolve_public_partset_id(db: Session, access_id: str) -> str | None:
@@ -81,11 +81,7 @@ def list_library(db: Session, user_id: str) -> list[dict]:
                     }
                 )
         if partset.score_id:
-            score_name = f"{partset.score_id}_score.pdf"
-            score_pdf_url = presigned_get_url(
-                f"scores/{partset.score_id}/score.pdf",
-                download_name=score_name,
-            )
+            score_pdf_url = presigned_score_pdf_url(partset.score_id)
 
         items.append(
             {

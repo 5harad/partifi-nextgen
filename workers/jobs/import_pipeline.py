@@ -9,7 +9,7 @@ from pathlib import Path
 
 from find_segments import analyze_score
 from pdf2png import convert_score
-from s3_storage import download_file, download_prefix, score_images_exist, upload_directory
+from s3_storage import download_file, download_prefix, score_images_exist, score_pdf_s3_key, upload_directory
 from score_cache import (
     copy_partset_segs_to_score,
     copy_score_segs_to_partset,
@@ -52,7 +52,7 @@ def _mark_convert_complete(partset_id: str, score_id: str, num_pages: int | None
 def _run_convert(partset_id: str, score_id: str, workdir: Path) -> int:
     pdf_path = workdir / "score.pdf"
     logger.info("Downloading score %s for partset %s", score_id, partset_id)
-    download_file(f"scores/{score_id}/score.pdf", pdf_path)
+    download_file(score_pdf_s3_key(score_id), pdf_path)
 
     pages_dir = workdir / "pages"
     pages_dir.mkdir(parents=True, exist_ok=True)

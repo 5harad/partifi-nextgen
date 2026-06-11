@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.models import Partset, Score
 from app.services.library import claim_partset_for_user
 from app.services.queue import enqueue_job
-from app.services.s3 import upload_bytes
+from app.services.s3 import score_pdf_s3_key, upload_bytes
 from app.services.score_cache import (
     copy_score_segs_to_partset,
     mark_import_pipeline_complete,
@@ -111,7 +111,7 @@ def create_pdf_partset(
         partset.import_complete = now
         partset.import_progress = 100.0
         action = "upload"
-        upload_bytes(f"scores/{score_id}/score.pdf", pdf_bytes, "application/pdf")
+        upload_bytes(score_pdf_s3_key(score_id), pdf_bytes, "application/pdf")
 
     if user_id:
         claim_partset_for_user(db, partset, user_id)

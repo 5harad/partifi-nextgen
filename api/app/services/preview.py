@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Break, Part, Partset, Segment
 from app.services.queue import enqueue_job
-from app.services.s3 import get_s3_client, presigned_get_url
+from app.services.s3 import get_s3_client, presigned_get_url, presigned_score_pdf_url
 from app.services.segments import ensure_import_complete, get_partset_by_private_id
 from app.utils.strings import tag_to_filename
 
@@ -342,11 +342,7 @@ def get_parts_data(db: Session, partset: Partset, *, mode: str = "owner") -> dic
 
     score_pdf_url = None
     if partset.score_id:
-        score_name = f"{partset.score_id}_score.pdf"
-        score_pdf_url = presigned_get_url(
-            f"scores/{partset.score_id}/score.pdf",
-            download_name=score_name,
-        )
+        score_pdf_url = presigned_score_pdf_url(partset.score_id)
 
     payload = {
         "partset_id": partset.id,
