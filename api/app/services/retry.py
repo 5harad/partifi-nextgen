@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.models import Partset
+from app.services.gen_parts_lock import try_acquire_gen_parts_lock
 from app.services.queue import enqueue_job
 
 
@@ -39,6 +40,10 @@ def retry_partset_pipeline(db: Session, partset: Partset) -> tuple[str, str | No
 
     if partset.parts_ready:
         raise ValueError("Nothing to retry")
+
+    if not try_acquire_gen_parts_lock(partset.id):
+        db.commit()
+        return "partgen", None
 
     job_id = enqueue_job("gen_parts", {"partset_id": partset.id})
     db.commit()

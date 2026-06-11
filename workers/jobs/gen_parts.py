@@ -26,6 +26,7 @@ from pipeline.cutpaste import (
     prct2pixel,
 )
 from pipeline.paste_segments import create_parts
+from gen_parts_lock import release_gen_parts_lock
 from local_cache import get_local_cache
 from s3_storage import upload_file
 
@@ -116,8 +117,9 @@ def _update_paste_progress(partset_id: str, increment: float) -> None:
     )
 
 
-def run_gen_parts(partset_id: str) -> None:
-    workdir = Path(f"/tmp/partifi/{partset_id}/gen")
+def run_gen_parts(partset_id: str, *, job_id: str | None = None) -> None:
+    suffix = job_id or "unknown"
+    workdir = Path(f"/tmp/partifi/{partset_id}/gen-{suffix}")
     try:
         _run_gen_parts(partset_id, workdir)
     except Exception:
@@ -126,6 +128,7 @@ def run_gen_parts(partset_id: str) -> None:
         raise
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
+        release_gen_parts_lock(partset_id)
 
 
 def _run_gen_parts(partset_id: str, workdir: Path) -> None:
@@ -265,7 +268,8 @@ def _run_gen_parts(partset_id: str, workdir: Path) -> None:
         upload_file(path, key, "application/pdf")
 
     execute(
-        "UPDATE partsets SET paste_complete = NOW(), parts_ready = 1, mod_ts = NOW() WHERE id = :id",
+        "UPDATE partsets SET paste_complete = NOW(), parts_ready = 1, mod_ts = NOW(), error = NULL "
+        "WHERE id = :id",
         {"id": partset_id},
     )
 

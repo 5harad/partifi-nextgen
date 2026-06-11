@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     mysql_password: str = "partifi_dev_password"
 
     redis_url: str = "redis://localhost:6379/0"
+    job_timeout_seconds: int = 2700
 
     s3_endpoint_url: str | None = None
     s3_public_endpoint_url: str | None = None

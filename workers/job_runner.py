@@ -61,7 +61,9 @@ def run_job_with_timeout(job: dict[str, Any]) -> None:
     global _active_proc, _shutdown_requested
 
     job_type = job.get("type", "unknown")
-    payload = job.get("payload", {})
+    payload = dict(job.get("payload", {}))
+    if job.get("id"):
+        payload["job_id"] = job["id"]
     partset_id = payload.get("partset_id")
     timeout = get_settings().job_timeout_seconds
 

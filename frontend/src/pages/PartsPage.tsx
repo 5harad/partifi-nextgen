@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { PartsDownloadPane } from '../components/parts/PartsDownloadPane'
-import { getPartsByAccessId } from '../lib/api'
+import { getCsrfToken, getPartsByAccessId, startPartGeneration } from '../lib/api'
 import type { PartsDataResponse } from '../types/preview'
 
 export function PartsPage() {
@@ -21,6 +21,12 @@ export function PartsPage() {
         if (cancelled) return
         if (!parts.parts_ready) {
           if (parts.mode === 'owner' && parts.private_id) {
+            try {
+              const csrf = await getCsrfToken()
+              await startPartGeneration(parts.private_id, csrf)
+            } catch {
+              /* job may already be running */
+            }
             navigate(`/${parts.private_id}/partgen`)
             return
           }

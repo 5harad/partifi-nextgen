@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { getCsrfToken, getPartgenStatus, retryPartsetPipeline, startPartGeneration } from '../lib/api'
+import { getCsrfToken, getImportStatus, getPartgenStatus, retryPartsetPipeline } from '../lib/api'
 import { pipelineErrorMessage, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
 
 export function PartgenProgressPage() {
@@ -62,17 +62,7 @@ export function PartgenProgressPage() {
       poll()
     }
 
-    ;(async () => {
-      try {
-        const csrf = await getCsrfToken()
-        await startPartGeneration(privateId, csrf)
-      } catch {
-        /* job may already be running */
-      }
-      if (!cancelled) {
-        poll()
-      }
-    })()
+    poll()
 
     return () => {
       cancelled = true

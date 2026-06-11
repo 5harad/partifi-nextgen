@@ -281,6 +281,7 @@ export function SegmentEditor({ data }: Props) {
   }
 
   const handleSegmenterClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return
     const el = segmenterRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()

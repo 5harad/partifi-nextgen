@@ -63,8 +63,9 @@ def test_retry_imslp_import(_mock_enqueue: patch) -> None:
     )
 
 
+@patch("app.services.retry.try_acquire_gen_parts_lock", return_value=True)
 @patch("app.services.retry.enqueue_job", return_value="7")
-def test_retry_partgen(_mock_enqueue: patch) -> None:
+def test_retry_partgen(_mock_enqueue: patch, _mock_lock: patch) -> None:
     db = Mock()
     now = datetime.utcnow()
     partset = _partset(
