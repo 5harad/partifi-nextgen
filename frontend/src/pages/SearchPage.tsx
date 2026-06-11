@@ -22,6 +22,7 @@ export function SearchPage() {
   const [query, setQuery] = useState(urlQuery)
   const [results, setResults] = useState<SearchResultItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
   const [pageIndex, setPageIndex] = useState(0)
   const [cloning, setCloning] = useState(false)
 
@@ -33,13 +34,15 @@ export function SearchPage() {
 
   const runSearch = useCallback(async (term: string) => {
     setLoading(true)
+    setSearchError(null)
     try {
       const data = await searchPartsets(term)
       setResults(data.results)
       setPageIndex(0)
-    } catch {
+    } catch (err) {
       setResults([])
       setPageIndex(0)
+      setSearchError(err instanceof Error ? err.message : 'Search failed')
     } finally {
       setLoading(false)
     }
@@ -182,7 +185,18 @@ export function SearchPage() {
                 <div className="box-bottom" />
               </div>
             )}
-            {!loading && results.length === 0 && query.trim() && (
+            {!loading && searchError && (
+              <div className="search-results-page" style={{ left: 0 }}>
+                <div className="box-top" />
+                <div className="search-results">
+                  <p id="search-no-results" className="red">
+                    {searchError}
+                  </p>
+                </div>
+                <div className="box-bottom" />
+              </div>
+            )}
+            {!loading && results.length === 0 && query.trim() && !searchError && (
               <div className="search-results-page" style={{ left: 0 }}>
                 <div className="box-top" />
                 <div className="search-results">

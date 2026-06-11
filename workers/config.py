@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     mysql_password: str = "partifi_dev_password"
 
     redis_url: str = "redis://localhost:6379/0"
-    worker_concurrency: int = 1
     job_timeout_seconds: int = 2700  # 45 minutes
     partgen_pool_size: int = 0  # 0 = auto (half of CPU cores)
 

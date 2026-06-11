@@ -54,3 +54,19 @@ def test_logout_clears_session() -> None:
     assert response.status_code == 200
     me = client.get("/api/v1/auth/me")
     assert me.json()["user"] is None
+
+
+def test_dev_login_blocked_in_production(monkeypatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("APP_SECRET", "production-test-secret-value")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    prod_client = TestClient(app)
+    response = prod_client.post(
+        "/api/v1/auth/dev-login",
+        json={"user_id": "test-user", "name": "Test User"},
+    )
+    assert response.status_code == 404
+    monkeypatch.setenv("APP_ENV", "development")
+    get_settings.cache_clear()

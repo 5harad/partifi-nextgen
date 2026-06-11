@@ -48,6 +48,17 @@ class Settings(BaseSettings):
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
 
+def validate_settings() -> None:
+    settings = get_settings()
+    if settings.app_env != "production":
+        return
+    insecure_secrets = {"change-me", "change-me-to-a-long-random-string"}
+    if settings.app_secret in insecure_secrets or len(settings.app_secret) < 16:
+        raise RuntimeError(
+            "APP_SECRET must be set to a strong random value when APP_ENV=production"
+        )
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()

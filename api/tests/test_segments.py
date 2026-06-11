@@ -1,0 +1,93 @@
+from datetime import UTC, datetime
+from unittest.mock import Mock, patch
+
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.db import Base
+from app.models import Page, Part, Partset, Score
+from app.services.segments import save_all_page_segments
+
+
+@pytest.fixture
+def db() -> Session:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine, autoflush=False, autocommit=False)()
+    now = datetime.now(UTC)
+
+    session.add(
+        Score(
+            id="score1",
+            num_pages=2,
+            import_complete=now,
+            convert_complete=now,
+            analysis_complete=now,
+        )
+    )
+    partset = Partset(
+        id="pub1",
+        private_id="priv1",
+        score_id="score1",
+        parts_ready=True,
+        status="analysis",
+        import_complete=now,
+        convert_complete=now,
+        analysis_complete=now,
+    )
+    session.add(partset)
+    session.add(Page(partset_id="pub1", page=1, left_margin=0, right_margin=100, rotation=0))
+    session.add(Page(partset_id="pub1", page=2, left_margin=0, right_margin=100, rotation=0))
+    session.commit()
+    return session
+
+
+@patch("app.services.segments.get_local_cache")
+def test_save_all_page_segments_syncs_part_rows(mock_cache: Mock, db: Session) -> None:
+    mock_cache.return_value = Mock()
+    partset = db.get(Partset, "pub1")
+    assert partset is not None
+
+    save_all_page_segments(
+        db,
+        partset,
+        {
+            "p1": {
+                "left_margin": 0,
+                "right_margin": 100,
+                "rotation": 0,
+                "segments": [
+                    {
+                        "pos": [10.0, 50.0],
+                        "tags": "violin",
+                        "tag_is_suggestion": False,
+                        "label": "",
+                        "label_is_suggestion": False,
+                    }
+                ],
+            },
+            "p2": {
+                "left_margin": 0,
+                "right_margin": 100,
+                "rotation": 0,
+                "segments": [
+                    {
+                        "pos": [10.0, 50.0],
+                        "tags": "cello",
+                        "tag_is_suggestion": False,
+                        "label": "",
+                        "label_is_suggestion": False,
+                    }
+                ],
+            },
+        },
+    )
+
+    db.expire_all()
+    tags = {
+        row.tag
+        for row in db.query(Part).filter(Part.partset_id == "pub1", Part.combined.is_(False)).all()
+    }
+    assert tags == {"violin", "cello"}
+    assert partset.parts_ready is False

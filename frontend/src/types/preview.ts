@@ -40,8 +40,3 @@ export type PartsDataResponse = {
   }>
   parts_ready: boolean
 }
-
-export type PreviewPageLayout = {
-  pages: number[][][]
-  cues: Set<number>
-}

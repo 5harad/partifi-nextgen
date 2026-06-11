@@ -64,7 +64,7 @@ export async function createPartsetFromPdf(params: {
 }
 
 export async function getImportStatus(privateId: string): Promise<ImportProgressResponse> {
-  const res = await fetch(`/api/v1/partsets/${privateId}/import-status`)
+  const res = await apiFetch(`/api/v1/partsets/${privateId}/import-status`)
   if (!res.ok) throw new Error('Failed to fetch import status')
   return res.json()
 }
@@ -85,7 +85,7 @@ export async function retryPartsetPipeline(
 }
 
 export async function getSegmentData(privateId: string): Promise<SegmentDataResponse> {
-  const res = await fetch(`/api/v1/partsets/${privateId}/segment-data`)
+  const res = await apiFetch(`/api/v1/partsets/${privateId}/segment-data`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail || 'Failed to load segment data')
@@ -99,7 +99,7 @@ export async function savePageSegments(
   data: PageSegmentData,
   csrfToken: string,
 ): Promise<void> {
-  const res = await fetch(`/api/v1/partsets/${privateId}/pages/${page}/segments`, {
+  const res = await apiFetch(`/api/v1/partsets/${privateId}/pages/${page}/segments`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -118,7 +118,7 @@ export async function saveAllPageSegments(
   pages: Record<string, PageSegmentData>,
   csrfToken: string,
 ): Promise<void> {
-  const res = await fetch(`/api/v1/partsets/${privateId}/segments`, {
+  const res = await apiFetch(`/api/v1/partsets/${privateId}/segments`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -133,7 +133,7 @@ export async function saveAllPageSegments(
 }
 
 export async function getPreviewData(privateId: string): Promise<PreviewDataResponse> {
-  const res = await fetch(`/api/v1/partsets/${privateId}/preview-data`)
+  const res = await apiFetch(`/api/v1/partsets/${privateId}/preview-data`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail || 'Failed to load preview data')
@@ -146,7 +146,7 @@ export async function saveLayout(
   body: { breaks: Record<string, number[]>; spacings: Record<string, number> },
   csrfToken: string,
 ): Promise<void> {
-  const res = await fetch(`/api/v1/partsets/${privateId}/layout`, {
+  const res = await apiFetch(`/api/v1/partsets/${privateId}/layout`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -166,7 +166,7 @@ export async function combineParts(
   tag: string,
   csrfToken: string,
 ): Promise<void> {
-  const res = await fetch(`/api/v1/partsets/${privateId}/parts/combine`, {
+  const res = await apiFetch(`/api/v1/partsets/${privateId}/parts/combine`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -184,7 +184,7 @@ export async function startPartGeneration(
   privateId: string,
   csrfToken: string,
 ): Promise<void> {
-  const res = await fetch(`/api/v1/partsets/${privateId}/generate`, {
+  const res = await apiFetch(`/api/v1/partsets/${privateId}/generate`, {
     method: 'POST',
     headers: { 'X-CSRF-Token': csrfToken },
   })
@@ -195,22 +195,13 @@ export async function startPartGeneration(
 }
 
 export async function getPartgenStatus(privateId: string): Promise<PartgenProgressResponse> {
-  const res = await fetch(`/api/v1/partsets/${privateId}/partgen-status`)
+  const res = await apiFetch(`/api/v1/partsets/${privateId}/partgen-status`)
   if (!res.ok) throw new Error('Failed to fetch part generation status')
   return res.json()
 }
 
-export async function getPartsData(privateId: string): Promise<PartsDataResponse> {
-  const res = await fetch(`/api/v1/partsets/${privateId}/parts`)
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || 'Failed to load parts')
-  }
-  return res.json()
-}
-
 export async function getPartsByAccessId(accessId: string): Promise<PartsDataResponse> {
-  const res = await fetch(`/api/v1/access/${accessId}/parts`)
+  const res = await apiFetch(`/api/v1/access/${accessId}/parts`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail || 'Failed to load parts')
@@ -223,7 +214,7 @@ export async function updatePartsetMetadata(
   body: { title: string; composer: string; publisher: string },
   csrfToken: string,
 ): Promise<void> {
-  const res = await fetch(`/api/v1/partsets/${privateId}/metadata`, {
+  const res = await apiFetch(`/api/v1/partsets/${privateId}/metadata`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -238,7 +229,7 @@ export async function updatePartsetMetadata(
 }
 
 export async function deletePartset(privateId: string, csrfToken: string): Promise<void> {
-  const res = await fetch(`/api/v1/partsets/${privateId}`, {
+  const res = await apiFetch(`/api/v1/partsets/${privateId}`, {
     method: 'DELETE',
     headers: { 'X-CSRF-Token': csrfToken },
   })
@@ -250,7 +241,7 @@ export async function deletePartset(privateId: string, csrfToken: string): Promi
 
 export async function searchPartsets(query: string): Promise<SearchResponse> {
   const params = new URLSearchParams({ q: query })
-  const res = await fetch(`/api/v1/search?${params}`)
+  const res = await apiFetch(`/api/v1/search?${params}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail || 'Search failed')
@@ -269,7 +260,7 @@ export async function getImslpInfo(
   signal?.addEventListener('abort', abortFromParent)
 
   try {
-    const res = await fetch(`/api/v1/imslp/${encodeURIComponent(imslpId)}/info`, {
+    const res = await apiFetch(`/api/v1/imslp/${encodeURIComponent(imslpId)}/info`, {
       signal: controller.signal,
     })
     if (res.status === 404) return null

@@ -190,6 +190,8 @@ def _apply_page_segment_payload(
 
 
 def _finalize_segment_save(db: Session, partset_id: str) -> None:
+    # Session uses autoflush=False (see app.db); pending Segment inserts are not
+    # visible to queries until flush, so sync must run after flush not before commit.
     db.flush()
     _sync_part_rows_from_tags(db, partset_id)
     cache = get_local_cache()

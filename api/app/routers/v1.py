@@ -75,10 +75,6 @@ PART_FILE_PATTERN = re.compile(r"^[A-Za-z0-9._-]+\.pdf$")
 PAGE_IMAGE_RES = {"lowres", "thumbs"}
 
 
-class CsrfTokenResponse(dict):
-    pass
-
-
 def _csrf_serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(get_settings().app_secret, salt="csrf")
 

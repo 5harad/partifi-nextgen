@@ -30,11 +30,6 @@ export function loadComposerData(): Promise<ComposerData> {
   return composerDataPromise
 }
 
-/** @deprecated use loadComposerData */
-export function loadComposerNames(): Promise<string[]> {
-  return loadComposerData().then((d) => d.names)
-}
-
 function tokenize(name: string): string[] {
   return name
     .toLowerCase()

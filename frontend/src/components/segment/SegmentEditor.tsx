@@ -199,9 +199,8 @@ export function SegmentEditor({ data }: Props) {
   }, [regions, leftMargin, rightMargin, rotation])
 
   const persistPage = useCallback(
-    async (page: number, pageData: PageSegmentData) => {
-      const token = await getCsrfToken()
-      await savePageSegments(data.private_id, page, pageData, token)
+    async (page: number, pageData: PageSegmentData, csrfToken: string) => {
+      await savePageSegments(data.private_id, page, pageData, csrfToken)
     },
     [data.private_id],
   )
@@ -258,7 +257,8 @@ export function SegmentEditor({ data }: Props) {
       try {
         if (!pageDataAreEqual(serverPageDataRef.current, pageData)) {
           setSaving(true)
-          await persistPage(current, pageData)
+          const token = await getCsrfToken()
+          await persistPage(current, pageData, token)
           serverPageDataRef.current = JSON.parse(JSON.stringify(pageData))
         }
         applyPageData(nextPage, updatedPages)

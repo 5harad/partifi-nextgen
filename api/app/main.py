@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import get_settings
+from app.config import get_settings, validate_settings
 from app.middleware.security import SecurityHeadersMiddleware
 from app.routers import auth, health, v1
 from app.services.s3 import ensure_bucket
@@ -11,15 +11,17 @@ from app.services.s3 import ensure_bucket
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    try:
-        ensure_bucket()
-    except Exception:
-        # MinIO may not be ready on first boot; readiness endpoint reports status.
-        pass
+    if get_settings().app_env == "development":
+        try:
+            ensure_bucket()
+        except Exception:
+            # MinIO may not be ready on first boot; readiness endpoint reports status.
+            pass
     yield
 
 
 def create_app() -> FastAPI:
+    validate_settings()
     settings = get_settings()
     app = FastAPI(title="Partifi API", version="0.1.0", lifespan=lifespan)
 
