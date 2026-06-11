@@ -98,6 +98,11 @@ def score_page_images_on_s3(score_id: str) -> bool:
     return bool(response.get("KeyCount"))
 
 
+def delete_object(key: str) -> None:
+    settings = get_settings()
+    get_s3_client().delete_object(Bucket=settings.s3_bucket, Key=key)
+
+
 def delete_prefix(prefix: str) -> None:
     settings = get_settings()
     client = get_s3_client()
