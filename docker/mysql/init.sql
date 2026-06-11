@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS partsets (
     user_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
     num_downloads INT NOT NULL DEFAULT 0,
     status ENUM('import', 'convert', 'analysis', 'cut', 'paste'),
-    error ENUM('import', 'convert', 'analysis', 'cut', 'paste'),
+    error ENUM('import', 'import_size', 'convert', 'analysis', 'cut', 'paste'),
     import_start DATETIME,
     import_complete DATETIME,
     import_progress FLOAT NOT NULL DEFAULT 0,

@@ -1,4 +1,18 @@
+x-journald-logging: &journald-logging
+  logging:
+    driver: journald
+    options:
+      tag: "partifi/{{.Name}}"
+
+x-json-logging: &json-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "50m"
+      max-file: "3"
+
 x-worker-service: &worker-service
+  <<: *journald-logging
   build:
     context: .
     dockerfile: workers/Dockerfile
@@ -24,6 +38,7 @@ x-worker-service: &worker-service
 
 services:
   web:
+    <<: *journald-logging
     build:
       context: .
       dockerfile: frontend/Dockerfile
@@ -43,6 +58,7 @@ services:
         condition: service_started
 
   api:
+    <<: *journald-logging
     build:
       context: .
       dockerfile: api/Dockerfile
@@ -74,6 +90,7 @@ services:
         condition: service_healthy
 
   mysql:
+    <<: *json-logging
     image: mysql:8.0
     restart: unless-stopped
     environment:
@@ -92,6 +109,7 @@ services:
       retries: 10
 
   redis:
+    <<: *json-logging
     image: redis:7-alpine
     restart: unless-stopped
     healthcheck:

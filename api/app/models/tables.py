@@ -48,7 +48,15 @@ class Partset(Base):
         Enum("import", "convert", "analysis", "cut", "paste", name="status_enum")
     )
     error: Mapped[str | None] = mapped_column(
-        Enum("import", "convert", "analysis", "cut", "paste", name="error_enum")
+        Enum(
+            "import",
+            "import_size",
+            "convert",
+            "analysis",
+            "cut",
+            "paste",
+            name="error_enum",
+        )
     )
     import_start: Mapped[datetime | None] = mapped_column(DateTime)
     import_complete: Mapped[datetime | None] = mapped_column(DateTime)

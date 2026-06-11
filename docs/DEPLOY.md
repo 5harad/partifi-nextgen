@@ -295,15 +295,111 @@ curl -s http://localhost/health/ready
 ### Restart after deploy
 
 ```bash
+cd ~/partifi-nextgen
+
+# Optional: save logs before containers are recreated
+sudo mkdir -p /var/log/partifi
+docker compose -f docker-compose.prod.yml logs --since 24h api worker-1 worker-2 worker-3 web \
+  > "/var/log/partifi/pre-deploy-$(date +%F-%H%M).log" 2>&1 || true
+
 git pull
-docker compose -f docker-compose.prod.yml up -d --build
+
+# After this deploy (journald logging): recreate app containers once so the new log driver applies
+docker compose -f docker-compose.prod.yml up -d --build --force-recreate web api worker-1 worker-2 worker-3
+
+docker compose -f docker-compose.prod.yml ps
+curl -s http://localhost/health/ready
 ```
 
-### Logs
+**One-time on existing databases** (adds `import_size` to `partsets.error` for oversize import failures):
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T mysql \
+  mysql -u root -p"$MYSQL_ROOT_PASSWORD" partifi < scripts/alter_add_import_size_error.sql
+```
+
+Fresh installs from current `docker/mysql/init.sql` already include `import_size`.
+
+### Monitoring
+
+#### External health check (recommended)
+
+Use a third-party uptime monitor (UptimeRobot, Better Stack, etc.) — **not** a cron on the same EC2 box.
+
+| Setting | Value |
+|---------|--------|
+| URL | `https://partifi.org/health/ready` |
+| Interval | 5 minutes |
+| Success | HTTP 200 and JSON `"status":"ok"` (MySQL, Redis, S3 all ok) |
+| Alert | Email or Slack when down for 2+ checks |
+
+`/health` only returns liveness; use **`/health/ready`** for dependency checks.
+
+#### Diagnostic script (when something feels wrong)
+
+SSH to the host and run:
+
+```bash
+cd ~/partifi-nextgen
+chmod +x scripts/diagnostics.sh   # once
+./scripts/diagnostics.sh
+```
+
+Optional: `HOURS=24 ./scripts/diagnostics.sh` for a longer log window.
+
+The script prints:
+
+1. **Readiness** — local `/health/ready`
+2. **Cache size** — total and by `scores/` / `preview/` / `parts/`
+3. **Failed partsets** — MySQL rows with `error` set or imports stuck &gt; 1 hour
+4. **Recent errors** — journald (or docker logs fallback) from api + workers + web
+5. **Container status** — `docker compose ps`
+
+**What each layer tells you:**
+
+| Layer | Good for | Not good for |
+|-------|----------|--------------|
+| External health check | Site down, API/DB/Redis/S3 broken | Stuck imports, cache full |
+| DB (`partsets.error`) | Which jobs failed, at what stage | Root cause, warm-page failures |
+| Logs (journald) | Exceptions, timeouts, OOM | Pre-import home-page rejections |
+| Cache `du` | Growth, segment warm issues | User-facing error text |
+
+#### Logs (journald)
+
+Production compose sends **api**, **workers**, and **web** logs to **journald** (survives container recreate). **mysql** and **redis** use rotated `json-file` logs.
+
+Recent errors (last 6 hours):
+
+```bash
+journalctl --since "6 hours ago" --no-pager \
+  | grep -E 'partifi-nextgen-(api|worker|web)' \
+  | grep -iE 'error|exception|failed|timed out|137'
+```
+
+Per-container (tag set in compose):
+
+```bash
+journalctl -t partifi/partifi-nextgen-api-1 --since "6 hours ago"
+journalctl -t partifi/partifi-nextgen-worker-1-1 --since "6 hours ago"
+```
+
+`docker compose logs` still works for live tailing:
 
 ```bash
 docker compose -f docker-compose.prod.yml logs -f api worker-1 worker-2 worker-3
 ```
+
+Limit journal disk use on the host (optional, in `/etc/systemd/journald.conf`):
+
+```ini
+SystemMaxUse=500M
+```
+
+Then: `sudo systemctl restart systemd-journald`.
+
+Pre-deploy log snapshots (before `git pull`) are written to `/var/log/partifi/pre-deploy-*.log` — see **Restart after deploy** above.
+
+Daily cache cleanup output: `/var/log/partifi-clean-cache.log` (cron in **S3 vs local cache** below).
 
 ### Backups
 
@@ -351,6 +447,7 @@ docker compose -f docker-compose.prod.yml exec api du -sh /data/partifi
 
 ```bash
 # crontab -e on the EC2 host (04:00 UTC daily)
+sudo mkdir -p /var/log/partifi
 0 4 * * * cd /home/ubuntu/partifi-nextgen && docker compose -f docker-compose.prod.yml exec -T worker-1 python -m jobs.clean_cache >> /var/log/partifi-clean-cache.log 2>&1
 ```
 
@@ -364,7 +461,8 @@ Evicting cold **parts** cache sets `parts_ready = 0` for that partset (legacy be
 
 | Symptom | Check |
 |---------|--------|
-| Worker OOM / exit 137 | `docker compose … logs worker-1`; score may be very large — retry; lower concurrency or raise cap in compose |
+| Something feels wrong | `./scripts/diagnostics.sh` (cache + DB + logs) |
+| Worker OOM / exit 137 | `journalctl` or `docker compose … logs worker-1`; score may be very large — retry; lower concurrency or raise cap in compose |
 | Host sluggish / OOM | `free -h`; swap enabled? three heavy jobs at once? stop workers during maintenance |
 | Jobs never run | `docker compose -f docker-compose.prod.yml ps` — all three workers up? Redis healthy? |
 | Import stuck | Worker logs; `partsets.error` column; `JOB_TIMEOUT_SECONDS` |
