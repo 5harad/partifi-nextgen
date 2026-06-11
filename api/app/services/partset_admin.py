@@ -4,6 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models import Break, Page, Part, Partset, Segment
+from app.services.local_cache import get_local_cache
 from app.services.s3 import delete_prefix
 
 
@@ -48,3 +49,6 @@ def delete_partset(db: Session, partset: Partset) -> None:
     db.delete(partset)
     db.commit()
     delete_prefix(f"parts/{partset_id}/")
+    cache = get_local_cache()
+    cache.invalidate_preview(partset_id)
+    cache.invalidate_parts(partset_id)

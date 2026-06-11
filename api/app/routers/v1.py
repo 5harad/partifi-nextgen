@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+import asyncio
+import re
+
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy.orm import Session
-
-import asyncio
 
 from app.config import get_settings
 from app.deps.auth import get_current_user_id
@@ -55,6 +57,8 @@ from app.services.preview import (
     save_layout,
     start_part_generation,
 )
+from app.services.local_cache import get_local_cache
+from app.services.partset_touch import touch_partset_access
 
 from app.services.segments import (
     get_partset_by_private_id,
@@ -65,6 +69,8 @@ from app.services.segments import (
 router = APIRouter(prefix="/api/v1", tags=["v1"])
 
 COPYRIGHT_VALUES = {"before 1923", "after 1923", "unknown"}
+PART_FILE_PATTERN = re.compile(r"^[A-Za-z0-9._-]+\.pdf$")
+PAGE_IMAGE_RES = {"lowres", "thumbs"}
 
 
 class CsrfTokenResponse(dict):
@@ -88,6 +94,80 @@ def verify_csrf(token: str | None) -> None:
         _csrf_serializer().loads(token, max_age=3600)
     except BadSignature as exc:
         raise HTTPException(status_code=403, detail="Invalid CSRF token") from exc
+
+
+def _serve_cached_part(partset: Partset, filename: str) -> FileResponse:
+    if not PART_FILE_PATTERN.match(filename):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    cache = get_local_cache()
+    path = cache.ensure_part_file(partset.id, filename)
+    if not path:
+        raise HTTPException(status_code=404, detail="Part file not found")
+    return FileResponse(path, media_type="application/pdf", filename=filename)
+
+
+@router.get("/partsets/{private_id}/preview-segment/{ndx}.png")
+def preview_segment_image(
+    private_id: str,
+    ndx: int,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    cache = get_local_cache()
+    path = cache.preview_segment_path(partset.id, ndx)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Preview segment not found")
+    return FileResponse(path, media_type="image/png")
+
+
+@router.get("/partsets/{private_id}/page-image/{page}.png")
+def page_image(
+    private_id: str,
+    page: int,
+    res: str = Query("lowres"),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    if res not in PAGE_IMAGE_RES:
+        raise HTTPException(status_code=400, detail="Invalid res")
+    if page < 1:
+        raise HTTPException(status_code=400, detail="Invalid page")
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    if not partset.score_id:
+        raise HTTPException(status_code=400, detail="Partset has no score")
+    try:
+        path = get_local_cache().ensure_score_page(partset.score_id, res, page)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail="Page image not found") from exc
+    return FileResponse(path, media_type="image/png")
+
+
+@router.get("/partsets/{private_id}/part-file/{filename}")
+def part_file_owner(
+    private_id: str,
+    filename: str,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    return _serve_cached_part(partset, filename)
+
+
+@router.get("/access/{access_id}/part-file/{filename}")
+def part_file_access(
+    access_id: str,
+    filename: str,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    resolved = resolve_partset_access(db, access_id)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    partset, _mode = resolved
+    return _serve_cached_part(partset, filename)
 
 
 @router.post("/partsets", response_model=PartsetCreateResponse)
@@ -223,7 +303,7 @@ def import_status(private_id: str, db: Session = Depends(get_db)) -> ImportProgr
     partset = db.query(Partset).filter(Partset.private_id == private_id).first()
     if not partset:
         raise HTTPException(status_code=404, detail="Partset not found")
-
+    touch_partset_access(db, partset)
     return ImportProgressResponse(**import_progress_payload(partset))
 
 

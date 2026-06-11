@@ -26,7 +26,8 @@ from pipeline.cutpaste import (
     prct2pixel,
 )
 from pipeline.paste_segments import create_parts
-from s3_storage import download_file, upload_file
+from local_cache import get_local_cache
+from s3_storage import upload_file
 
 logger = logging.getLogger("partifi.gen_parts")
 
@@ -161,9 +162,11 @@ def _run_gen_parts(partset_id: str, workdir: Path) -> None:
     )
 
     pages_needed = sorted({row["page"] for row in segment_rows})
+    cache = get_local_cache()
     for page in pages_needed:
         local_page = pages_dir / f"page-{page}.png"
-        download_file(f"scores/{score_id}/highres/page-{page}.png", local_page)
+        cached = cache.ensure_score_page(score_id, "highres", page)
+        local_page.write_bytes(cached.read_bytes())
 
     cut_tasks: list[tuple[Path, float, float, float, float, float, Path]] = []
     for ndx, row in enumerate(segment_rows):
@@ -258,6 +261,7 @@ def _run_gen_parts(partset_id: str, workdir: Path) -> None:
 
     for path in outdir.glob("*.pdf"):
         key = f"parts/{partset_id}/{path.name}"
+        cache.store_part_file(partset_id, path)
         upload_file(path, key, "application/pdf")
 
     execute(

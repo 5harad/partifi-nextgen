@@ -315,6 +315,44 @@ docker compose -f docker-compose.prod.yml exec mysql \
 
 MySQL data lives in the `mysql_data` volume. Back up regularly; S3 files are already durable separately.
 
+### Local file cache
+
+Score page PNGs, preview segment cuts, and generated part PDFs are mirrored on disk at **`PARTIFI_CACHE_ROOT`** (default `/data/partifi`) inside the **`partifi_cache`** Docker volume. The API and all workers share this volume so repeat preview/segment/partgen work avoids S3 round-trips.
+
+Layout:
+
+```text
+/data/partifi/
+  scores/{score_id}/lowres|highres|thumbs/
+  preview/{partset_id}/s0.png …
+  parts/{partset_id}/*.pdf
+```
+
+S3 remains the source of truth; local files are evicted when cold or over the size cap.
+
+**Check usage on the host:**
+
+```bash
+docker compose -f docker-compose.prod.yml exec api du -sh /data/partifi
+```
+
+**Optional bind mount** (instead of the named volume): create `/opt/partifi/cache` on the host and replace the `partifi_cache:` volume entries in `docker-compose.prod.yml` with:
+
+```yaml
+- /opt/partifi/cache:/data/partifi
+```
+
+**Daily cleanup** (TTL eviction + stale job scratch under `/tmp/partifi`):
+
+```bash
+# crontab -e on the EC2 host (04:00 UTC daily)
+0 4 * * * cd /home/ubuntu/partifi-nextgen && docker compose -f docker-compose.prod.yml exec -T worker-1 python -m jobs.clean_cache >> /var/log/partifi-clean-cache.log 2>&1
+```
+
+Tune retention in `.env`: `PARTIFI_CACHE_MAX_GB`, `PARTIFI_CACHE_*_TTL_DAYS`, `PARTIFI_CACHE_SCRATCH_MAX_AGE_HOURS`.
+
+Evicting cold **parts** cache sets `parts_ready = 0` for that partset (legacy behavior); the next download regenerates from layout.
+
 ---
 
 ## Troubleshooting

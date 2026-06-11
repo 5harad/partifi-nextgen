@@ -8,8 +8,10 @@ x-worker-service: &worker-service
   environment:
     MYSQL_HOST: mysql
     REDIS_URL: redis://redis:6379/0
+    PARTIFI_CACHE_ROOT: /data/partifi
   volumes:
     - worker_tmp:/tmp/partifi
+    - partifi_cache:/data/partifi
   deploy:
     resources:
       limits:
@@ -51,6 +53,9 @@ services:
       APP_ENV: production
       MYSQL_HOST: mysql
       REDIS_URL: redis://redis:6379/0
+      PARTIFI_CACHE_ROOT: /data/partifi
+    volumes:
+      - partifi_cache:/data/partifi
     command:
       [
         "uvicorn",
@@ -107,5 +112,6 @@ services:
 volumes:
   mysql_data:
   worker_tmp:
+  partifi_cache:
   caddy_data:
   caddy_config:

@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     s3_region: str = "us-east-1"
     s3_use_ssl: bool = True
 
+    partifi_cache_root: str = "/data/partifi"
+    partifi_cache_max_gb: float = 25.0
+    partifi_cache_preview_ttl_days: int = 7
+    partifi_cache_parts_ttl_days: int = 7
+    partifi_cache_score_ttl_days: int = 7
+
     @property
     def database_url(self) -> str:
         return (

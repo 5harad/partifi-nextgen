@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
 from app.models import Break, Part, Partset, Segment
+from app.config import get_settings
+from app.services.local_cache import get_local_cache
+from app.services.partset_touch import touch_partset_access
 from app.services.queue import enqueue_job
-from app.services.s3 import get_s3_client, presigned_get_url, presigned_score_pdf_url
+from app.services.s3 import presigned_get_url, presigned_score_pdf_url
 from app.services.segments import ensure_import_complete, get_partset_by_private_id
 from app.utils.strings import tag_to_filename
 
@@ -28,8 +32,7 @@ from pipeline.cutpaste import (  # noqa: E402
     preview_left_margin,
     prct2pixel,
 )
-
-from app.config import get_settings
+from pipeline.local_cache import LocalCache  # noqa: E402
 
 
 def _partgen_total_progress(status: str | None, progress: float) -> float:
@@ -117,52 +120,62 @@ def _get_spacings(db: Session, partset_id: str) -> dict[str, float]:
     return spacings
 
 
-def _cut_preview_segments(
+def invalidate_preview_cache(partset_id: str) -> None:
+    get_local_cache().invalidate_preview(partset_id)
+
+
+def _preview_scratch_dir() -> Path:
+    scratch = Path(get_settings().partifi_cache_root) / "_scratch"
+    scratch.mkdir(parents=True, exist_ok=True)
+    return scratch
+
+
+def _ensure_preview_segments(
     partset: Partset,
     segment_rows: list[dict],
-    workdir: Path,
+    fingerprint: str,
 ) -> None:
-    settings = get_settings()
-    client = get_s3_client()
-    pages_dir = workdir / "pages"
-    segments_dir = workdir / "segments"
-    pages_dir.mkdir(parents=True)
-    segments_dir.mkdir(parents=True)
+    cache = get_local_cache()
+    num_segments = len(segment_rows)
+    if cache.preview_is_valid(partset.id, fingerprint, num_segments):
+        return
 
-    pages_needed = sorted({row["page"] for row in segment_rows})
-    for page in pages_needed:
-        key = f"scores/{partset.score_id}/lowres/page-{page}.png"
-        local_page = pages_dir / f"page-{page}.png"
-        local_page.parent.mkdir(parents=True, exist_ok=True)
-        client.download_file(settings.s3_bucket, key, str(local_page))
+    work_root = Path(tempfile.mkdtemp(prefix=f"preview-{partset.id}-", dir=_preview_scratch_dir()))
+    try:
+        pages_dir = work_root / "pages"
+        segments_dir = work_root / "segments"
+        pages_dir.mkdir(parents=True)
+        segments_dir.mkdir(parents=True)
 
-    cut_tasks: list[tuple[Path, float, float, float, float, float, Path]] = []
-    for ndx, row in enumerate(segment_rows):
-        page_path = pages_dir / f"page-{row['page']}.png"
-        out_path = segments_dir / f"s{ndx}.png"
-        cut_tasks.append(
-            (
-                page_path,
-                row["rotation"],
-                row["left_margin"],
-                row["top"],
-                row["right_margin"],
-                row["bottom"],
-                out_path,
+        pages_needed = sorted({row["page"] for row in segment_rows})
+        for page in pages_needed:
+            local_page = pages_dir / f"page-{page}.png"
+            cached = cache.ensure_score_page(partset.score_id, "lowres", page)
+            local_page.write_bytes(cached.read_bytes())
+
+        cut_tasks: list[tuple[Path, float, float, float, float, float, Path]] = []
+        for ndx, row in enumerate(segment_rows):
+            page_path = pages_dir / f"page-{row['page']}.png"
+            out_path = segments_dir / f"s{ndx}.png"
+            cut_tasks.append(
+                (
+                    page_path,
+                    row["rotation"],
+                    row["left_margin"],
+                    row["top"],
+                    row["right_margin"],
+                    row["bottom"],
+                    out_path,
+                )
             )
-        )
-    cut_segment_tasks(cut_tasks, pool_size=1)
+        cut_segment_tasks(cut_tasks, pool_size=1)
+        cache.write_preview(partset.id, fingerprint, segments_dir)
+    finally:
+        shutil.rmtree(work_root, ignore_errors=True)
 
-    prefix = f"tmp/{partset.id}/preview"
-    for ndx in range(len(segment_rows)):
-        local_seg = segments_dir / f"s{ndx}.png"
-        key = f"{prefix}/s{ndx}.png"
-        client.upload_file(
-            str(local_seg),
-            settings.s3_bucket,
-            key,
-            ExtraArgs={"ContentType": "image/png"},
-        )
+
+def preview_segment_url(private_id: str, ndx: int) -> str:
+    return f"/api/v1/partsets/{private_id}/preview-segment/{ndx}.png"
 
 
 def get_preview_data(db: Session, partset: Partset) -> dict:
@@ -188,31 +201,31 @@ def get_preview_data(db: Session, partset: Partset) -> dict:
     if not part_names and not combined_part_names:
         raise ValueError("No parts tagged")
 
-    workdir = Path(f"/tmp/partifi/{partset.id}/preview")
-    if workdir.exists():
-        shutil.rmtree(workdir)
-    workdir.mkdir(parents=True)
-    _cut_preview_segments(partset, segment_rows, workdir)
-    shutil.rmtree(workdir, ignore_errors=True)
-
-    segment_heights = [prct2pixel(h) for h in heights_pct]
-    segment_widths = [prct2pixel(w, "width") for w in widths_pct]
     breaks = _get_breaks(db, partset.id)
     spacings = _get_spacings(db, partset.id)
-
     all_names = part_names + combined_part_names
     for name in all_names:
         breaks.setdefault(name, [])
         spacings.setdefault(name, 0.1)
 
+    fingerprint = LocalCache.preview_fingerprint(
+        segment_rows, breaks, spacings, combined_part_names
+    )
+    _ensure_preview_segments(partset, segment_rows, fingerprint)
+    touch_partset_access(db, partset)
+
+    segment_heights = [prct2pixel(h) for h in heights_pct]
+    segment_widths = [prct2pixel(w, "width") for w in widths_pct]
+    private_id = partset.private_id or ""
+
     segment_urls = {
-        str(ndx): presigned_get_url(f"tmp/{partset.id}/preview/s{ndx}.png")
+        str(ndx): preview_segment_url(private_id, ndx)
         for ndx in range(len(segment_rows))
     }
 
     return {
         "partset_id": partset.id,
-        "private_id": partset.private_id or "",
+        "private_id": private_id,
         "title": partset.title,
         "composer": partset.composer,
         "part_names": part_names,
@@ -252,6 +265,8 @@ def save_layout(db: Session, partset: Partset, breaks: dict[str, list[int]], spa
         if part:
             part.spacing = float(spacing)
 
+    invalidate_preview_cache(partset.id)
+    get_local_cache().invalidate_parts(partset.id)
     db.commit()
 
 
@@ -295,6 +310,8 @@ def combine_parts(db: Session, partset: Partset, action: str, tag: str) -> None:
     else:
         raise ValueError("Invalid combine action")
 
+    invalidate_preview_cache(partset.id)
+    get_local_cache().invalidate_parts(partset.id)
     db.commit()
 
 
@@ -316,8 +333,15 @@ def start_part_generation(db: Session, partset: Partset) -> str | None:
     return job_id
 
 
+def _part_file_url(partset: Partset, filename: str, *, mode: str) -> str:
+    if mode == "owner" and partset.private_id:
+        return f"/api/v1/partsets/{partset.private_id}/part-file/{filename}"
+    return f"/api/v1/access/{partset.id}/part-file/{filename}"
+
+
 def get_parts_data(db: Session, partset: Partset, *, mode: str = "owner") -> dict:
     ensure_import_complete(partset)
+    touch_partset_access(db, partset)
     parts = (
         db.query(Part)
         .filter(Part.partset_id == partset.id)
@@ -331,12 +355,20 @@ def get_parts_data(db: Session, partset: Partset, *, mode: str = "owner") -> dic
         a4_name = f"{partset.id}_a4_{part.file_name}"
         letter_key = f"parts/{partset.id}/{letter_name}"
         a4_key = f"parts/{partset.id}/{a4_name}"
+
+        if partset.parts_ready:
+            letter_url = _part_file_url(partset, letter_name, mode=mode)
+            a4_url = _part_file_url(partset, a4_name, mode=mode)
+        else:
+            letter_url = presigned_get_url(letter_key, download_name=letter_name)
+            a4_url = presigned_get_url(a4_key, download_name=a4_name)
+
         download_items.append(
             {
                 "tag": part.tag,
                 "file_name": part.file_name or "",
-                "letter_url": presigned_get_url(letter_key, download_name=letter_name),
-                "a4_url": presigned_get_url(a4_key, download_name=a4_name),
+                "letter_url": letter_url,
+                "a4_url": a4_url,
             }
         )
 

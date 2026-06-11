@@ -2,8 +2,15 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Page, Part, Partset, Score, Segment
-from app.services.s3 import presigned_get_url
+from app.services.local_cache import get_local_cache
+from app.services.partset_touch import touch_partset_access
 from app.utils.strings import rm_space, tag_to_filename
+
+ScoreImageKind = str
+
+
+def page_image_url(private_id: str, page: int, res: ScoreImageKind) -> str:
+    return f"/api/v1/partsets/{private_id}/page-image/{page}?res={res}"
 
 
 def _sync_part_rows_from_tags(db: Session, partset_id: str) -> None:
@@ -71,6 +78,8 @@ def get_segments_data(db: Session, partset: Partset) -> dict:
     if not partset.score_id:
         raise ValueError("Partset has no score")
 
+    touch_partset_access(db, partset)
+
     data: dict[str, dict] = {}
     pages = (
         db.query(Page)
@@ -113,19 +122,16 @@ def get_segments_data(db: Session, partset: Partset) -> dict:
         )
 
     num_pages = get_num_pages(db, partset.id, partset.score_id)
+    private_id = partset.private_id or ""
     image_urls: dict[str, dict[str, str]] = {"lowres": {}, "thumbs": {}}
     for page in range(1, num_pages + 1):
-        image_urls["lowres"][str(page)] = presigned_get_url(
-            f"scores/{partset.score_id}/lowres/page-{page}.png"
-        )
-        image_urls["thumbs"][str(page)] = presigned_get_url(
-            f"scores/{partset.score_id}/thumbs/page-{page}.png"
-        )
+        image_urls["lowres"][str(page)] = page_image_url(private_id, page, "lowres")
+        image_urls["thumbs"][str(page)] = page_image_url(private_id, page, "thumbs")
 
     return {
         "score_id": partset.score_id,
         "partset_id": partset.id,
-        "private_id": partset.private_id or "",
+        "private_id": private_id,
         "num_pages": num_pages,
         "pages": data,
         "image_urls": image_urls,
@@ -177,5 +183,7 @@ def save_page_segments(
         )
 
     _sync_part_rows_from_tags(db, partset.id)
-
+    cache = get_local_cache()
+    cache.invalidate_preview(partset.id)
+    cache.invalidate_parts(partset.id)
     db.commit()
