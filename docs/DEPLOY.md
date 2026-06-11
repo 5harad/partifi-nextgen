@@ -210,8 +210,12 @@ After DNS + TLS:
 1. Stop writes on legacy (maintenance page or stop Apache on Linode)
 2. Run a **final** `./scripts/import-legacy-partsets.sh --confirm` if anything changed since step 4
 3. Point **partifi.org** A record → Elastic IP
-4. Caddy obtains a Let's Encrypt certificate automatically (ports 80/443 must be open)
-5. Monitor:
+4. Optional aliases (Caddy redirects these to `https://partifi.org`):
+   - **partifi.com** → Elastic IP (A)
+   - **www.partifi.com** → Elastic IP (A or CNAME to `partifi.org`)
+   - **www.partifi.org** → Elastic IP (A or CNAME to `partifi.org`)
+5. Caddy obtains Let's Encrypt certificates automatically (ports 80/443 must be open)
+6. Monitor:
 
 ```bash
 docker compose -f docker-compose.prod.yml logs -f web api worker-1

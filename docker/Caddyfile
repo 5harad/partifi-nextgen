@@ -1,3 +1,8 @@
+# Alternate hostnames → canonical site (requires DNS A records to this server).
+partifi.com, www.partifi.com, www.partifi.org {
+	redir https://{$SITE_ADDRESS:partifi.org}{uri} permanent
+}
+
 {$SITE_ADDRESS:partifi.org} {
 	encode gzip
 
