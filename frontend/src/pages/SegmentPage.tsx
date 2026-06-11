@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { SegmentEditor } from '../components/segment/SegmentEditor'
+import { TransitionWait } from '../components/TransitionWait'
 import { getSegmentData } from '../lib/api'
 import type { SegmentDataResponse } from '../types/segment'
 
@@ -68,12 +69,7 @@ export function SegmentPage() {
           Loading segment editor…
         </div>
       ) : warming ? (
-        <div id="main" style={{ padding: '40px', textAlign: 'center' }}>
-          <div id="transition-text">Please wait while we prepare the score images</div>
-          <div id="progress-bar">
-            <div id="progress-ribbon" style={{ width: 120 }} />
-          </div>
-        </div>
+        <TransitionWait message="Please wait while we prepare the score images" />
       ) : error ? (
         <div id="main" style={{ padding: '40px', textAlign: 'center' }}>
           <p className="red">{error}</p>

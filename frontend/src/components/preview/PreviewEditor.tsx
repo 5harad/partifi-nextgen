@@ -20,6 +20,7 @@ import {
   spacingToSliderUpTop,
   uniqueSorted,
 } from '../../lib/previewUtils'
+import { TransitionWait } from '../TransitionWait'
 import type { PreviewDataResponse } from '../../types/preview'
 
 const SLIDER_RANGE = 46
@@ -245,16 +246,7 @@ export function PreviewEditor({ privateId }: Props) {
   }
 
   if (!data) {
-    return (
-      <div id="main" style={{ height: '750px' }}>
-        <div id="transition">
-          <div id="transition-text">Please wait while we prepare the score images</div>
-          <div id="progress-bar">
-            <div id="progress-ribbon" style={{ width: 120 }} />
-          </div>
-        </div>
-      </div>
-    )
+    return <TransitionWait message="Please wait while we prepare the score images" />
   }
 
   const spacingPx = spacingLowres(spacings[part] ?? 0.1)
