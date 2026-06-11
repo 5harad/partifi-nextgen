@@ -250,7 +250,7 @@ export function PreviewEditor({ privateId }: Props) {
   if (!data) {
     return (
       <TransitionWait
-        message="Please wait while we prepare the score images"
+        message="Please wait while we prepare the score"
         progress={warmProgress}
       />
     )
