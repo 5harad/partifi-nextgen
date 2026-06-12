@@ -18,8 +18,11 @@ IMSLP_HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     ),
 }
-PMLASIA_DISCLAIMER_COOKIE = "disclaimer_bypass"
-PMLASIA_DISCLAIMER_VALUE = "OK"
+PML_MIRROR_DISCLAIMER_COOKIE = "disclaimer_bypass"
+PML_MIRROR_DISCLAIMER_VALUE = "OK"
+# Backward-compatible aliases (PML Asia tests / callers).
+PMLASIA_DISCLAIMER_COOKIE = PML_MIRROR_DISCLAIMER_COOKIE
+PMLASIA_DISCLAIMER_VALUE = PML_MIRROR_DISCLAIMER_VALUE
 
 
 def is_pdf_body(content: bytes, content_type: str = "") -> bool:
@@ -29,9 +32,10 @@ def is_pdf_body(content: bytes, content_type: str = "") -> bool:
 
 
 def mirror_request_cookies(url: str) -> dict[str, str]:
-    """PML Asia (imslp.tw) requires a disclaimer cookie before serving PDF bytes."""
-    if "imslp.tw" in url:
-        return {PMLASIA_DISCLAIMER_COOKIE: PMLASIA_DISCLAIMER_VALUE}
+    """PML mirror hosts require a disclaimer cookie before serving PDF bytes."""
+    lowered = url.lower()
+    if "imslp.tw" in lowered or "petruccilibrary.us" in lowered:
+        return {PML_MIRROR_DISCLAIMER_COOKIE: PML_MIRROR_DISCLAIMER_VALUE}
     return {}
 
 
@@ -57,19 +61,61 @@ def pdf_response_from_redirect(response: httpx.Response) -> tuple[str, bytes] | 
     return str(response.url), response.content
 
 
-def _fetch_pmlasia_pdf(
-    client: httpx.Client, disclaimer_html: str, page_url: str
+def is_pmlus_disclaimer(page_html: str, page_url: str = "") -> bool:
+    if "petruccilibrary.us" in page_url.lower():
+        return True
+    return "Petrucci Music Library US" in page_html
+
+
+def parse_pmlus_pdf_url(page_html: str, page_url: str) -> str | None:
+    match = re.search(r'href="(files/[^"]+\.pdf)"', page_html, re.I)
+    if not match:
+        return None
+    path = html.unescape(match.group(1))
+    return str(httpx.URL(page_url).join(path))
+
+
+def _fetch_mirror_disclaimer_pdf(
+    client: httpx.Client,
+    disclaimer_html: str,
+    page_url: str,
+    *,
+    pdf_url: str | None,
+    mirror_name: str,
 ) -> tuple[str, bytes]:
-    pdf_url = parse_pmlasia_pdf_url(disclaimer_html, page_url)
     if not pdf_url:
-        raise ValueError(f"Could not parse PML Asia disclaimer page at {page_url}")
+        raise ValueError(f"Could not parse {mirror_name} disclaimer page at {page_url}")
 
     response = client.get(pdf_url, cookies=mirror_request_cookies(pdf_url))
     response.raise_for_status()
     content_type = response.headers.get("content-type", "")
     if not is_pdf_body(response.content, content_type):
-        raise ValueError(f"PML Asia mirror did not return a PDF at {pdf_url}")
+        raise ValueError(f"{mirror_name} mirror did not return a PDF at {pdf_url}")
     return str(response.url), response.content
+
+
+def _fetch_pmlasia_pdf(
+    client: httpx.Client, disclaimer_html: str, page_url: str
+) -> tuple[str, bytes]:
+    return _fetch_mirror_disclaimer_pdf(
+        client,
+        disclaimer_html,
+        page_url,
+        pdf_url=parse_pmlasia_pdf_url(disclaimer_html, page_url),
+        mirror_name="PML Asia",
+    )
+
+
+def _fetch_pmlus_pdf(
+    client: httpx.Client, disclaimer_html: str, page_url: str
+) -> tuple[str, bytes]:
+    return _fetch_mirror_disclaimer_pdf(
+        client,
+        disclaimer_html,
+        page_url,
+        pdf_url=parse_pmlus_pdf_url(disclaimer_html, page_url),
+        mirror_name="PML-US",
+    )
 
 
 def resolve_imslp_pdf_url(imslp_id: str, client: httpx.Client) -> tuple[str, bytes | None]:
@@ -81,8 +127,12 @@ def resolve_imslp_pdf_url(imslp_id: str, client: httpx.Client) -> tuple[str, byt
     if direct:
         return direct
 
+    page_url = str(response.url)
     if is_pmlasia_disclaimer(response.text):
-        return _fetch_pmlasia_pdf(client, response.text, str(response.url))
+        return _fetch_pmlasia_pdf(client, response.text, page_url)
+
+    if is_pmlus_disclaimer(response.text, page_url):
+        return _fetch_pmlus_pdf(client, response.text, page_url)
 
     match = re.search(r'id="sm_dl_wait"\s+data-id="([^"]+)"', response.text)
     if not match:

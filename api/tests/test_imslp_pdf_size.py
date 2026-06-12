@@ -56,6 +56,22 @@ def test_check_imslp_pdf_size_allows_small_direct_pdf() -> None:
     client.head.assert_not_called()
 
 
+def test_check_imslp_pdf_size_logs_resolution_failure(caplog: pytest.LogCaptureFixture) -> None:
+    import logging
+
+    client = MagicMock()
+    client.get.return_value = _mock_response(
+        url="https://imslp.org/wiki/Special:ImagefromIndex/398248",
+        text="<html>no pdf markers</html>",
+    )
+
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(ValueError, match="Could not resolve PDF URL"):
+            check_imslp_pdf_size("398248", client=client)
+
+    assert "IMSLP 398248 PDF URL resolution failed during pre-import check" in caplog.text
+
+
 def test_resolve_imslp_pdf_url_from_html() -> None:
     html = '<div id="sm_dl_wait" data-id="https://vmirror.imslp.org/files/foo.pdf"></div>'
     client = MagicMock()
