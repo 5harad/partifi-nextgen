@@ -58,6 +58,7 @@ from app.services.preview import (
     save_layout,
     start_part_generation,
 )
+from app.services.downloads import record_part_download
 from app.services.local_cache import get_local_cache
 from app.services.partset_touch import touch_partset_access
 
@@ -95,13 +96,20 @@ def verify_csrf(token: str | None) -> None:
         raise HTTPException(status_code=403, detail="Invalid CSRF token") from exc
 
 
-def _serve_cached_part(partset: Partset, filename: str) -> FileResponse:
+def _serve_cached_part(
+    partset: Partset,
+    filename: str,
+    db: Session,
+    *,
+    user_id: str | None = None,
+) -> FileResponse:
     if not PART_FILE_PATTERN.match(filename):
         raise HTTPException(status_code=400, detail="Invalid filename")
     cache = get_local_cache()
     path = cache.ensure_part_file(partset.id, filename)
     if not path:
         raise HTTPException(status_code=404, detail="Part file not found")
+    record_part_download(db, partset, filename, user_id=user_id)
     return FileResponse(path, media_type="application/pdf", filename=filename)
 
 
@@ -209,11 +217,12 @@ def part_file_owner(
     private_id: str,
     filename: str,
     db: Session = Depends(get_db),
+    user_id: str | None = Depends(get_current_user_id),
 ) -> FileResponse:
     partset = get_partset_by_private_id(db, private_id)
     if not partset:
         raise HTTPException(status_code=404, detail="Partset not found")
-    return _serve_cached_part(partset, filename)
+    return _serve_cached_part(partset, filename, db, user_id=user_id)
 
 
 @router.get("/access/{access_id}/part-file/{filename}")
@@ -221,12 +230,13 @@ def part_file_access(
     access_id: str,
     filename: str,
     db: Session = Depends(get_db),
+    user_id: str | None = Depends(get_current_user_id),
 ) -> FileResponse:
     resolved = resolve_partset_access(db, access_id)
     if not resolved:
         raise HTTPException(status_code=404, detail="Partset not found")
     partset, _mode = resolved
-    return _serve_cached_part(partset, filename)
+    return _serve_cached_part(partset, filename, db, user_id=user_id)
 
 
 @router.post("/partsets", response_model=PartsetCreateResponse)
