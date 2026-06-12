@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 
 const CONTACT = 'support@partifi.org'
@@ -25,7 +26,11 @@ export function HowToPage() {
           <div id="howto-text">
             We&apos;ve worked hard to make Partifi intuitive and easy to use. The series of short videos below
             walks you through each of the steps necessary to create parts from a score. If these videos still
-            leave you with unanswered questions, please contact us at{' '}
+            leave you with unanswered questions, see our{' '}
+            <Link to="/faq" className="red">
+              FAQ
+            </Link>{' '}
+            or contact us at{' '}
             <a className="contact red" href={`mailto:${CONTACT}?subject=Partifi%20Feedback`}>
               {CONTACT}
             </a>{' '}

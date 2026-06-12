@@ -90,6 +90,9 @@ export function Header() {
         <Link to="/howto" style={{ marginLeft: 15 }}>
           Help
         </Link>
+        <Link to="/faq" style={{ marginLeft: 15 }}>
+          FAQ
+        </Link>
       </div>
     </div>
   )

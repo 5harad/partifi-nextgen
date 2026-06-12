@@ -1941,6 +1941,19 @@ a.red:hover
 	font-size: 18px;
 }
 
+.faq-item + .faq-item {
+	margin-top: 28px;
+}
+
+.faq-question {
+	font-family: 'IM Fell DW Pica SC', serif;
+	font-size: 17px;
+}
+
+.faq-contact {
+	margin-top: 36px;
+}
+
 #about-pics {
 	margin-top: 50px;
 	position: relative;
