@@ -375,12 +375,13 @@ The script prints:
 
 Production compose sends **api**, **workers**, and **web** logs to **journald** (survives container recreate). **mysql** and **redis** use rotated `json-file` logs.
 
-Recent errors (last 6 hours):
+Recent errors (last 6 hours) — prefer `./scripts/diagnostics.sh`, which skips benign Caddy client disconnects and Ghostscript PDF warnings:
 
 ```bash
 journalctl --since "6 hours ago" --no-pager \
   | grep -E 'partifi-nextgen-(api|worker|web)' \
-  | grep -iE 'error|exception|failed|timed out|137'
+  | grep -iE ' ERROR |exception|failed|timed out|exit 137|OOM|Traceback|ValueError|Could not' \
+  | grep -viE 'aborting with incomplete response|http2: stream closed|repaired or ignored|The following errors were encountered'
 ```
 
 Per-container (tag set in compose):

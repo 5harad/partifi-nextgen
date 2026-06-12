@@ -126,15 +126,20 @@ ORDER BY COALESCE(mod_ts, create_ts) DESC
 LIMIT 20;
 "
 
+filter_error_lines() {
+  # Match real failures; skip benign Caddy client disconnects and Ghostscript PDF warnings.
+  grep -iE ' ERROR |exception|failed|timed out|exit 137|OOM|Traceback|ValueError|Could not' \
+    | grep -viE 'aborting with incomplete response|http2: stream closed|repaired or ignored|The following errors were encountered'
+}
+
 section "Recent errors (last ${HOURS}h)"
-ERROR_PATTERN='error|exception|failed|timed out|exit 137|OOM'
 
 if command -v journalctl >/dev/null 2>&1; then
   # Prod compose uses journald (tag: partifi/<container-name>).
   JOURNAL_LINES="$(
     journalctl --since "${HOURS} hours ago" --no-pager 2>/dev/null \
       | grep -E 'partifi-nextgen-(api|worker|web)' \
-      | grep -iE "$ERROR_PATTERN" \
+      | filter_error_lines \
       | tail -40 || true
   )"
   if [[ -n "$JOURNAL_LINES" ]]; then
@@ -142,12 +147,12 @@ if command -v journalctl >/dev/null 2>&1; then
   else
     echo "(no matching journal lines — try docker logs below or increase HOURS)"
     compose logs --since "${HOURS}h" api worker-1 worker-2 worker-3 web 2>&1 \
-      | grep -iE "$ERROR_PATTERN" \
+      | filter_error_lines \
       | tail -40 || echo "(no matching docker log lines)"
   fi
 else
   compose logs --since "${HOURS}h" api worker-1 worker-2 worker-3 web 2>&1 \
-    | grep -iE "$ERROR_PATTERN" \
+    | filter_error_lines \
     | tail -40 || echo "(no matching docker log lines)"
 fi
 
