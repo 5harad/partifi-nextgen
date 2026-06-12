@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { PartsDownloadPane } from '../components/parts/PartsDownloadPane'
 import { getPartsByAccessId } from '../lib/api'
+import { isPartsetAccessId } from '../lib/partsetRoutes'
 import type { PartsDataResponse } from '../types/preview'
 
 export function PartsPage() {
@@ -11,7 +12,12 @@ export function PartsPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!accessId) return
+    if (!isPartsetAccessId(accessId)) {
+      setError('Partset not found')
+      setData(null)
+      return
+    }
+    setError(null)
     let cancelled = false
     ;(async () => {
       try {
@@ -32,7 +38,7 @@ export function PartsPage() {
   if (error) {
     return (
       <Layout>
-        <div id="main" style={{ height: '750px', padding: '40px' }}>
+        <div id="main" style={{ minHeight: '750px', padding: '40px' }}>
           <p className="red">{error}</p>
         </div>
       </Layout>
@@ -42,7 +48,7 @@ export function PartsPage() {
   if (!data) {
     return (
       <Layout>
-        <div id="main" style={{ height: '750px' }}>
+        <div id="main" style={{ minHeight: '750px' }}>
           <div id="transition">
             <div id="transition-text">Loading…</div>
           </div>
@@ -53,7 +59,7 @@ export function PartsPage() {
 
   return (
     <Layout>
-      <div id="main" style={{ height: '750px' }}>
+      <div id="main" style={{ minHeight: '750px' }}>
         <img
           src="/images/notes_bg.jpg"
           width={1190}

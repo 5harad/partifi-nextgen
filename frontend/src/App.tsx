@@ -28,7 +28,7 @@ function App() {
       <Route path="/:privateId/segment" element={<SegmentPage />} />
       <Route path="/:privateId/preview" element={<PreviewPage />} />
       <Route path="/:privateId/partgen" element={<PartgenProgressPage />} />
-      <Route path="/:accessId([A-Za-z0-9]{5})" element={<PartsPage />} />
+      <Route path="/:accessId" element={<PartsPage />} />
     </Routes>
   )
 }
