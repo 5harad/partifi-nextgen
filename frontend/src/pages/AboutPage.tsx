@@ -60,7 +60,7 @@ export function AboutPage() {
                     <a className="red" href="http://krsavage.com">
                       Kelly Savage
                     </a>{' '}
-                    is a harpsichordist in San Francisco. She no longer cuts up scores.
+                    is a harpsichordist in Boston. She no longer cuts up scores.
                   </p>
                 </div>
 
