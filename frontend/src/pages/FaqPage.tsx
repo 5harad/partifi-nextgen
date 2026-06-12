@@ -69,7 +69,7 @@ export function FaqPage() {
 
             <p className="faq-contact">
               Still have questions? Contact us at{' '}
-              <a className="contact red" href={`mailto:${CONTACT}?subject=Partifi%20FAQ`}>
+              <a className="contact red" href={`mailto:${CONTACT}?subject=Partifi%20Feedback`}>
                 {CONTACT}
               </a>
               .
