@@ -241,7 +241,7 @@ export function PreviewEditor({ privateId }: Props) {
 
   if (error) {
     return (
-      <div id="main" style={{ height: '750px', padding: '40px' }}>
+      <div id="main" className="canvas-page" style={{ height: '750px', padding: '40px' }}>
         <p className="red">{error}</p>
       </div>
     )
@@ -263,7 +263,7 @@ export function PreviewEditor({ privateId }: Props) {
   const navDisabledStyle = { color: 'gray', cursor: 'default' as const }
 
   return (
-    <div id="main">
+    <div id="main" className="canvas-page">
       <img
         src="/images/notes_bg.jpg"
         width={1190}

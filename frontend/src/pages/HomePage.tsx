@@ -216,7 +216,8 @@ export function HomePage() {
 
   return (
     <Layout>
-      <div id="main" style={{ height: '750px' }}>
+      <div className="site-canvas">
+        <div id="main" className="canvas-page" style={{ height: '750px' }}>
         <div id="main-tag-text">An automated tool for creating parts from music scores</div>
         <img
           src="/images/notes_bg.jpg"
@@ -408,7 +409,7 @@ export function HomePage() {
             </div>
           </form>
         )}
-      </div>
+        </div><div className="site-canvas-seam" aria-hidden="true" /><div className="site-canvas-fill" aria-hidden="true" /></div>
     </Layout>
   )
 }

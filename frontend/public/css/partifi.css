@@ -17,6 +17,63 @@ body
 	flex-direction: column;
 }
 
+.site-canvas {
+	flex: 1;
+	display: grid;
+	grid-template-rows: auto 35px 1fr;
+	width: 100%;
+	min-height: 0;
+}
+
+.site-canvas-seam {
+	display: block;
+	grid-row: 2;
+	height: 35px;
+	width: 100%;
+	min-width: 1190px;
+	background: url('/images/bg-foot-top.jpg') repeat-x top center;
+}
+
+.site-canvas > #main {
+	grid-row: 1;
+}
+
+.site-canvas-fill {
+	grid-row: 3;
+	min-height: 0;
+	width: 100%;
+	min-width: 1190px;
+	background: url('/images/bg-foot.jpg');
+}
+
+.site-canvas--preview #main.canvas-page {
+	padding-top: 30px;
+	box-sizing: border-box;
+}
+
+.site-canvas--preview #preview-pane {
+	margin-top: 0;
+	/* Crop baked-in cream padding from bottom of music-stand-header_bg.gif (816→808). */
+	height: 808px;
+}
+
+.site-main:has(.site-canvas-fill) + #footer {
+	background: url('/images/bg-foot.jpg');
+}
+
+#main.canvas-page {
+	position: relative;
+	isolation: isolate;
+	margin-top: 0;
+	margin-bottom: 0;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+.site-canvas:not(.site-canvas--preview) #main.canvas-page {
+	overflow: hidden;
+}
+
 textarea:focus, input:focus{
     outline: none;
 }
@@ -418,6 +475,7 @@ a.red:hover
 {
 	background: url('/images/bg-foot-top.jpg') repeat-x, url('/images/bg-foot.jpg');
 	height:175px;
+	width: 100%;
 	min-width:1190px;
 	position:relative;
 	text-align: left;
@@ -955,8 +1013,17 @@ a.red:hover
 
 #preview-pane 
 {
-	height: 810px;
+	position: relative;
+	height: 816px;
 	margin-top: 30px;
+	overflow: hidden;
+}
+
+#preview-pane > img {
+	display: block;
+	width: 949px;
+	height: 816px;
+	margin: 0 auto;
 }
 
 #preview-header 

@@ -9,7 +9,7 @@ export function PreviewPage() {
 
   return (
     <Layout>
-      <PreviewEditor privateId={privateId} />
+      <div className="site-canvas site-canvas--preview"><PreviewEditor privateId={privateId} /><div className="site-canvas-seam" aria-hidden="true" /><div className="site-canvas-fill" aria-hidden="true" /></div>
     </Layout>
   )
 }
