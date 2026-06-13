@@ -82,8 +82,7 @@ def find_skew(im, search_center=0, search_radius=5):
 		
 def find_segments(imfile, fixskew=False):
 	# convert image to grayscale
-	im = Image.open(imfile)
-	im.convert('L')
+	im = Image.open(imfile).convert('L')
 	width, height = im.size
 
 	# if requested, detect and correct image skew
@@ -191,8 +190,7 @@ def par_find_segments(imfiles, fixskew, partset_id=None):
 	return results
 	
 def draw_segments(imfile, skew, segments, margins):
-	im = Image.open(imfile)
-	im.convert('RGB')
+	im = Image.open(imfile).convert('RGB')
 	width, height = im.size
 	
 	# rotate the image
