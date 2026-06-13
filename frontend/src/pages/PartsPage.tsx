@@ -59,7 +59,7 @@ export function PartsPage() {
 
   return (
     <Layout>
-      <div id="main" style={{ minHeight: '750px' }}>
+      <div id="main" className="parts-page">
         <img
           src="/images/notes_bg.jpg"
           width={1190}

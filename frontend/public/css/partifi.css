@@ -1428,14 +1428,18 @@ a.red:hover
 
 /* DOWNLOAD */
 
+#main.parts-page {
+	min-height: 750px;
+	padding-bottom: 40px;
+}
+
 .download-pane 
 {
 	width: 734px;
 	height: auto;
 	background-image: url('/images/box_middle.png');
-	position: absolute;
-	top: 100px;
-	left: 228px;
+	position: relative;
+	margin: 100px auto 100px;
 }
 
 .box-top {
