@@ -4,9 +4,11 @@ import argparse
 import random
 import os
 import sys
-import multiprocessing
 import db_conn
 import re
+
+from pipeline.cut_segments import default_pool_size
+from pipeline.parallel import map_in_parallel
 
 def update_db(partset_id, imfile, rotation, margins, segments):
 	match = re.search(r"page-(\d+)", imfile)
@@ -170,13 +172,9 @@ def find_segments_star(args):
 	
 # parallel segmentation — workers compute only; DB writes stay in the parent process
 def par_find_segments(imfiles, fixskew, partset_id=None):
-	args = zip(imfiles, [fixskew] * len(imfiles))
-	pool = multiprocessing.Pool(max(multiprocessing.cpu_count() // 2, 1))
-	try:
-		results = pool.map(find_segments_star, args)
-	finally:
-		pool.close()
-		pool.join()
+	args = list(zip(imfiles, [fixskew] * len(imfiles)))
+	workers = default_pool_size(len(args))
+	results = map_in_parallel(find_segments_star, args, workers=workers)
 
 	if partset_id:
 		num_tasks = len(imfiles)

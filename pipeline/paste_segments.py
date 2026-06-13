@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from functools import lru_cache
-from multiprocessing import Pool
 from pathlib import Path
 
 from PIL import Image
@@ -211,20 +210,11 @@ def create_parts(
     on_part_done: Callable[[], None] | None = None,
 ) -> None:
     from pipeline.cut_segments import default_pool_size
+    from pipeline.parallel import run_in_parallel
 
     if not jobs:
         return
 
     serialized_jobs = [_serialize_part_job(job) for job in jobs]
     workers = pool_size if pool_size is not None else default_pool_size(len(serialized_jobs))
-    if workers <= 1:
-        for job in serialized_jobs:
-            _create_part_job(job)
-            if on_part_done:
-                on_part_done()
-        return
-
-    with Pool(processes=workers) as pool:
-        for _ in pool.imap_unordered(_create_part_job, serialized_jobs, chunksize=1):
-            if on_part_done:
-                on_part_done()
+    run_in_parallel(_create_part_job, serialized_jobs, workers=workers, on_done=on_part_done)

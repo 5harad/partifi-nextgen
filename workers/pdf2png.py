@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import glob
-import multiprocessing
 import os
 import shutil
 import subprocess
@@ -14,6 +13,8 @@ from pathlib import Path
 from PIL import Image
 
 import db_conn
+from pipeline.cut_segments import default_pool_size
+from pipeline.parallel import map_in_parallel
 
 
 def pdf2png(
@@ -91,9 +92,8 @@ def par_pdf2png(
     num_tasks = max(len(pdfpages), 1)
     params = [(pdfpage, outdir, partset_id, num_tasks, score_id) for pdfpage in pdfpages]
 
-    workers = max(multiprocessing.cpu_count() // 2, 1)
-    with multiprocessing.Pool(workers) as pool:
-        pool.map(pdf2png_star, params)
+    workers = default_pool_size(len(params))
+    map_in_parallel(pdf2png_star, params, workers=workers)
 
     shutil.rmtree(tempdir)
 

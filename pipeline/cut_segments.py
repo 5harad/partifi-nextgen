@@ -5,10 +5,11 @@ from __future__ import annotations
 import os
 from collections import defaultdict
 from collections.abc import Callable
-from multiprocessing import Pool
 from pathlib import Path
 
 from PIL import Image
+
+from pipeline.parallel import run_in_parallel
 
 
 def _percent2abs(percent: float, scale: int) -> int:
@@ -80,14 +81,4 @@ def cut_segment_tasks(
         return
 
     workers = pool_size if pool_size is not None else default_pool_size(len(jobs))
-    if workers <= 1:
-        for job in jobs:
-            _cut_image_job(job)
-            if on_page_done:
-                on_page_done()
-        return
-
-    with Pool(processes=workers) as pool:
-        for _ in pool.imap_unordered(_cut_image_job, jobs, chunksize=1):
-            if on_page_done:
-                on_page_done()
+    run_in_parallel(_cut_image_job, jobs, workers=workers, on_done=on_page_done)
