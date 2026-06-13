@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from urllib.parse import quote
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -24,9 +25,10 @@ def score_pdf_url_for_owner(private_id: str) -> str:
 
 
 def part_file_url(partset: Partset, filename: str, *, mode: str = "public") -> str:
+    encoded = quote(filename, safe="")
     if mode == "owner" and partset.private_id:
-        return f"/api/v1/partsets/{partset.private_id}/part-file/{filename}"
-    return f"/api/v1/access/{partset.id}/part-file/{filename}"
+        return f"/api/v1/partsets/{partset.private_id}/part-file/{encoded}"
+    return f"/api/v1/access/{partset.id}/part-file/{encoded}"
 
 
 def score_pdf_url_for_partset(partset: Partset, *, mode: str = "public") -> str | None:

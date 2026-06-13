@@ -72,7 +72,7 @@ from app.services.segments import (
 router = APIRouter(prefix="/api/v1", tags=["v1"])
 
 COPYRIGHT_VALUES = {"before 1923", "after 1923", "unknown"}
-PART_FILE_PATTERN = re.compile(r"^[A-Za-z0-9._-]+\.pdf$")
+PART_FILE_PATTERN = re.compile(r"^[A-Za-z0-9._+\-]+\.pdf$")
 SCORE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 PAGE_IMAGE_RES = {"lowres", "thumbs"}
 

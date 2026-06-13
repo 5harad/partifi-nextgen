@@ -40,11 +40,28 @@ def test_score_pdf_url_for_partset_modes() -> None:
     assert score_pdf_url_for_partset(Partset(id="pub02", score_id=None)) is None
 
 
+def test_part_file_urls_encode_plus() -> None:
+    partset = Partset(id="pub01", private_id="priv1")
+    combined = "pub01_violin_+_cello.pdf"
+    assert (
+        part_file_url(partset, combined, mode="owner")
+        == "/api/v1/partsets/priv1/part-file/pub01_violin_%2B_cello.pdf"
+    )
+    assert (
+        part_file_url(partset, combined, mode="public")
+        == "/api/v1/access/pub01/part-file/pub01_violin_%2B_cello.pdf"
+    )
+
+
 def test_part_file_name_from_download_filename() -> None:
     assert part_file_name_from_download_filename("pub01", "pub01_flute.pdf") == ("flute.pdf", False)
     assert part_file_name_from_download_filename("pub01", "pub01_a4_flute.pdf") == (
         "flute.pdf",
         True,
+    )
+    assert part_file_name_from_download_filename("pub01", "pub01_violin_+_cello.pdf") == (
+        "violin_+_cello.pdf",
+        False,
     )
     assert part_file_name_from_download_filename("pub01", "other_flute.pdf") is None
     assert part_file_name_from_download_filename("pub01", "pub01_flute.txt") is None
