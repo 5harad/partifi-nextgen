@@ -59,6 +59,10 @@ CREATE TABLE IF NOT EXISTS partsets (
     INDEX idx_partsets_score_id (score_id),
     UNIQUE KEY uq_partsets_private_id (private_id),
     INDEX idx_partsets_last_access (last_access),
+    INDEX idx_partsets_paste_complete (paste_complete),
+    INDEX idx_partsets_analysis_complete (analysis_complete),
+    INDEX idx_partsets_create_ts (create_ts),
+    INDEX idx_partsets_mod_ts (mod_ts),
     FULLTEXT idx_partsets_search (title, composer, publisher, imslp_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -127,7 +131,8 @@ CREATE TABLE IF NOT EXISTS downloads (
     bcookie VARCHAR(255),
     ts DATETIME,
     INDEX idx_downloads_score_id (score_id),
-    INDEX idx_downloads_partset_tag (partset_id, tag)
+    INDEX idx_downloads_partset_tag (partset_id, tag),
+    INDEX idx_downloads_ts (ts)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS imslp_info (
