@@ -78,17 +78,19 @@ if [[ -f .env ]]; then
 fi
 
 section "Activity (last ${DAYS} days)"
+# partsets_generated / part_lines_generated: gen_parts finished (paste_complete).
+# Nextgen clean_cache clears parts_ready only, not paste_complete — do not filter on parts_ready.
 compose exec -T mysql mysql -u partifi -p"$MYSQL_PASSWORD" partifi -e "
 SELECT
   (SELECT COUNT(*)
    FROM partsets
-   WHERE parts_ready = 1
-     AND paste_complete >= NOW() - INTERVAL ${DAYS} DAY) AS partsets_with_parts,
+   WHERE paste_complete >= NOW() - INTERVAL ${DAYS} DAY
+     AND error IS NULL) AS partsets_generated,
   (SELECT COUNT(*)
    FROM parts p
    JOIN partsets ps ON ps.id = p.partset_id
-   WHERE ps.parts_ready = 1
-     AND ps.paste_complete >= NOW() - INTERVAL ${DAYS} DAY) AS part_pdfs_produced,
+   WHERE ps.paste_complete >= NOW() - INTERVAL ${DAYS} DAY
+     AND ps.error IS NULL) AS part_lines_generated,
   (SELECT COUNT(*)
    FROM partsets
    WHERE analysis_complete IS NOT NULL
@@ -105,8 +107,8 @@ compose exec -T mysql mysql -u partifi -p"$MYSQL_PASSWORD" partifi -e "
 SELECT p.id, p.title, p.paste_complete,
        (SELECT COUNT(*) FROM parts pt WHERE pt.partset_id = p.id) AS num_parts
 FROM partsets p
-WHERE p.parts_ready = 1
-  AND p.paste_complete >= NOW() - INTERVAL ${DAYS} DAY
+WHERE p.paste_complete >= NOW() - INTERVAL ${DAYS} DAY
+  AND p.error IS NULL
 ORDER BY p.paste_complete DESC
 LIMIT 10;
 "
