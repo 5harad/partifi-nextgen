@@ -271,8 +271,13 @@ export function PreviewEditor({ privateId }: Props) {
         style={{ position: 'absolute', left: 0, top: 200, zIndex: -1, opacity: 0.3 }}
         alt=""
       />
+      <img
+        className="stand-figure-img"
+        src="/images/music-stand-header-long.gif"
+        width={949}
+        alt=""
+      />
       <div id="preview-pane">
-        <img src="/images/music-stand-header_bg.gif" alt="" />
         <div id="preview-header">STEP 3. &nbsp; Preview the parts</div>
         <div
           id="adjust-spacing"

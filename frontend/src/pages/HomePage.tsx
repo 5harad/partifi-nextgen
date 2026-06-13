@@ -216,8 +216,9 @@ export function HomePage() {
 
   return (
     <Layout>
-      <div className="site-canvas">
-        <div id="main" className="canvas-page" style={{ height: '750px' }}>
+      <div className="site-canvas site-canvas--long-pole">
+        <div className="stand-stage">
+        <div id="main" className="canvas-page">
         <div id="main-tag-text">An automated tool for creating parts from music scores</div>
         <img
           src="/images/notes_bg.jpg"
@@ -226,7 +227,7 @@ export function HomePage() {
           style={{ position: 'absolute', left: 0, top: 200, zIndex: -1, opacity: 0.3 }}
           alt=""
         />
-        <img src="/images/musicstand.gif" height={640} width={774} alt="" />
+        <img className="stand-figure-img" src="/images/musicstand-long.gif" width={774} alt="" />
 
         <div id="step">STEP 1. &nbsp; Import sheet music</div>
 
@@ -409,7 +410,11 @@ export function HomePage() {
             </div>
           </form>
         )}
-        </div><div className="site-canvas-seam" aria-hidden="true" /><div className="site-canvas-fill" aria-hidden="true" /></div>
+        </div>
+        </div>
+        <div className="site-canvas-seam" aria-hidden="true" />
+        <div className="site-canvas-fill" aria-hidden="true" />
+      </div>
     </Layout>
   )
 }

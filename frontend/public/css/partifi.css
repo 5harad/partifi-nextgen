@@ -46,15 +46,78 @@ body
 	background: url('/images/bg-foot.jpg');
 }
 
-.site-canvas--preview #main.canvas-page {
+/* Long stand: one tall GIF, top-aligned in .stand-stage; height grows only on tall viewports. */
+.site-canvas.site-canvas--long-pole {
+	--stand-layout-chrome: 261px; /* #header + #footer */
+	--stand-seam-height: 35px;
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+}
+
+.site-canvas--long-pole .stand-stage {
+	flex: 0 0 auto;
+	overflow: hidden;
+	width: 100%;
+}
+
+.site-canvas--long-pole:not(.site-canvas--preview) .stand-stage {
+	height: max(
+		750px,
+		min(calc(100vh - var(--stand-layout-chrome) - var(--stand-seam-height)), 1826px)
+	);
+}
+
+.site-canvas--long-pole.site-canvas--preview .stand-stage {
+	height: max(
+		838px,
+		min(calc(100vh - var(--stand-layout-chrome) - var(--stand-seam-height)), 2008px)
+	);
+}
+
+.site-canvas--long-pole .stand-stage #main {
+	height: 100%;
+	overflow: hidden;
+}
+
+.site-canvas--long-pole .stand-figure-img {
+	display: block;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+.site-canvas--long-pole:not(.site-canvas--preview) .stand-figure-img {
+	width: 774px;
+}
+
+.site-canvas--long-pole.site-canvas--preview .stand-figure-img {
+	width: 949px;
+}
+
+.site-canvas--long-pole .site-canvas-seam {
+	flex: 0 0 var(--stand-seam-height);
+}
+
+.site-canvas--long-pole .site-canvas-fill {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.site-canvas--long-pole.site-canvas--preview #main.canvas-page {
+	position: relative;
 	padding-top: 30px;
 	box-sizing: border-box;
 }
 
-.site-canvas--preview #preview-pane {
-	margin-top: 0;
-	/* Crop baked-in cream padding from bottom of music-stand-header_bg.gif (816→808). */
+.site-canvas--long-pole.site-canvas--preview #preview-pane {
+	position: absolute;
+	top: 30px;
+	left: 0;
+	right: 0;
 	height: 808px;
+	margin-top: 0;
+	overflow: hidden;
 }
 
 .site-main:has(.site-canvas-fill) + #footer {
@@ -1009,21 +1072,14 @@ a.red:hover
 	left: 715px;
 }
 
-/* PREVIEW */
+/* PREVIEW — desk overlay; stand GIF is .stand-figure-img on #main (see .site-canvas--long-pole). */
 
 #preview-pane 
 {
 	position: relative;
-	height: 816px;
-	margin-top: 30px;
+	height: 808px;
+	margin-top: 0;
 	overflow: hidden;
-}
-
-#preview-pane > img {
-	display: block;
-	width: 949px;
-	height: 816px;
-	margin: 0 auto;
 }
 
 #preview-header 
