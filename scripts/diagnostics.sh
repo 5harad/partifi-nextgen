@@ -47,8 +47,8 @@ with urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=10) as
 
 check_health_caddy() {
   local site="${SITE_ADDRESS:-partifi.org}"
-  # Caddy serves this site on HTTPS; plain HTTP gets a redirect, not JSON.
-  curl -sk --max-time 10 -H "Host: ${site}" "https://127.0.0.1/health/ready"
+  # TLS cert is issued for $site, not 127.0.0.1 — --resolve sets SNI correctly.
+  curl -sk --max-time 10 --resolve "${site}:443:127.0.0.1" "https://${site}/health/ready"
 }
 
 section "Health (API /health/ready)"
@@ -62,7 +62,7 @@ section "Health (via Caddy HTTPS /health/ready)"
 if check_health_caddy | python3 -m json.tool 2>/dev/null; then
   :
 else
-  echo "Caddy health/ready request failed (Host: ${SITE_ADDRESS:-partifi.org}, https://127.0.0.1)"
+  echo "Caddy health/ready request failed (https://${SITE_ADDRESS:-partifi.org}/health/ready via 127.0.0.1)"
   echo "Raw response:"
   check_health_caddy 2>/dev/null || echo "(no response)"
 fi

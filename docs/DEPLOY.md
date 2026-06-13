@@ -105,7 +105,9 @@ with urllib.request.urlopen('http://127.0.0.1:8000/health/ready') as r:
     print(json.dumps(json.load(r), indent=2))
 "
 
-curl -sk -H "Host: ${SITE_ADDRESS:-partifi.org}" https://127.0.0.1/health/ready
+# --resolve sets TLS SNI to your site name (cert is not valid for bare 127.0.0.1)
+curl -sk --resolve "${SITE_ADDRESS:-partifi.org}:443:127.0.0.1" \
+  "https://${SITE_ADDRESS:-partifi.org}/health/ready"
 ```
 
 ---
@@ -295,7 +297,8 @@ After reboot, verify:
 
 ```bash
 docker compose -f docker-compose.prod.yml ps
-curl -sk -H "Host: ${SITE_ADDRESS:-partifi.org}" https://127.0.0.1/health/ready
+curl -sk --resolve "${SITE_ADDRESS:-partifi.org}:443:127.0.0.1" \
+  "https://${SITE_ADDRESS:-partifi.org}/health/ready"
 ```
 
 ### Restart after deploy
@@ -314,7 +317,8 @@ git pull
 docker compose -f docker-compose.prod.yml up -d --build --force-recreate web api worker-1 worker-2 worker-3
 
 docker compose -f docker-compose.prod.yml ps
-curl -sk -H "Host: ${SITE_ADDRESS:-partifi.org}" https://127.0.0.1/health/ready
+curl -sk --resolve "${SITE_ADDRESS:-partifi.org}:443:127.0.0.1" \
+  "https://${SITE_ADDRESS:-partifi.org}/health/ready"
 ```
 
 **One-time on existing databases** (adds `import_size` to `partsets.error` for oversize import failures):
