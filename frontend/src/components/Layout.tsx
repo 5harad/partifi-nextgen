@@ -4,10 +4,10 @@ import { Header } from './Header'
 
 export function Layout({ children }: { children: ReactNode }) {
   return (
-    <>
+    <div className="site-layout">
       <Header />
-      {children}
+      <div className="site-main">{children}</div>
       <Footer />
-    </>
+    </div>
   )
 }

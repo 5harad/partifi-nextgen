@@ -4,6 +4,17 @@ body
 	margin:0px;
 }
 
+.site-layout {
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+}
+
+.site-main {
+	flex: 1 0 auto;
+	width: 100%;
+}
+
 textarea:focus, input:focus{
     outline: none;
 }
@@ -1429,7 +1440,7 @@ a.red:hover
 /* DOWNLOAD */
 
 #main.parts-page {
-	padding-bottom: 20px;
+	padding-bottom: 0;
 }
 
 .download-pane 
