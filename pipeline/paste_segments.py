@@ -60,6 +60,15 @@ def _add_page_info(
     doc.line(left_in, top_in - 36, right_in, top_in - 36)
 
 
+def _max_segment_width(pages: list[list[dict]]) -> int:
+    max_width = 0
+    for page in pages:
+        for seg in page:
+            with Image.open(seg["file"]) as im:
+                max_width = max(max_width, im.size[0])
+    return max_width
+
+
 def _add_images(
     doc: canvas.Canvas,
     images: list[dict],
@@ -71,31 +80,33 @@ def _add_images(
     y_in = y * inch
 
     for image in images:
-        im = Image.open(image["file"])
-        if image.get("cue"):
-            im_white = Image.new("L", im.size, 255)
-            im = Image.blend(im, im_white, 0.5)
-
-        w, h = [d / RESOLUTION * inch for d in im.size]
-        y_in -= h
-        doc.drawImage(ImageReader(im), x_in, y_in, width=w, height=h)
-
-        label = image.get("label") or ""
-        if label:
+        with Image.open(image["file"]) as src:
             if image.get("cue"):
-                doc.setStrokeColor(gray)
-                doc.setFillColor(gray)
+                im_white = Image.new("L", src.size, 255)
+                im = Image.blend(src, im_white, 0.5)
+            else:
+                im = src
 
-            doc.rect(x_in - inch / 4, y_in + (h - inch / 2) / 2, inch / 5, inch / 2, stroke=1)
-            doc.rotate(90)
-            doc.drawCentredString(y_in + h / 2, -x_in + inch / 10, label)
-            doc.rotate(-90)
+            w, h = [d / RESOLUTION * inch for d in im.size]
+            y_in -= h
+            doc.drawImage(ImageReader(im), x_in, y_in, width=w, height=h)
 
-            if image.get("cue"):
-                doc.setStrokeColor(black)
-                doc.setFillColor(black)
+            label = image.get("label") or ""
+            if label:
+                if image.get("cue"):
+                    doc.setStrokeColor(gray)
+                    doc.setFillColor(gray)
 
-        y_in -= vspace * inch
+                doc.rect(x_in - inch / 4, y_in + (h - inch / 2) / 2, inch / 5, inch / 2, stroke=1)
+                doc.rotate(90)
+                doc.drawCentredString(y_in + h / 2, -x_in + inch / 10, label)
+                doc.rotate(-90)
+
+                if image.get("cue"):
+                    doc.setStrokeColor(black)
+                    doc.setFillColor(black)
+
+            y_in -= vspace * inch
 
 
 def create_part(
@@ -116,8 +127,7 @@ def create_part(
     header_right = page_w - 0.75
     center = page_w / 2
 
-    segments = [Image.open(seg["file"]) for page in pages for seg in page]
-    max_width = max(segment.size[0] for segment in segments) if segments else 0
+    max_width = _max_segment_width(pages)
     left_margin = max(0, (page_w - max_width / RESOLUTION) / 2)
 
     bottom_margin = (page_h - 10.5) / 2
