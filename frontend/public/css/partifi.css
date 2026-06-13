@@ -1440,6 +1440,7 @@ a.red:hover
 	background-image: url('/images/box_middle.png');
 	position: relative;
 	margin: 100px auto 100px;
+	padding-top: 45px;
 }
 
 .box-top {
@@ -1481,9 +1482,10 @@ a.red:hover
 	height: auto;
 	text-align: left;
 	border-bottom: 2px dotted gray;
-	margin-top: 45px;
+	margin-top: 0;
 	margin-bottom: 20px;
 	padding-bottom: 30px;
+	padding-right: 30px;
 	color: gray;
 }
 
