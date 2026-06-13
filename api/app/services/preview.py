@@ -335,7 +335,6 @@ def combine_parts(db: Session, partset: Partset, action: str, tag: str) -> None:
     else:
         raise ValueError("Invalid combine action")
 
-    invalidate_preview_cache(partset.id)
     get_local_cache().invalidate_parts(partset.id)
     db.commit()
 
