@@ -1249,8 +1249,8 @@ a.red:hover
 	left: 201px;
 }
 
-#scrollbar1 .viewport { width: 183px; height: 504px; overflow: hidden; position: relative; }
-#scrollbar1 .overview { list-style: none; position: absolute; left: 0; top: 0; }
+#scrollbar1 .viewport { width: 183px; height: 504px; overflow-x: hidden; overflow-y: auto; position: relative; }
+#scrollbar1 .overview { list-style: none; position: relative; }
 #scrollbar1 .thumb .end,
 #scrollbar1 .thumb { background-color: #D8D8C7; }
 
@@ -1313,8 +1313,8 @@ a.red:hover
 	text-align: left;
 }
 
-#scrollbar2 .viewport { width: 230px; height: 420px; overflow: hidden; position: relative; }
-#scrollbar2 .overview { list-style: none; position: absolute; left: 0; top: 0; }
+#scrollbar2 .viewport { width: 230px; height: 420px; overflow-x: hidden; overflow-y: auto; position: relative; }
+#scrollbar2 .overview { list-style: none; position: relative; }
 #scrollbar2 .thumb .end,
 #scrollbar2 .thumb { background-color: #D8D8C7; }
 
@@ -1334,8 +1334,8 @@ a.red:hover
 	text-align: left;
 }
 
-#scrollbar3 .viewport { width: 260px; height: 450px; overflow: hidden; position: relative; }
-#scrollbar3 .overview { list-style: none; position: absolute; left: 0; top: 0; }
+#scrollbar3 .viewport { width: 260px; height: 450px; overflow-x: hidden; overflow-y: auto; position: relative; }
+#scrollbar3 .overview { list-style: none; position: relative; }
 #scrollbar3 .thumb .end,
 #scrollbar3 .thumb { background-color: #D8D8C7; }
 
