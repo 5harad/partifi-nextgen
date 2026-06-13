@@ -1449,7 +1449,7 @@ a.red:hover
 	height: auto;
 	background-image: url('/images/box_middle.png');
 	position: relative;
-	margin: 100px auto 40px;
+	margin: 100px auto;
 	padding-top: 45px;
 }
 
