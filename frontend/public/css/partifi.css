@@ -13,6 +13,8 @@ body
 .site-main {
 	flex: 1 0 auto;
 	width: 100%;
+	display: flex;
+	flex-direction: column;
 }
 
 textarea:focus, input:focus{
@@ -1440,7 +1442,9 @@ a.red:hover
 /* DOWNLOAD */
 
 #main.parts-page {
-	padding-bottom: 0;
+	flex: 1;
+	position: relative;
+	isolation: isolate;
 }
 
 .download-pane 
