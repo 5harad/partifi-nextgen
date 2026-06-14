@@ -237,6 +237,20 @@ a.red:hover
 	text-align:left;
 }
 
+#login .google-sign-in-link
+{
+	display: inline;
+	width: auto;
+	position: static;
+	vertical-align: baseline;
+}
+
+/* GIS bootstrap iframes can bleed over the header menu and steal hover/clicks */
+iframe[src*="accounts.google.com/gsi"]
+{
+	pointer-events: none !important;
+}
+
 /* MAIN LAYOUT */
 
 #main
