@@ -9,22 +9,14 @@ import {
 import { fetchFavoriteStatus, updateFavorite } from '../../lib/authApi'
 import { useAuth } from '../../context/AuthContext'
 import { PartsetMetadata, usePartsetMetadata } from '../PartsetMetadata'
-import { HelpTip } from '../HelpTip'
 import { GoogleSignInLink } from '../GoogleSignInLink'
 import { PartDownloadLinks } from './PartDownloadLinks'
+import { PartsetShareLinks } from './PartsetShareLinks'
 import type { PartsDataResponse } from '../../types/preview'
 
 type Props = {
   data: PartsDataResponse
   onDataChange: React.Dispatch<React.SetStateAction<PartsDataResponse>>
-}
-
-function partsetUrl(path: string) {
-  return `${window.location.origin}${path}`
-}
-
-async function copyLink(text: string) {
-  await navigator.clipboard.writeText(text)
 }
 
 export function PartsDownloadPane({ data, onDataChange }: Props) {
@@ -111,9 +103,6 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
       window.clearTimeout(timeoutId)
     }
   }, [accessId, data.parts_ready, data.parts.length, data.partset_id, onDataChange])
-
-  const editorLink = partsetUrl(`/${privateId}`)
-  const downloadLink = partsetUrl(`/${publicId}`)
 
   const saveMetadata = useCallback(async () => {
     await metadata.save(async (fields) => {
@@ -245,64 +234,11 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
           partgenAccessId={accessId}
         />
       </div>
-      <div className="partset-links">
-        {isOwner && (
-          <div className="partset-link">
-            <div className="partset-link-label">editor link</div>
-            <div className="partset-link-link">
-              <Link className="red" to={`/${privateId}`}>
-                {editorLink}
-              </Link>
-            </div>
-            <HelpTip
-              className="partset-link-tip editor-tip"
-              text="The editor link returns you to this page to edit and download the parts."
-            />
-            <div
-              className="copy-button"
-              onClick={() => void copyLink(editorLink)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  void copyLink(editorLink)
-                }
-              }}
-              role="button"
-              tabIndex={0}
-            >
-              Copy
-            </div>
-          </div>
-        )}
-        <div className="partset-link">
-          <div className="partset-link-label">download link</div>
-          <div className="partset-link-link">
-            <Link className="red" to={`/${publicId}`}>
-              {downloadLink}
-            </Link>
-          </div>
-          {isOwner && (
-            <HelpTip
-              className="partset-link-tip download-tip"
-              text="Use the download link to share your parts with others. This link lets you download but not edit the parts."
-            />
-          )}
-          <div
-            className="copy-button"
-            onClick={() => void copyLink(downloadLink)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                void copyLink(downloadLink)
-              }
-            }}
-            role="button"
-            tabIndex={0}
-          >
-            Copy
-          </div>
-        </div>
-      </div>
+      <PartsetShareLinks
+        isOwner={isOwner}
+        privateId={privateId || null}
+        publicId={publicId}
+      />
       <div className="box-bottom" />
     </div>
   )

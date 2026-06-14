@@ -3,14 +3,11 @@ import { Link } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { PartsetMetadata, usePartsetMetadata } from '../components/PartsetMetadata'
 import { PartDownloadLinks } from '../components/parts/PartDownloadLinks'
+import { PartsetShareLinks } from '../components/parts/PartsetShareLinks'
 import { useAuth } from '../context/AuthContext'
 import { deletePartset, getCsrfToken, updatePartsetMetadata } from '../lib/api'
 import { fetchLibrary, updateFavorite } from '../lib/authApi'
 import type { LibraryItem } from '../types/library'
-
-function partsetUrl(path: string) {
-  return `${window.location.origin}${path}`
-}
 
 function LibraryItemPane({
   item,
@@ -24,8 +21,6 @@ function LibraryItemPane({
   onMetadataSaved: (partsetId: string, fields: { title: string; composer: string; publisher: string }) => void
 }) {
   const privateId = item.private_id ?? ''
-  const editorLink = privateId ? partsetUrl(`/${privateId}`) : ''
-  const downloadLink = partsetUrl(`/${item.partset_id}`)
   const partgenAccessId = privateId || item.partset_id
 
   const metadata = usePartsetMetadata(item)
@@ -148,26 +143,11 @@ function LibraryItemPane({
         />
       </div>
 
-      <div className="partset-links">
-        {item.admin && privateId && (
-          <div className="partset-link">
-            <div className="partset-link-label">editor link</div>
-            <div className="partset-link-link">
-              <Link className="red" to={`/${privateId}`}>
-                {editorLink}
-              </Link>
-            </div>
-          </div>
-        )}
-        <div className="partset-link">
-          <div className="partset-link-label">download link</div>
-          <div className="partset-link-link">
-            <Link className="red" to={`/${item.partset_id}`}>
-              {downloadLink}
-            </Link>
-          </div>
-        </div>
-      </div>
+      <PartsetShareLinks
+        isOwner={item.admin}
+        privateId={privateId || null}
+        publicId={item.partset_id}
+      />
 
       <div className="box-bottom" />
     </div>
