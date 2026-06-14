@@ -18,5 +18,6 @@ partifi.com, www.partifi.com, www.partifi.org {
 		root * /srv
 		try_files {path} /index.html
 		file_server
+		header Cross-Origin-Opener-Policy "same-origin-allow-popups"
 	}
 }
