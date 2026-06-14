@@ -28,7 +28,8 @@ export function AboutPage() {
             <p>
               Partifi is made for musicians by musicians. By freely offering this part-making tool, and by
               maintaining a publicly accessible library of user-contributed scores, we seek to support and
-              encourage the study and performance of early music.
+              encourage the study and performance of early music. To date, Partifi has been used to create
+              over 2 million parts!
             </p>
 
             <p>

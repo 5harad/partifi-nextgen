@@ -3,8 +3,8 @@
 #
 # Usage (on EC2, from repo root):
 #   ./scripts/diagnostics.sh
-#   HOURS=24 ./scripts/diagnostics.sh
 #   DAYS=7 ./scripts/diagnostics.sh
+#   DAYS=30 ./scripts/diagnostics.sh
 #
 # Requires .env with MYSQL_PASSWORD (same as docker compose prod).
 set -euo pipefail
@@ -13,7 +13,6 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
-HOURS="${HOURS:-6}"
 DAYS="${DAYS:-7}"
 
 if [[ -f .env ]]; then
@@ -113,7 +112,7 @@ ORDER BY p.paste_complete DESC
 LIMIT 10;
 "
 
-section "Failed / stuck partsets (MySQL)"
+section "Failed / stuck partsets (last ${DAYS} days)"
 compose exec -T mysql mysql -u partifi -p"$MYSQL_PASSWORD" partifi -e "
 SELECT id, title, status, error,
        ROUND(import_progress) AS imp,
@@ -122,10 +121,12 @@ SELECT id, title, status, error,
        parts_ready,
        create_ts, mod_ts, last_access
 FROM partsets
-WHERE error IS NOT NULL
-   OR (import_complete IS NULL AND create_ts < NOW() - INTERVAL 1 HOUR)
-ORDER BY COALESCE(mod_ts, create_ts) DESC
-LIMIT 20;
+WHERE COALESCE(mod_ts, create_ts) >= NOW() - INTERVAL ${DAYS} DAY
+  AND (
+    error IS NOT NULL
+    OR (import_complete IS NULL AND create_ts < NOW() - INTERVAL 1 HOUR)
+  )
+ORDER BY COALESCE(mod_ts, create_ts) DESC;
 "
 
 filter_error_lines() {
@@ -134,28 +135,29 @@ filter_error_lines() {
     | grep -viE 'aborting with incomplete response|http2: stream closed|repaired or ignored|The following errors were encountered'
 }
 
-section "Recent errors (last ${HOURS}h)"
+section "Recent errors (last ${DAYS} days)"
+ERROR_SINCE_HOURS=$((DAYS * 24))
 
 if command -v journalctl >/dev/null 2>&1; then
   # Prod compose uses journald (tag: partifi/<container-name>).
   JOURNAL_LINES="$(
-    journalctl --since "${HOURS} hours ago" --no-pager 2>/dev/null \
+    journalctl --since "${ERROR_SINCE_HOURS} hours ago" --no-pager 2>/dev/null \
       | grep -E 'partifi-nextgen-(api|worker|web)' \
       | filter_error_lines \
-      | tail -40 || true
+      || true
   )"
   if [[ -n "$JOURNAL_LINES" ]]; then
     echo "$JOURNAL_LINES"
   else
-    echo "(no matching journal lines — try docker logs below or increase HOURS)"
-    compose logs --since "${HOURS}h" api worker-1 worker-2 worker-3 web 2>&1 \
+    echo "(no matching journal lines — try docker logs below or increase DAYS)"
+    compose logs --since "${ERROR_SINCE_HOURS}h" api worker-1 worker-2 worker-3 web 2>&1 \
       | filter_error_lines \
-      | tail -40 || echo "(no matching docker log lines)"
+      || echo "(no matching docker log lines)"
   fi
 else
-  compose logs --since "${HOURS}h" api worker-1 worker-2 worker-3 web 2>&1 \
+  compose logs --since "${ERROR_SINCE_HOURS}h" api worker-1 worker-2 worker-3 web 2>&1 \
     | filter_error_lines \
-    | tail -40 || echo "(no matching docker log lines)"
+    || echo "(no matching docker log lines)"
 fi
 
 section "Containers"

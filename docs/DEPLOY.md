@@ -355,7 +355,7 @@ chmod +x scripts/diagnostics.sh   # once
 ./scripts/diagnostics.sh
 ```
 
-Optional: `HOURS=24 ./scripts/diagnostics.sh` for a longer log window; `DAYS=30` for activity stats (default 7 days).
+Optional: `DAYS=30 ./scripts/diagnostics.sh` for a longer activity/error window (default 7 days).
 
 The script prints:
 
