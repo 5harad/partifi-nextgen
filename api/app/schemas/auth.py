@@ -11,6 +11,8 @@ class AuthMeResponse(BaseModel):
 
 
 class GoogleLoginRequest(BaseModel):
+    code: str | None = None
+    redirect_uri: str | None = None
     access_token: str | None = None
     id_token: str | None = None
 

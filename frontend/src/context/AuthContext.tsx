@@ -1,12 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  fetchAuthMe,
-  getGoogleClientId,
-  googleLogin,
-  logout as apiLogout,
-} from '../lib/authApi'
+import { fetchAuthMe, getGoogleClientId, googleLoginWithCode, logout as apiLogout } from '../lib/authApi'
 import type { AuthUser } from '../types/auth'
 
 type AuthContextValue = {
@@ -14,7 +9,7 @@ type AuthContextValue = {
   loading: boolean
   googleEnabled: boolean
   refresh: () => Promise<void>
-  loginWithGoogle: (idToken: string) => Promise<void>
+  loginWithGoogleCode: (code: string, redirectUri: string) => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -46,8 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const loginWithGoogle = useCallback(async (idToken: string) => {
-    const data = await googleLogin(idToken)
+  const loginWithGoogleCode = useCallback(async (code: string, redirectUri: string) => {
+    const data = await googleLoginWithCode(code, redirectUri)
     setUser(data.user)
   }, [])
 
@@ -63,10 +58,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       googleEnabled,
       refresh,
-      loginWithGoogle,
+      loginWithGoogleCode,
       logout,
     }),
-    [user, loading, googleEnabled, refresh, loginWithGoogle, logout],
+    [user, loading, googleEnabled, refresh, loginWithGoogleCode, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

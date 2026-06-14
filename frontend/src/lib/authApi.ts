@@ -12,11 +12,14 @@ export async function fetchAuthMe(): Promise<AuthMeResponse> {
   return res.json()
 }
 
-export async function googleLogin(idToken: string): Promise<AuthMeResponse> {
+export async function googleLoginWithCode(
+  code: string,
+  redirectUri: string,
+): Promise<AuthMeResponse> {
   const res = await authFetch('/api/v1/auth/google', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id_token: idToken }),
+    body: JSON.stringify({ code, redirect_uri: redirectUri }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))

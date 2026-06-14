@@ -35,9 +35,10 @@ Legacy **public download links** (`https://partifi.org/{publicId}`) and **editor
 
 In [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials → your Web client:
 
-- [ ] **Authorized JavaScript origins:** `https://partifi.org`
-- [ ] **Authorized redirect URIs:** (if used) `https://partifi.org`
-- [ ] Copy client id into `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID`
+- [ ] **Authorized JavaScript origins:** `https://partifi.org` (and `http://localhost:5173` for local dev)
+- [ ] **Authorized redirect URIs:** same origins (`https://partifi.org`, etc.) — required for auth-code sign-in
+- [ ] Copy **client id** into `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID`
+- [ ] Copy **client secret** into `GOOGLE_CLIENT_SECRET` (API only — never in the frontend bundle)
 
 ---
 
@@ -486,5 +487,5 @@ Evicting cold **parts** cache sets `parts_ready = 0` for that partset (legacy be
 | Jobs never run | `docker compose -f docker-compose.prod.yml ps` — all three workers up? Redis healthy? |
 | Import stuck | Worker logs; `partsets.error` column; `JOB_TIMEOUT_SECONDS` |
 | S3 403 | IAM policy, `S3_BUCKET`, region |
-| Google login fails | Client id in `.env` **and** baked into frontend at build time (`VITE_GOOGLE_CLIENT_ID`); rebuild `web` after changing |
+| Google login fails | Client id + **client secret** in `.env`; `VITE_GOOGLE_CLIENT_ID` baked into frontend at build; redirect URIs include site origin; rebuild `web` + restart `api` after changing |
 | TLS fails | DNS propagated? Ports 80/443 open? `docker compose … logs web` |

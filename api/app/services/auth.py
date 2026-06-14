@@ -122,3 +122,37 @@ def validate_google_id_token(token: str) -> dict[str, str]:
         raise HTTPException(status_code=401, detail="Invalid Google ID token")
 
     return {"id": str(sub), "name": idinfo.get("name")}
+
+
+def exchange_google_auth_code(code: str, redirect_uri: str | None = None) -> dict[str, str]:
+    """Exchange a GIS authorization code for a verified user profile (via id_token)."""
+    settings = get_settings()
+    if not settings.google_client_id or not settings.google_client_secret:
+        raise HTTPException(status_code=503, detail="Google login is not configured")
+
+    uri = redirect_uri if redirect_uri is not None else settings.google_oauth_redirect_uri
+
+    try:
+        response = requests.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": settings.google_client_id,
+                "client_secret": settings.google_client_secret,
+                "grant_type": "authorization_code",
+                "redirect_uri": uri,
+            },
+            timeout=10,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=401, detail="Invalid Google authorization code") from exc
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid Google authorization code")
+
+    token_payload = response.json()
+    id_token_str = token_payload.get("id_token")
+    if not id_token_str:
+        raise HTTPException(status_code=401, detail="Google did not return an ID token")
+
+    return validate_google_id_token(id_token_str)

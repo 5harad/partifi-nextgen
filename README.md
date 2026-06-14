@@ -132,7 +132,7 @@ Partsets (CSRF required on mutations):
 
 - `GET /api/v1/csrf-token`
 - `GET /api/v1/auth/me` — current user (session cookie)
-- `POST /api/v1/auth/google` — exchange Google access token for session
+- `POST /api/v1/auth/google` — exchange Google auth code (or legacy id_token) for session
 - `POST /api/v1/auth/dev-login` — development-only mock login
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/library` — signed-in user's saved partsets

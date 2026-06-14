@@ -73,6 +73,36 @@ def test_google_login_id_token_success(monkeypatch) -> None:
     get_settings.cache_clear()
 
 
+def test_google_login_auth_code_success(monkeypatch) -> None:
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "test-client-secret")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+
+    from app.routers import auth as auth_router
+
+    def fake_exchange(_code: str, _redirect_uri: str | None) -> dict[str, str]:
+        return {"id": "google-sub-code", "name": "Auth Code User"}
+
+    monkeypatch.setattr(auth_router, "exchange_google_auth_code", fake_exchange)
+    monkeypatch.setattr(auth_router, "validate_google_id_token", lambda _t: {"id": "unused"})
+
+    auth_client = TestClient(app)
+    response = auth_client.post(
+        "/api/v1/auth/google",
+        json={"code": "auth-code-xyz", "redirect_uri": "http://testserver"},
+    )
+    assert response.status_code == 200
+    assert response.json()["user"]["id"] == "google-sub-code"
+    assert response.json()["user"]["name"] == "Auth Code User"
+
+    me = auth_client.get("/api/v1/auth/me")
+    assert me.json()["user"]["id"] == "google-sub-code"
+
+    get_settings.cache_clear()
+
+
 def test_logout_clears_session() -> None:
     client.post("/api/v1/auth/dev-login", json={})
     response = client.post("/api/v1/auth/logout")

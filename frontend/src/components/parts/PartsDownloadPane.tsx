@@ -20,7 +20,7 @@ type Props = {
 }
 
 export function PartsDownloadPane({ data, onDataChange }: Props) {
-  const { user, googleEnabled, loginWithGoogle } = useAuth()
+  const { user, googleEnabled, loginWithGoogleCode } = useAuth()
   const isOwner = data.mode === 'owner'
   const privateId = data.private_id ?? ''
   const publicId = data.public_id
@@ -186,7 +186,7 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
         <p className="red owner-sign-in-hint">
           {googleEnabled ? (
             <>
-              <GoogleSignInLink onLogin={loginWithGoogle} className="red">
+              <GoogleSignInLink onLogin={loginWithGoogleCode} className="red">
                 Sign in
               </GoogleSignInLink>
               {' '}to save this score to your library and return later to edit the parts.

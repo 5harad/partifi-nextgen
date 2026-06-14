@@ -18,6 +18,7 @@ from app.schemas.library import (
 )
 from app.services.auth import (
     clear_session_cookie,
+    exchange_google_auth_code,
     set_session_cookie,
     upsert_user,
     validate_google_access_token,
@@ -46,7 +47,9 @@ def auth_google(
     response: Response,
     db: Session = Depends(get_db),
 ) -> AuthMeResponse:
-    if body.id_token:
+    if body.code:
+        profile = exchange_google_auth_code(body.code, body.redirect_uri)
+    elif body.id_token:
         profile = validate_google_id_token(body.id_token)
     elif body.access_token:
         profile = validate_google_access_token(body.access_token)

@@ -10,7 +10,7 @@ export function Header() {
     user,
     loading,
     googleEnabled,
-    loginWithGoogle,
+    loginWithGoogleCode,
     logout,
   } = useAuth()
 
@@ -60,7 +60,7 @@ export function Header() {
           </>
         )}
         {!loading && !user && googleEnabled && (
-          <GoogleSignInLink onLogin={loginWithGoogle} style={{ marginLeft: 15 }} />
+          <GoogleSignInLink onLogin={loginWithGoogleCode} style={{ marginLeft: 15 }} />
         )}
         <Link to="/howto" style={{ marginLeft: 15 }}>
           Help

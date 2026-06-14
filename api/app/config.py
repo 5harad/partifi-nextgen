@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
 
     google_client_id: str = ""
+    google_client_secret: str = ""
+    # GIS popup code exchange: defaults to empty; frontend sends window.location.origin.
+    google_oauth_redirect_uri: str = ""
 
     mysql_host: str = "localhost"
     mysql_port: int = 3306
