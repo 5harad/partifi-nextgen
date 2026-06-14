@@ -16,7 +16,10 @@ JOB_HANDLERS: dict[str, JobHandler] = {
         payload["partset_id"], payload["score_id"], job_id=payload.get("job_id")
     ),
     "imslp_import": lambda payload: run_imslp_import(
-        payload["partset_id"], payload["imslp_id"], job_id=payload.get("job_id")
+        payload["partset_id"],
+        payload["imslp_id"],
+        pdf_url=payload.get("pdf_url"),
+        job_id=payload.get("job_id"),
     ),
     "gen_parts": lambda payload: run_gen_parts(
         payload["partset_id"], job_id=payload.get("job_id")

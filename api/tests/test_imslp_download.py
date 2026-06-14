@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import httpx
 
@@ -11,6 +11,7 @@ from pipeline.imslp_download import (
     parse_pmlus_pdf_url,
     pdf_response_from_redirect,
     resolve_imslp_pdf_url,
+    resolve_imslp_pdf_url_with_retries,
 )
 
 PMLASIA_HTML = """<!doctype html>
@@ -106,6 +107,28 @@ def test_resolve_pmlasia_disclaimer_fetches_pdf_with_cookie() -> None:
     assert client.get.call_count == 2
     assert client.get.call_args_list[1].kwargs["cookies"] == {"disclaimer_bypass": "OK"}
     assert is_pmlasia_disclaimer(PMLASIA_HTML)
+
+
+def test_resolve_with_retries_succeeds_on_second_attempt() -> None:
+    html = '<div id="sm_dl_wait" data-id="https://vmirror.imslp.org/files/foo.pdf"></div>'
+    client = MagicMock()
+    client.get.side_effect = [
+        _mock_response(
+            url="https://imslp.org/wiki/Special:ImagefromIndex/930226",
+            text="<html>no pdf markers</html>",
+        ),
+        _mock_response(
+            url="https://imslp.org/wiki/Special:ImagefromIndex/930226",
+            text=html,
+        ),
+    ]
+
+    with patch("pipeline.imslp_download.time.sleep"):
+        url, cached = resolve_imslp_pdf_url_with_retries("930226", client, max_attempts=2)
+
+    assert url == "https://vmirror.imslp.org/files/foo.pdf"
+    assert cached is None
+    assert client.get.call_count == 2
 
 
 def test_resolve_pmlus_disclaimer_fetches_pdf_with_cookie() -> None:

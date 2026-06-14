@@ -46,7 +46,13 @@ def _mark_import_error(partset_id: str) -> None:
 def _mark_import_size_error(partset_id: str) -> None:
     mark_partset_error(partset_id, "import_size")
 
-def run_imslp_import(partset_id: str, imslp_id: str, *, job_id: str | None = None) -> None:
+def run_imslp_import(
+    partset_id: str,
+    imslp_id: str,
+    *,
+    pdf_url: str | None = None,
+    job_id: str | None = None,
+) -> None:
     suffix = job_id or "unknown"
     workdir = Path(f"/tmp/partifi/{partset_id}/import-{suffix}")
     if workdir.exists():
@@ -55,10 +61,16 @@ def run_imslp_import(partset_id: str, imslp_id: str, *, job_id: str | None = Non
     pdf_path = workdir / "score.pdf"
 
     try:
-        logger.info("Downloading IMSLP %s for partset %s", imslp_id, partset_id)
+        logger.info(
+            "Downloading IMSLP %s for partset %s%s",
+            imslp_id,
+            partset_id,
+            " (presolved URL)" if pdf_url else "",
+        )
         download_imslp_pdf(
             imslp_id,
             pdf_path,
+            pdf_url=pdf_url,
             on_progress=lambda progress: _set_import_progress(partset_id, progress),
         )
 

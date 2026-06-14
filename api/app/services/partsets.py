@@ -140,7 +140,7 @@ def create_imslp_partset(
     user_id: str | None = None,
 ) -> tuple[Partset, str]:
     from app.services.imslp import ImslpLookupError, lookup_imslp_info, normalize_imslp_id
-    from app.services.imslp_pdf import check_imslp_pdf_size
+    from app.services.imslp_pdf import ingest_imslp_pdf_bytes, resolve_imslp_pdf_for_import
 
     normalized = normalize_imslp_id(imslp_id)
     if not normalized:
@@ -154,8 +154,11 @@ def create_imslp_partset(
     existing_score = db.query(Score).filter(Score.imslp_id == normalized).first()
     if existing_score and existing_score.file_size and existing_score.file_size > MAX_SCORE_BYTES:
         raise ScoreTooLargeError(existing_score.file_size)
+
+    pdf_url: str | None = None
+    pdf_bytes: bytes | None = None
     if not existing_score or not existing_score.file_size:
-        check_imslp_pdf_size(normalized)
+        pdf_url, pdf_bytes = resolve_imslp_pdf_for_import(normalized)
 
     public_id, private_id = gen_partset_ids(db)
     now = datetime.utcnow()
@@ -200,13 +203,29 @@ def create_imslp_partset(
     partset.import_start = now
     if user_id:
         claim_partset_for_user(db, partset, user_id)
+
+    action = "continue"
+    if pdf_bytes is not None:
+        score_id, action = ingest_imslp_pdf_bytes(db, normalized, pdf_bytes)
+        partset.score_id = score_id
+        partset.import_complete = now
+        partset.import_progress = 100.0
+        db.commit()
+        db.refresh(partset)
+        if try_acquire_import_lock(public_id):
+            enqueue_job(
+                "import_pipeline",
+                {"partset_id": public_id, "score_id": score_id},
+            )
+        return partset, action
+
     db.commit()
     db.refresh(partset)
     if try_acquire_import_lock(public_id):
-        enqueue_job(
-            "imslp_import",
-            {"partset_id": public_id, "imslp_id": normalized},
-        )
+        payload: dict[str, str] = {"partset_id": public_id, "imslp_id": normalized}
+        if pdf_url:
+            payload["pdf_url"] = pdf_url
+        enqueue_job("imslp_import", payload)
     return partset, "continue"
 
 

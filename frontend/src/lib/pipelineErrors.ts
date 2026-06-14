@@ -1,7 +1,7 @@
 import { scoreTooLargeMessage } from './scoreLimits'
 
 const STAGE_MESSAGES: Record<string, string> = {
-  import: 'Sorry, there was a problem importing the score.',
+  import: 'Sorry, there was a problem downloading the score.',
   import_size: scoreTooLargeMessage(),
   convert: 'Sorry, there was a problem preparing the score pages.',
   analysis: 'Sorry, there was a problem analyzing the score layout.',

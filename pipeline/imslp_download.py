@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 import html
+import logging
+import random
 import re
+import time
 
 import httpx
+
+logger = logging.getLogger(__name__)
+
+IMSLP_RETRY_ATTEMPTS = 3
+IMSLP_RETRY_BASE_SECONDS = 5.0
 
 IMSLP_INDEX_URL = "https://imslp.org/wiki/Special:ImagefromIndex/{imslp_id}"
 IMSLP_COOKIES = {
@@ -138,9 +146,66 @@ def resolve_imslp_pdf_url(imslp_id: str, client: httpx.Client) -> tuple[str, byt
     if not match:
         match = re.search(r'data-id="(https?://[^"]+\.pdf[^"]*)"', response.text, re.I)
     if not match:
+        page_html = response.text
+        logger.info(
+            "IMSLP %s index HTML missing PDF link: status=%s len=%d url=%s ban=%s",
+            imslp_id,
+            response.status_code,
+            len(page_html),
+            response.url,
+            "ripping ban" in page_html.lower(),
+        )
         raise ValueError(f"Could not resolve PDF URL for IMSLP {imslp_id}")
 
     pdf_url = html.unescape(match.group(1))
     if not pdf_url.lower().endswith(".pdf"):
         raise ValueError(f"Resolved URL is not a PDF for IMSLP {imslp_id}")
     return pdf_url, None
+
+
+def _is_retryable_resolve_error(exc: BaseException) -> bool:
+    if isinstance(exc, ValueError):
+        return "Resolved URL is not a PDF" not in str(exc)
+    if isinstance(exc, httpx.TimeoutException):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        code = exc.response.status_code
+        return code in (403, 429) or code >= 500
+    return False
+
+
+def resolve_imslp_pdf_url_with_retries(
+    imslp_id: str,
+    client: httpx.Client,
+    *,
+    max_attempts: int = IMSLP_RETRY_ATTEMPTS,
+) -> tuple[str, bytes | None]:
+    """Resolve an IMSLP edition PDF URL, retrying transient mirror/index failures."""
+    last_exc: BaseException | None = None
+    for attempt in range(max_attempts):
+        try:
+            return resolve_imslp_pdf_url(imslp_id, client)
+        except Exception as exc:
+            last_exc = exc
+            if not _is_retryable_resolve_error(exc):
+                raise
+            if attempt + 1 >= max_attempts:
+                break
+            delay = IMSLP_RETRY_BASE_SECONDS * (3**attempt) + random.uniform(0, 1)
+            logger.warning(
+                "IMSLP %s resolve attempt %d/%d failed, retry in %.1fs: %s",
+                imslp_id,
+                attempt + 1,
+                max_attempts,
+                delay,
+                exc,
+            )
+            time.sleep(delay)
+    assert last_exc is not None
+    logger.warning(
+        "IMSLP %s resolve failed after %d attempts: %s",
+        imslp_id,
+        max_attempts,
+        last_exc,
+    )
+    raise last_exc
