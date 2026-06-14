@@ -49,11 +49,15 @@ def build_part_segment_map(
     widths: list[float] = []
     labels: list[str] = []
 
+    all_indices: list[int] = []
+
     for ndx, row in enumerate(segment_rows):
         tags = parse_tag_list(row.get("tags"))
-        tags = [t for t in tags if t not in ALL_TAG_KEYS]
         for tag in tags:
-            segments.setdefault(tag, []).append(ndx)
+            if tag in ALL_TAG_KEYS:
+                all_indices.append(ndx)
+            else:
+                segments.setdefault(tag, []).append(ndx)
 
         label = row.get("label") or ""
         if label == "(none)":
@@ -62,17 +66,13 @@ def build_part_segment_map(
         widths.append(float(row["right_margin"]) - float(row["left_margin"]))
         labels.append(label)
 
-    all_indices: list[int] = []
-    for key in ALL_TAG_KEYS:
-        if key in segments:
-            all_indices.extend(segments.pop(key))
     all_indices = sorted(set(all_indices))
 
-    for part in list(segments.keys()):
-        merged = sorted(set(segments[part] + all_indices))
-        segments[part] = merged
+    if all_indices:
+        for part in list(segments.keys()):
+            merged = sorted(set(segments[part] + all_indices))
+            segments[part] = merged
 
-    part_names = sorted(segments.keys())
     return segments, heights, widths, labels
 
 
