@@ -8,8 +8,8 @@ type Props = {
   style?: CSSProperties
 }
 
-/** Pixel width for the invisible Google button overlay (must cover the visible label). */
-const OVERLAY_WIDTH = 160
+/** GIS button width; overlay is out-of-flow so this does not widen the menu. */
+const OVERLAY_WIDTH = 120
 
 export function GoogleSignInLink({
   onLogin,
@@ -29,25 +29,17 @@ export function GoogleSignInLink({
   }
 
   return (
-    <span
-      className={className}
-      style={{
-        position: 'relative',
-        display: 'inline-block',
-        verticalAlign: 'baseline',
-        minWidth: OVERLAY_WIDTH,
-        minHeight: 40,
-        ...style,
-      }}
-    >
-      <span aria-hidden="true" style={{ pointerEvents: 'none' }}>
-        {children}
-      </span>
+    <span className={className} style={{ position: 'relative', display: 'inline', ...style }}>
+      {children}
       <span
         aria-label="Sign in with Google"
         style={{
           position: 'absolute',
-          inset: 0,
+          left: 0,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          width: OVERLAY_WIDTH,
+          height: 40,
           opacity: 0,
           overflow: 'hidden',
           cursor: 'pointer',
