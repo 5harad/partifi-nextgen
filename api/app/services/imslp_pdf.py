@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Score
 from app.score_limits import MAX_SCORE_BYTES, ScoreTooLargeError
+from app.services.imslp import IMSLP_ERROR_UNAVAILABLE, ImslpLookupUnavailableError
 from app.services.s3 import score_pdf_s3_key, upload_bytes
 from app.utils.ids import gen_score_id
 from pipeline.imslp_download import (
@@ -62,26 +63,53 @@ def resolve_imslp_pdf_for_import(
                 exc,
             )
             raise
-        except httpx.HTTPError as exc:
+        except httpx.HTTPStatusError as exc:
             log_imslp_http_failure(
                 exc,
                 imslp_id=imslp_id,
                 operation="pre_import_pdf_resolve",
                 level=logging.ERROR,
             )
-            raise
+            raise ImslpLookupUnavailableError(IMSLP_ERROR_UNAVAILABLE) from exc
+        except httpx.RequestError as exc:
+            log_imslp_http_failure(
+                exc,
+                imslp_id=imslp_id,
+                operation="pre_import_pdf_resolve",
+                level=logging.ERROR,
+            )
+            raise ImslpLookupUnavailableError(IMSLP_ERROR_UNAVAILABLE) from exc
 
         if cached is not None:
             if len(cached) > MAX_SCORE_BYTES:
                 raise ScoreTooLargeError(len(cached))
             return pdf_url, cached
 
-        head = client.head(
-            pdf_url,
-            follow_redirects=True,
-            cookies=mirror_request_cookies(pdf_url),
-        )
-        head.raise_for_status()
+        try:
+            head = client.head(
+                pdf_url,
+                follow_redirects=True,
+                cookies=mirror_request_cookies(pdf_url),
+            )
+            head.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            log_imslp_http_failure(
+                exc,
+                imslp_id=imslp_id,
+                url=pdf_url,
+                operation="pre_import_pdf_head",
+                level=logging.ERROR,
+            )
+            raise ImslpLookupUnavailableError(IMSLP_ERROR_UNAVAILABLE) from exc
+        except httpx.RequestError as exc:
+            log_imslp_http_failure(
+                exc,
+                imslp_id=imslp_id,
+                url=pdf_url,
+                operation="pre_import_pdf_head",
+                level=logging.ERROR,
+            )
+            raise ImslpLookupUnavailableError(IMSLP_ERROR_UNAVAILABLE) from exc
         content_length = head.headers.get("content-length")
         if content_length and int(content_length) > MAX_SCORE_BYTES:
             raise ScoreTooLargeError(int(content_length))

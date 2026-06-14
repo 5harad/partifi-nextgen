@@ -29,7 +29,7 @@ __all__ = ["download_imslp_pdf", "download_imslp_pdf_url"]
 
 
 def _is_retryable_download_error(exc: BaseException) -> bool:
-    if isinstance(exc, httpx.TimeoutException):
+    if isinstance(exc, (httpx.TimeoutException, httpx.ConnectError)):
         return True
     if isinstance(exc, httpx.HTTPStatusError):
         code = exc.response.status_code

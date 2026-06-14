@@ -1,7 +1,8 @@
 import asyncio
 import re
+import threading
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy.orm import Session
@@ -33,7 +34,12 @@ from app.services.partsets import (
     create_pdf_partset,
     import_progress_payload,
 )
-from app.services.imslp import ImslpLookupError, lookup_imslp_info_remote
+from app.services.imslp import (
+    ImslpLookupCancelled,
+    ImslpLookupError,
+    ImslpLookupUnavailableError,
+    lookup_imslp_info_remote,
+)
 from app.services.search import search_partsets
 from app.services.partset_admin import (
     delete_partset,
@@ -286,22 +292,42 @@ def search(q: str = "", db: Session = Depends(get_db)) -> SearchResponse:
 
 
 @router.get("/imslp/{imslp_id}/info", response_model=ImslpInfoResponse)
-async def imslp_info(imslp_id: str) -> ImslpInfoResponse:
+async def imslp_info(request: Request, imslp_id: str) -> ImslpInfoResponse:
+    cancel = threading.Event()
+    task = asyncio.create_task(
+        asyncio.to_thread(lookup_imslp_info_remote, imslp_id, cancel=cancel),
+    )
     try:
-        info = await asyncio.wait_for(
-            asyncio.to_thread(lookup_imslp_info_remote, imslp_id),
-            timeout=20.0,
-        )
+        while not task.done():
+            if await request.is_disconnected():
+                cancel.set()
+                break
+            await asyncio.sleep(0.05)
+
+        if await request.is_disconnected():
+            try:
+                await asyncio.wait_for(asyncio.shield(task), timeout=1.0)
+            except asyncio.TimeoutError:
+                pass
+            raise HTTPException(status_code=499, detail="Client disconnected")
+
+        info = await asyncio.wait_for(task, timeout=20.0)
     except asyncio.TimeoutError as exc:
+        cancel.set()
         raise HTTPException(
             status_code=504,
             detail="IMSLP lookup timed out. Try again in a moment.",
         ) from exc
     except TimeoutError as exc:
+        cancel.set()
         raise HTTPException(
             status_code=504,
             detail="IMSLP lookup timed out. Try again in a moment.",
         ) from exc
+    except ImslpLookupCancelled as exc:
+        raise HTTPException(status_code=499, detail="Client disconnected") from exc
+    except ImslpLookupUnavailableError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ImslpLookupError as exc:
         raise HTTPException(
             status_code=400 if exc.not_pdf else 404,

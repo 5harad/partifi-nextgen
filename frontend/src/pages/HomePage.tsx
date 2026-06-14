@@ -123,12 +123,12 @@ export function HomePage() {
   }, [searchParams])
 
   useEffect(() => {
-    if (importMode !== 'imslp') return
+    if (importMode !== 'imslp' || submitting) return
     const timer = window.setTimeout(() => {
       void lookupImslp(imslpId)
     }, 600)
     return () => window.clearTimeout(timer)
-  }, [imslpId, importMode, lookupImslp])
+  }, [imslpId, importMode, lookupImslp, submitting])
 
   useEffect(() => {
     return () => abortRef.current?.abort()

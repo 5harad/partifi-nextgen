@@ -217,7 +217,7 @@ def resolve_imslp_pdf_url(imslp_id: str, client: httpx.Client) -> tuple[str, byt
 def _is_retryable_resolve_error(exc: BaseException) -> bool:
     if isinstance(exc, ValueError):
         return "Resolved URL is not a PDF" not in str(exc)
-    if isinstance(exc, httpx.TimeoutException):
+    if isinstance(exc, (httpx.TimeoutException, httpx.ConnectError)):
         return True
     if isinstance(exc, httpx.HTTPStatusError):
         code = exc.response.status_code

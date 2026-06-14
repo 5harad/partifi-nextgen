@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import logging
 import re
+import threading
 from typing import Any
 
 import httpx
@@ -28,12 +29,24 @@ REQUEST_TIMEOUT = 15.0
 
 IMSLP_ERROR_NOT_FOUND = "Edition not found."
 IMSLP_ERROR_NOT_PDF = "Not a PDF score."
+IMSLP_ERROR_UNAVAILABLE = "IMSLP temporarily unavailable. Try again in a moment."
+
+_fetch_locks_guard = threading.Lock()
+_fetch_locks: dict[str, threading.Lock] = {}
 
 
 class ImslpLookupError(ValueError):
     def __init__(self, message: str, *, not_pdf: bool = False) -> None:
         super().__init__(message)
         self.not_pdf = not_pdf
+
+
+class ImslpLookupCancelled(Exception):
+    """Raised when the client disconnects during a metadata lookup."""
+
+
+class ImslpLookupUnavailableError(OSError):
+    """Raised when IMSLP cannot be reached (connect errors, HTTP failures)."""
 
 
 def _fail_lookup(row: ImslpInfo | None) -> None:
@@ -132,7 +145,18 @@ def parse_reverse_lookup_location(location: str) -> tuple[str, str] | None:
     return page_url, id_match.group(1)
 
 
-def _fetch_imslp_page(client: httpx.Client, imslp_id: str) -> tuple[str, str] | None:
+def _check_cancelled(cancel: threading.Event | None) -> None:
+    if cancel is not None and cancel.is_set():
+        raise ImslpLookupCancelled()
+
+
+def _fetch_imslp_page(
+    client: httpx.Client,
+    imslp_id: str,
+    *,
+    cancel: threading.Event | None = None,
+) -> tuple[str, str] | None:
+    _check_cancelled(cancel)
     reverse_url = REVERSE_LOOKUP_URL.format(imslp_id=imslp_id)
     resp = client.get(reverse_url, follow_redirects=False)
     if resp.status_code in (301, 302, 303, 307, 308):
@@ -141,6 +165,7 @@ def _fetch_imslp_page(client: httpx.Client, imslp_id: str) -> tuple[str, str] | 
         if not parsed or parsed[1] != imslp_id:
             return None
         page_url, _ = parsed
+        _check_cancelled(cancel)
         page_resp = client.get(page_url, follow_redirects=True)
         page_resp.raise_for_status()
         return page_resp.text, location
@@ -149,14 +174,37 @@ def _fetch_imslp_page(client: httpx.Client, imslp_id: str) -> tuple[str, str] | 
     return None
 
 
-def lookup_imslp_info_remote(raw_id: str) -> dict[str, str]:
+def _fetch_lock_for(imslp_id: str) -> threading.Lock:
+    with _fetch_locks_guard:
+        lock = _fetch_locks.get(imslp_id)
+        if lock is None:
+            lock = threading.Lock()
+            _fetch_locks[imslp_id] = lock
+        return lock
+
+
+def _result_from_cache(db: Session, imslp_id: str) -> dict[str, str] | None:
+    row = db.get(ImslpInfo, imslp_id)
+    if row and _cache_row_complete(row):
+        return _row_to_result(row)
+    return None
+
+
+def lookup_imslp_info_remote(
+    raw_id: str,
+    *,
+    cancel: threading.Event | None = None,
+) -> dict[str, str]:
     """Thread-safe lookup using a fresh DB session (for async API handlers)."""
     from app.db import SessionLocal
 
     imslp_id = normalize_imslp_id(raw_id) or raw_id.strip()
     db = SessionLocal()
     try:
-        return lookup_imslp_info(db, raw_id)
+        return lookup_imslp_info(db, raw_id, cancel=cancel)
+    except ImslpLookupCancelled:
+        logger.info("IMSLP metadata lookup cancelled imslp_id=%s", imslp_id)
+        raise
     except httpx.TimeoutException as exc:
         log_imslp_http_failure(
             exc,
@@ -164,14 +212,22 @@ def lookup_imslp_info_remote(raw_id: str) -> dict[str, str]:
             operation="metadata_lookup",
         )
         raise TimeoutError("IMSLP lookup timed out") from exc
-    except httpx.HTTPError as exc:
+    except httpx.HTTPStatusError as exc:
         log_imslp_http_failure(
             exc,
             imslp_id=imslp_id,
             operation="metadata_lookup",
             level=logging.ERROR,
         )
-        raise
+        raise ImslpLookupUnavailableError(IMSLP_ERROR_UNAVAILABLE) from exc
+    except httpx.RequestError as exc:
+        log_imslp_http_failure(
+            exc,
+            imslp_id=imslp_id,
+            operation="metadata_lookup",
+            level=logging.ERROR,
+        )
+        raise ImslpLookupUnavailableError(IMSLP_ERROR_UNAVAILABLE) from exc
     finally:
         db.close()
 
@@ -207,16 +263,58 @@ def _upsert_cache(db: Session, imslp_id: str, data: dict[str, str], imslp_url: s
     db.commit()
 
 
-def lookup_imslp_info(db: Session, raw_id: str, *, client: httpx.Client | None = None) -> dict[str, str]:
+def _lookup_imslp_info_remote_locked(
+    db: Session,
+    imslp_id: str,
+    *,
+    client: httpx.Client,
+    cancel: threading.Event | None = None,
+) -> dict[str, str]:
+    row = db.get(ImslpInfo, imslp_id)
+    fetched = _fetch_imslp_page(client, imslp_id, cancel=cancel)
+    if not fetched:
+        if row:
+            result = _row_to_result(row)
+            if result:
+                return result
+        _fail_lookup(row)
+
+    page_html, imslp_url = fetched
+    parsed = parse_imslp_page_html(page_html, imslp_id)
+    if not parsed.get("title") and not parsed.get("composer"):
+        if row:
+            result = _row_to_result(row)
+            if result:
+                return result
+        _fail_lookup(row)
+
+    _upsert_cache(db, imslp_id, parsed, imslp_url)
+    row = db.get(ImslpInfo, imslp_id)
+    if row:
+        result = _row_to_result(row)
+        if result:
+            return result
+    _fail_lookup(row)
+    raise AssertionError("unreachable")
+
+
+def lookup_imslp_info(
+    db: Session,
+    raw_id: str,
+    *,
+    client: httpx.Client | None = None,
+    cancel: threading.Event | None = None,
+) -> dict[str, str]:
     imslp_id = normalize_imslp_id(raw_id)
     if not imslp_id:
         _fail_lookup(None)
 
+    cached = _result_from_cache(db, imslp_id)
+    if cached:
+        return cached
+
     row = db.get(ImslpInfo, imslp_id)
     if row and _cache_row_complete(row):
-        result = _row_to_result(row)
-        if result:
-            return result
         _fail_lookup(row)
 
     owns_client = client is None
@@ -225,35 +323,25 @@ def lookup_imslp_info(db: Session, raw_id: str, *, client: httpx.Client | None =
 
     try:
         assert client is not None
-        fetched = _fetch_imslp_page(client, imslp_id)
-        if not fetched:
-            if row:
-                result = _row_to_result(row)
-                if result:
-                    return result
-            _fail_lookup(row)
-
-        page_html, imslp_url = fetched
-        parsed = parse_imslp_page_html(page_html, imslp_id)
-        if not parsed.get("title") and not parsed.get("composer"):
-            if row:
-                result = _row_to_result(row)
-                if result:
-                    return result
-            _fail_lookup(row)
-
-        _upsert_cache(db, imslp_id, parsed, imslp_url)
-        row = db.get(ImslpInfo, imslp_id)
-        if row:
-            result = _row_to_result(row)
-            if result:
-                return result
-        _fail_lookup(row)
+        fetch_lock = _fetch_lock_for(imslp_id)
+        with fetch_lock:
+            cached = _result_from_cache(db, imslp_id)
+            if cached:
+                return cached
+            return _lookup_imslp_info_remote_locked(
+                db,
+                imslp_id,
+                client=client,
+                cancel=cancel,
+            )
     finally:
         if owns_client:
             client.close()
 
-    raise AssertionError("unreachable")
+
+def ensure_imslp_info_for_import(db: Session, imslp_id: str) -> dict[str, str]:
+    """Validate an IMSLP edition for import, using cache when already warm."""
+    return lookup_imslp_info(db, imslp_id)
 
 
 def lookup_imslp_info_for_api(db: Session, raw_id: str) -> dict[str, Any]:

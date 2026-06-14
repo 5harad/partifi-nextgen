@@ -139,7 +139,12 @@ def create_imslp_partset(
     copyright: str,
     user_id: str | None = None,
 ) -> tuple[Partset, str]:
-    from app.services.imslp import ImslpLookupError, lookup_imslp_info, normalize_imslp_id
+    from app.services.imslp import (
+        ImslpLookupError,
+        ImslpLookupUnavailableError,
+        ensure_imslp_info_for_import,
+        normalize_imslp_id,
+    )
     from app.services.imslp_pdf import ingest_imslp_pdf_bytes, resolve_imslp_pdf_for_import
 
     normalized = normalize_imslp_id(imslp_id)
@@ -147,8 +152,10 @@ def create_imslp_partset(
         raise ValueError("Invalid IMSLP id")
 
     try:
-        lookup_imslp_info(db, normalized)
+        ensure_imslp_info_for_import(db, normalized)
     except ImslpLookupError as exc:
+        raise ValueError(str(exc)) from exc
+    except ImslpLookupUnavailableError as exc:
         raise ValueError(str(exc)) from exc
 
     existing_score = db.query(Score).filter(Score.imslp_id == normalized).first()
@@ -158,7 +165,10 @@ def create_imslp_partset(
     pdf_url: str | None = None
     pdf_bytes: bytes | None = None
     if not existing_score or not existing_score.file_size:
-        pdf_url, pdf_bytes = resolve_imslp_pdf_for_import(normalized)
+        try:
+            pdf_url, pdf_bytes = resolve_imslp_pdf_for_import(normalized)
+        except ImslpLookupUnavailableError as exc:
+            raise ValueError(str(exc)) from exc
 
     public_id, private_id = gen_partset_ids(db)
     now = datetime.utcnow()
