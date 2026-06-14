@@ -15,6 +15,7 @@ from pipeline.imslp_download import (
     IMSLP_HEADERS,
     IMSLP_RETRY_ATTEMPTS,
     IMSLP_RETRY_BASE_SECONDS,
+    log_imslp_http_failure,
     mirror_request_cookies,
     resolve_imslp_pdf_url_with_retries,
 )
@@ -72,21 +73,34 @@ def download_imslp_pdf_url(
             if isinstance(exc, ScoreTooLargeError):
                 raise
             if not _is_retryable_download_error(exc):
+                log_imslp_http_failure(
+                    exc,
+                    url=pdf_url,
+                    operation="pdf_download",
+                    level=logging.ERROR,
+                )
                 raise
             if attempt + 1 >= max_attempts:
                 break
             delay = IMSLP_RETRY_BASE_SECONDS * (3**attempt) + random.uniform(0, 1)
-            logger.warning(
-                "IMSLP PDF download attempt %d/%d failed for %s, retry in %.1fs: %s",
-                attempt + 1,
-                max_attempts,
-                pdf_url,
-                delay,
+            log_imslp_http_failure(
                 exc,
+                url=pdf_url,
+                operation=f"pdf_download attempt {attempt + 1}/{max_attempts}",
+            )
+            logger.warning(
+                "IMSLP PDF download retry in %.1fs url=%s",
+                delay,
+                pdf_url,
             )
             time.sleep(delay)
     assert last_exc is not None
-    logger.warning("IMSLP PDF download failed after %d attempts: %s", max_attempts, pdf_url)
+    log_imslp_http_failure(
+        last_exc,
+        url=pdf_url,
+        operation=f"pdf_download failed after {max_attempts} attempts",
+        level=logging.ERROR,
+    )
     raise last_exc
 
 

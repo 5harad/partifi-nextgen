@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import logging
 import re
 from typing import Any
 
@@ -10,6 +11,9 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.models.tables import ImslpInfo
+from pipeline.imslp_download import log_imslp_http_failure
+
+logger = logging.getLogger(__name__)
 
 IMSLP_BASE = "https://imslp.org"
 REVERSE_LOOKUP_URL = (
@@ -149,11 +153,25 @@ def lookup_imslp_info_remote(raw_id: str) -> dict[str, str]:
     """Thread-safe lookup using a fresh DB session (for async API handlers)."""
     from app.db import SessionLocal
 
+    imslp_id = normalize_imslp_id(raw_id) or raw_id.strip()
     db = SessionLocal()
     try:
         return lookup_imslp_info(db, raw_id)
     except httpx.TimeoutException as exc:
+        log_imslp_http_failure(
+            exc,
+            imslp_id=imslp_id,
+            operation="metadata_lookup",
+        )
         raise TimeoutError("IMSLP lookup timed out") from exc
+    except httpx.HTTPError as exc:
+        log_imslp_http_failure(
+            exc,
+            imslp_id=imslp_id,
+            operation="metadata_lookup",
+            level=logging.ERROR,
+        )
+        raise
     finally:
         db.close()
 

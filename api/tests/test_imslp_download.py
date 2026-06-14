@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 
 from pipeline.imslp_download import (
+    format_imslp_http_context,
     is_pdf_body,
     is_pmlasia_disclaimer,
     is_pmlus_disclaimer,
@@ -52,6 +53,32 @@ def test_is_pdf_body() -> None:
     assert is_pdf_body(b"%PDF-1.4", "text/html")
     assert not is_pdf_body(b"<html>", "text/html")
     assert is_pdf_body(b"xxxx", "application/pdf")
+
+
+def test_format_imslp_http_context_connect_error() -> None:
+    url = "https://petruccilibrary.us/files/foo.pdf"
+    request = httpx.Request("GET", url)
+    exc = httpx.ConnectError("[Errno 111] Connection refused", request=request)
+    context = format_imslp_http_context(
+        exc,
+        imslp_id="33421",
+        operation="metadata_lookup",
+    )
+    assert "operation=metadata_lookup" in context
+    assert "imslp_id=33421" in context
+    assert f"url={url}" in context
+    assert "host=petruccilibrary.us" in context
+    assert "ConnectError" in context
+
+
+def test_format_imslp_http_context_http_status_error() -> None:
+    url = "https://imslp.org/wiki/Special:ImagefromIndex/33421"
+    request = httpx.Request("GET", url)
+    response = httpx.Response(429, request=request)
+    exc = httpx.HTTPStatusError("rate limited", request=request, response=response)
+    context = format_imslp_http_context(exc, imslp_id="33421", operation="pdf_resolve")
+    assert "status=429" in context
+    assert "host=imslp.org" in context
 
 
 def test_pdf_response_rejects_html_url_ending_in_pdf() -> None:

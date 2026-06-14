@@ -33,6 +33,57 @@ PMLASIA_DISCLAIMER_COOKIE = PML_MIRROR_DISCLAIMER_COOKIE
 PMLASIA_DISCLAIMER_VALUE = PML_MIRROR_DISCLAIMER_VALUE
 
 
+def format_imslp_http_context(
+    exc: BaseException,
+    *,
+    imslp_id: str | None = None,
+    url: str | None = None,
+    operation: str | None = None,
+) -> str:
+    """Build a single log line with IMSLP id, URL, host, and error details."""
+    parts: list[str] = []
+    if operation:
+        parts.append(f"operation={operation}")
+    if imslp_id:
+        parts.append(f"imslp_id={imslp_id}")
+
+    request_url = url
+    if request_url is None and isinstance(exc, httpx.HTTPStatusError):
+        request_url = str(exc.request.url)
+        parts.append(f"status={exc.response.status_code}")
+    elif request_url is None and isinstance(exc, httpx.RequestError) and exc.request is not None:
+        request_url = str(exc.request.url)
+
+    if request_url:
+        parts.append(f"url={request_url}")
+        host = httpx.URL(request_url).host
+        if host:
+            parts.append(f"host={host}")
+
+    parts.append(f"error={type(exc).__name__}: {exc}")
+    return " ".join(parts)
+
+
+def log_imslp_http_failure(
+    exc: BaseException,
+    *,
+    imslp_id: str | None = None,
+    url: str | None = None,
+    operation: str,
+    level: int = logging.WARNING,
+) -> None:
+    logger.log(
+        level,
+        "IMSLP HTTP failure %s",
+        format_imslp_http_context(
+            exc,
+            imslp_id=imslp_id,
+            url=url,
+            operation=operation,
+        ),
+    )
+
+
 def is_pdf_body(content: bytes, content_type: str = "") -> bool:
     if len(content) >= 4 and content[:4] == b"%PDF":
         return True
@@ -188,24 +239,31 @@ def resolve_imslp_pdf_url_with_retries(
         except Exception as exc:
             last_exc = exc
             if not _is_retryable_resolve_error(exc):
+                log_imslp_http_failure(
+                    exc,
+                    imslp_id=imslp_id,
+                    operation="pdf_resolve",
+                )
                 raise
             if attempt + 1 >= max_attempts:
                 break
             delay = IMSLP_RETRY_BASE_SECONDS * (3**attempt) + random.uniform(0, 1)
-            logger.warning(
-                "IMSLP %s resolve attempt %d/%d failed, retry in %.1fs: %s",
-                imslp_id,
-                attempt + 1,
-                max_attempts,
-                delay,
+            log_imslp_http_failure(
                 exc,
+                imslp_id=imslp_id,
+                operation=f"pdf_resolve attempt {attempt + 1}/{max_attempts}",
+            )
+            logger.warning(
+                "IMSLP %s pdf_resolve retry in %.1fs",
+                imslp_id,
+                delay,
             )
             time.sleep(delay)
     assert last_exc is not None
-    logger.warning(
-        "IMSLP %s resolve failed after %d attempts: %s",
-        imslp_id,
-        max_attempts,
+    log_imslp_http_failure(
         last_exc,
+        imslp_id=imslp_id,
+        operation=f"pdf_resolve failed after {max_attempts} attempts",
+        level=logging.ERROR,
     )
     raise last_exc

@@ -15,6 +15,7 @@ from app.utils.ids import gen_score_id
 from pipeline.imslp_download import (
     IMSLP_COOKIES,
     IMSLP_HEADERS,
+    log_imslp_http_failure,
     mirror_request_cookies,
     resolve_imslp_pdf_url_with_retries,
 )
@@ -59,6 +60,14 @@ def resolve_imslp_pdf_for_import(
                 "IMSLP %s PDF URL resolution failed during pre-import check: %s",
                 imslp_id,
                 exc,
+            )
+            raise
+        except httpx.HTTPError as exc:
+            log_imslp_http_failure(
+                exc,
+                imslp_id=imslp_id,
+                operation="pre_import_pdf_resolve",
+                level=logging.ERROR,
             )
             raise
 
