@@ -133,6 +133,7 @@ function LibraryItemPane({
             </div>
             <div
               className="save-button"
+              style={{ display: 'block' }}
               role="button"
               tabIndex={0}
               onClick={() => void saveMetadata()}
@@ -142,6 +143,7 @@ function LibraryItemPane({
             </div>
             <div
               className="cancel-button"
+              style={{ display: 'block' }}
               role="button"
               tabIndex={0}
               onClick={() => setEditing(false)}
