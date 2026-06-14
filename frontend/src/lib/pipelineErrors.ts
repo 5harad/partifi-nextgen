@@ -18,3 +18,6 @@ export function pipelineErrorMessage(stage: string | null | undefined): string {
 
 export const POLLING_FAILED_MESSAGE =
   'Could not reach the server. Please refresh the page or try again later.'
+
+export const LOCK_BUSY_MESSAGE =
+  'This score is already being processed. Please wait a minute and try again.'

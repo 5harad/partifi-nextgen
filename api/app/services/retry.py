@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.models import Partset
 from app.services.gen_parts_lock import try_acquire_gen_parts_lock
 from app.services.import_lock import try_acquire_import_lock
+from app.services.partset_failure import clear_partset_failure
 from app.services.queue import enqueue_job
 
 
@@ -20,7 +21,7 @@ def import_pipeline_complete(partset: Partset) -> bool:
 
 def retry_partset_pipeline(db: Session, partset: Partset) -> tuple[str, str | None]:
     """Clear error and enqueue import or partgen work. Returns (stage, job_id)."""
-    partset.error = None
+    clear_partset_failure(partset)
 
     if not import_pipeline_complete(partset):
         if partset.score_id:

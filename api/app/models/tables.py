@@ -58,6 +58,9 @@ class Partset(Base):
             name="error_enum",
         )
     )
+    error_message: Mapped[str | None] = mapped_column(String(512))
+    error_ts: Mapped[datetime | None] = mapped_column(DateTime)
+    last_job_id: Mapped[str | None] = mapped_column(String(32))
     import_start: Mapped[datetime | None] = mapped_column(DateTime)
     import_complete: Mapped[datetime | None] = mapped_column(DateTime)
     import_progress: Mapped[float] = mapped_column(Float, default=0.0)

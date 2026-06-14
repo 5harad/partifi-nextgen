@@ -39,12 +39,17 @@ def _set_import_progress(partset_id: str, progress: float) -> None:
     )
 
 
-def _mark_import_error(partset_id: str) -> None:
-    mark_partset_error(partset_id, "import")
+def _mark_import_error(partset_id: str, *, message: str | None = None, job_id: str | None = None) -> None:
+    mark_partset_error(partset_id, "import", message=message, job_id=job_id)
 
 
-def _mark_import_size_error(partset_id: str) -> None:
-    mark_partset_error(partset_id, "import_size")
+def _mark_import_size_error(
+    partset_id: str,
+    *,
+    message: str | None = None,
+    job_id: str | None = None,
+) -> None:
+    mark_partset_error(partset_id, "import_size", message=message, job_id=job_id)
 
 def run_imslp_import(
     partset_id: str,
@@ -76,13 +81,15 @@ def run_imslp_import(
 
         pdf_bytes = pdf_path.read_bytes()
         if not pdf_bytes.startswith(PDF_MAGIC):
-            logger.error("IMSLP %s did not return a PDF for partset %s", imslp_id, partset_id)
-            _mark_import_error(partset_id)
-            return
+            msg = f"IMSLP {imslp_id} did not return a PDF"
+            logger.error("%s for partset %s", msg, partset_id)
+            _mark_import_error(partset_id, message=msg, job_id=job_id)
+            raise ValueError(msg)
         if len(pdf_bytes) > MAX_SCORE_BYTES:
-            logger.error("IMSLP %s exceeds size limit for partset %s", imslp_id, partset_id)
-            _mark_import_size_error(partset_id)
-            return
+            msg = f"IMSLP {imslp_id} exceeds size limit ({len(pdf_bytes)} bytes)"
+            logger.error("%s for partset %s", msg, partset_id)
+            _mark_import_size_error(partset_id, message=msg, job_id=job_id)
+            raise ScoreTooLargeError(len(pdf_bytes))
 
         file_hash = hashlib.sha1(pdf_bytes).hexdigest()
         file_size = len(pdf_bytes)
@@ -119,13 +126,15 @@ def run_imslp_import(
             {"score_id": score_id, "id": partset_id},
         )
 
-        run_import_pipeline(partset_id, score_id)
-    except ScoreTooLargeError:
+        run_import_pipeline(partset_id, score_id, job_id=job_id)
+    except ScoreTooLargeError as exc:
         logger.error("IMSLP %s exceeds size limit for partset %s", imslp_id, partset_id)
-        _mark_import_size_error(partset_id)
-    except Exception:
+        _mark_import_size_error(partset_id, message=str(exc), job_id=job_id)
+        raise
+    except Exception as exc:
         logger.exception("IMSLP import failed for partset %s", partset_id)
-        _mark_import_error(partset_id)
+        _mark_import_error(partset_id, message=str(exc), job_id=job_id)
+        raise
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
         release_import_lock(partset_id)

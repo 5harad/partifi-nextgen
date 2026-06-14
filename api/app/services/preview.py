@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.services.local_cache import get_local_cache
 from app.services.partset_touch import touch_partset_access
 from app.services.gen_parts_lock import try_acquire_gen_parts_lock
+from app.services.partset_failure import clear_partset_failure
 from app.services.queue import enqueue_job
 from app.services.downloads import part_file_url, score_pdf_url_for_partset
 from app.services.score_pages import ensure_score_pages_warming
@@ -281,12 +282,12 @@ def save_layout(db: Session, partset: Partset, breaks: dict[str, list[int]], spa
         for brk in breakpoints:
             db.add(Break(partset_id=partset.id, tag=tag, break_=int(brk)))
 
+    parts_by_tag = {
+        part.tag: part
+        for part in db.query(Part).filter(Part.partset_id == partset.id).all()
+    }
     for tag, spacing in spacings.items():
-        part = (
-            db.query(Part)
-            .filter(Part.partset_id == partset.id, Part.tag == tag)
-            .first()
-        )
+        part = parts_by_tag.get(tag)
         if part:
             part.spacing = float(spacing)
 
@@ -365,16 +366,16 @@ def start_part_generation(db: Session, partset: Partset) -> str | None:
         raise ValueError("No parts tagged for generation")
 
     if partset.status in ("cut", "paste"):
-        partset.error = None
+        clear_partset_failure(partset)
         db.commit()
         return None
 
     if not try_acquire_gen_parts_lock(partset.id):
-        partset.error = None
+        clear_partset_failure(partset)
         db.commit()
         return None
 
-    partset.error = None
+    clear_partset_failure(partset)
     job_id = enqueue_job("gen_parts", {"partset_id": partset.id})
     db.commit()
     return job_id

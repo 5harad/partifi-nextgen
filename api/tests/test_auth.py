@@ -48,6 +48,31 @@ def test_google_login_not_configured() -> None:
     assert response.status_code == 503
 
 
+def test_google_login_id_token_success(monkeypatch) -> None:
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+
+    from app.routers import auth as auth_router
+
+    def fake_validate(_token: str) -> dict[str, str]:
+        return {"id": "google-sub-42", "name": "Ada Lovelace"}
+
+    monkeypatch.setattr(auth_router, "validate_google_id_token", fake_validate)
+
+    auth_client = TestClient(app)
+    response = auth_client.post("/api/v1/auth/google", json={"id_token": "fake-jwt"})
+    assert response.status_code == 200
+    assert response.json()["user"]["id"] == "google-sub-42"
+    assert response.json()["user"]["name"] == "Ada Lovelace"
+
+    me = auth_client.get("/api/v1/auth/me")
+    assert me.json()["user"]["id"] == "google-sub-42"
+
+    get_settings.cache_clear()
+
+
 def test_logout_clears_session() -> None:
     client.post("/api/v1/auth/dev-login", json={})
     response = client.post("/api/v1/auth/logout")

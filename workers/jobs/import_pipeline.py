@@ -109,9 +109,9 @@ def run_import_pipeline(partset_id: str, score_id: str, *, job_id: str | None = 
             {"id": partset_id},
         )
         logger.info("Import pipeline complete for partset %s", partset_id)
-    except Exception:
+    except Exception as exc:
         logger.exception("Import pipeline failed for partset %s", partset_id)
-        mark_partset_error(partset_id)
+        mark_partset_error(partset_id, message=str(exc), job_id=job_id)
         raise
     finally:
         shutil.rmtree(workdir, ignore_errors=True)

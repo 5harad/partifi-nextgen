@@ -5,6 +5,7 @@ from botocore.client import Config
 from botocore.exceptions import ClientError
 
 from app.config import get_settings
+from app.services.s3_retry import call_with_s3_retries
 
 def score_pdf_s3_key(score_id: str) -> str:
     return f"scores/{score_id}_score.pdf"
@@ -45,12 +46,16 @@ def ensure_bucket() -> None:
 def upload_bytes(key: str, data: bytes, content_type: str = "application/octet-stream") -> None:
     settings = get_settings()
     client = get_s3_client()
-    client.put_object(
-        Bucket=settings.s3_bucket,
-        Key=key,
-        Body=data,
-        ContentType=content_type,
-    )
+
+    def _upload() -> None:
+        client.put_object(
+            Bucket=settings.s3_bucket,
+            Key=key,
+            Body=data,
+            ContentType=content_type,
+        )
+
+    call_with_s3_retries(f"put {key}", _upload)
 
 
 @lru_cache

@@ -328,7 +328,14 @@ docker compose -f docker-compose.prod.yml exec -T mysql \
   mysql -u root -p"$MYSQL_ROOT_PASSWORD" partifi < scripts/alter_add_import_size_error.sql
 ```
 
-Fresh installs from current `docker/mysql/init.sql` already include `import_size`.
+**Failure metadata** (`error_message`, `error_ts`, `last_job_id` on `partsets`):
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T mysql \
+  mysql -u root -p"$MYSQL_ROOT_PASSWORD" partifi < scripts/alter_add_failure_metadata.sql
+```
+
+Fresh installs from current `docker/mysql/init.sql` already include both migrations.
 
 ### Monitoring
 

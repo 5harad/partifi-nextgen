@@ -5,6 +5,7 @@ import boto3
 from botocore.client import Config
 
 from config import get_settings
+from s3_retry import call_with_s3_retries
 
 
 def score_pdf_s3_key(score_id: str) -> str:
@@ -30,17 +31,27 @@ def get_s3_client():
 def download_file(key: str, dest: Path) -> None:
     settings = get_settings()
     dest.parent.mkdir(parents=True, exist_ok=True)
-    get_s3_client().download_file(settings.s3_bucket, key, str(dest))
+    client = get_s3_client()
+
+    def _download() -> None:
+        client.download_file(settings.s3_bucket, key, str(dest))
+
+    call_with_s3_retries(f"download {key}", _download)
 
 
 def upload_file(local_path: Path, key: str, content_type: str = "application/octet-stream") -> None:
     settings = get_settings()
-    get_s3_client().upload_file(
-        str(local_path),
-        settings.s3_bucket,
-        key,
-        ExtraArgs={"ContentType": content_type},
-    )
+    client = get_s3_client()
+
+    def _upload() -> None:
+        client.upload_file(
+            str(local_path),
+            settings.s3_bucket,
+            key,
+            ExtraArgs={"ContentType": content_type},
+        )
+
+    call_with_s3_retries(f"upload {key}", _upload)
 
 
 def upload_directory(local_dir: Path, prefix: str) -> None:
@@ -53,12 +64,16 @@ def upload_directory(local_dir: Path, prefix: str) -> None:
 
 def score_images_exist(score_id: str) -> bool:
     settings = get_settings()
-    response = get_s3_client().list_objects_v2(
-        Bucket=settings.s3_bucket,
-        Prefix=f"scores/{score_id}/lowres/",
-        MaxKeys=1,
-    )
-    return bool(response.get("KeyCount"))
+
+    def _list() -> bool:
+        response = get_s3_client().list_objects_v2(
+            Bucket=settings.s3_bucket,
+            Prefix=f"scores/{score_id}/lowres/",
+            MaxKeys=1,
+        )
+        return bool(response.get("KeyCount"))
+
+    return call_with_s3_retries(f"list scores/{score_id}/lowres/", _list)
 
 
 def download_prefix(prefix: str, dest_dir: Path) -> None:

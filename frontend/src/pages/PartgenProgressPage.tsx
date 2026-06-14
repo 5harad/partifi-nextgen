@@ -6,7 +6,7 @@ import {
   retryPartsetPipelineByAccessId,
 } from '../lib/api'
 import { triggerPartFileDownload } from '../lib/partDownloads'
-import { pipelineErrorMessage, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
+import { pipelineErrorMessage, LOCK_BUSY_MESSAGE, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
 
 export function PartgenProgressPage() {
   const { privateId: accessId } = useParams<{ privateId: string }>()
@@ -95,7 +95,11 @@ export function PartgenProgressPage() {
     setRetrying(true)
     try {
       const csrf = await getCsrfToken()
-      await retryPartsetPipelineByAccessId(accessId, csrf)
+      const result = await retryPartsetPipelineByAccessId(accessId, csrf)
+      if (result.job_id === null) {
+        setErrorMessage(LOCK_BUSY_MESSAGE)
+        return
+      }
       setErrorMessage(null)
       setProgress(0)
       pollRef.current?.()

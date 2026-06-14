@@ -121,9 +121,9 @@ def run_gen_parts(partset_id: str, *, job_id: str | None = None) -> None:
     workdir = Path(f"/tmp/partifi/{partset_id}/gen-{suffix}")
     try:
         _run_gen_parts(partset_id, workdir)
-    except Exception:
+    except Exception as exc:
         logger.exception("Part generation failed for partset %s", partset_id)
-        mark_partset_error(partset_id)
+        mark_partset_error(partset_id, message=str(exc), job_id=job_id)
         raise
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
@@ -136,8 +136,9 @@ def _run_gen_parts(partset_id: str, workdir: Path) -> None:
         {"id": partset_id},
     )
     if not partset or not partset.score_id:
-        logger.error("Invalid partset %s", partset_id)
-        return
+        msg = f"Invalid partset {partset_id}"
+        logger.error(msg)
+        raise ValueError(msg)
 
     score_id = partset.score_id
     if workdir.exists():
@@ -265,7 +266,8 @@ def _run_gen_parts(partset_id: str, workdir: Path) -> None:
         cache.store_part_file(partset_id, path)
 
     execute(
-        "UPDATE partsets SET paste_complete = NOW(), parts_ready = 1, mod_ts = NOW(), error = NULL "
+        "UPDATE partsets SET paste_complete = NOW(), parts_ready = 1, mod_ts = NOW(), "
+        "error = NULL, error_message = NULL, error_ts = NULL, last_job_id = NULL "
         "WHERE id = :id",
         {"id": partset_id},
     )

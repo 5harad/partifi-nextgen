@@ -114,7 +114,7 @@ LIMIT 10;
 
 section "Failed / stuck partsets (last ${DAYS} days)"
 compose exec -T mysql mysql -u partifi -p"$MYSQL_PASSWORD" partifi -e "
-SELECT id, title, status, error,
+SELECT id, title, status, error, error_message, error_ts, last_job_id,
        ROUND(import_progress) AS imp,
        ROUND(convert_progress) AS conv,
        ROUND(analysis_progress) AS anal,

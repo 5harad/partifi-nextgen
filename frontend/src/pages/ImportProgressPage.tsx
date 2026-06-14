@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { getCsrfToken, getImportStatus, retryPartsetPipeline } from '../lib/api'
-import { pipelineErrorMessage, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
+import { pipelineErrorMessage, LOCK_BUSY_MESSAGE, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
 
 export function ImportProgressPage() {
   const { privateId } = useParams<{ privateId: string }>()
@@ -89,7 +89,11 @@ export function ImportProgressPage() {
     setRetrying(true)
     try {
       const csrf = await getCsrfToken()
-      await retryPartsetPipeline(privateId, csrf)
+      const result = await retryPartsetPipeline(privateId, csrf)
+      if (result.job_id === null) {
+        setErrorMessage(LOCK_BUSY_MESSAGE)
+        return
+      }
       setErrorMessage(null)
       setErrorStage(null)
       setProgress(0)

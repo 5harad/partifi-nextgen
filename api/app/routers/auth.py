@@ -46,10 +46,10 @@ def auth_google(
     response: Response,
     db: Session = Depends(get_db),
 ) -> AuthMeResponse:
-    if body.access_token:
-        profile = validate_google_access_token(body.access_token)
-    elif body.id_token:
+    if body.id_token:
         profile = validate_google_id_token(body.id_token)
+    elif body.access_token:
+        profile = validate_google_access_token(body.access_token)
     else:
         raise HTTPException(status_code=400, detail="Missing Google credential")
     user = upsert_user(db, profile["id"], profile.get("name"))

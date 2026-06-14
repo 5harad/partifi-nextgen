@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -52,17 +53,23 @@ def list_library(db: Session, user_id: str) -> list[dict]:
         .all()
     )
 
+    partset_ids = [partset.id for _, partset in rows]
+    parts_by_partset: dict[str, list[Part]] = defaultdict(list)
+    if partset_ids:
+        all_parts = (
+            db.query(Part)
+            .filter(Part.partset_id.in_(partset_ids))
+            .order_by(Part.partset_id, Part.combined, Part.tag)
+            .all()
+        )
+        for part in all_parts:
+            parts_by_partset[part.partset_id].append(part)
+
     items: list[dict] = []
     for favorite, partset in rows:
         link_mode = "owner" if favorite.admin and partset.private_id else "public"
-        parts = (
-            db.query(Part)
-            .filter(Part.partset_id == partset.id)
-            .order_by(Part.combined, Part.tag)
-            .all()
-        )
         parts_payload: list[dict] = []
-        for part in parts:
+        for part in parts_by_partset.get(partset.id, []):
             letter_name = f"{partset.id}_{part.file_name}"
             a4_name = f"{partset.id}_a4_{part.file_name}"
             parts_payload.append(

@@ -1,4 +1,5 @@
 import json
+import time
 from functools import lru_cache
 from typing import Any
 
@@ -19,6 +20,11 @@ QUEUE_KEY = "partifi:jobs"
 def enqueue_job(job_type: str, payload: dict[str, Any]) -> str:
     client = get_redis()
     job_id = client.incr("partifi:job_id")
-    job = {"id": str(job_id), "type": job_type, "payload": payload}
+    job = {
+        "id": str(job_id),
+        "type": job_type,
+        "payload": payload,
+        "enqueued_at": int(time.time()),
+    }
     client.lpush(QUEUE_KEY, json.dumps(job))
     return str(job_id)

@@ -27,26 +27,26 @@ def _sync_part_rows_from_tags(db: Session, partset_id: str) -> None:
             if cleaned and cleaned not in {"all", "All", "ALL", "(none)"}:
                 tags_set.add(cleaned)
 
-    for tag in tags_set:
-        filename = tag_to_filename(tag)
-        existing = (
-            db.query(Part)
-            .filter(Part.partset_id == partset_id, Part.tag == tag)
-            .first()
-        )
-        if not existing:
-            db.add(
-                Part(
-                    partset_id=partset_id,
-                    tag=tag,
-                    spacing=0.1,
-                    combined=False,
-                    file_name=filename,
-                )
-            )
+    parts_by_tag = {
+        part.tag: part
+        for part in db.query(Part).filter(Part.partset_id == partset_id).all()
+    }
 
-    parts = db.query(Part).filter(Part.partset_id == partset_id).all()
-    for part in parts:
+    for tag in tags_set:
+        if tag in parts_by_tag:
+            continue
+        filename = tag_to_filename(tag)
+        part = Part(
+            partset_id=partset_id,
+            tag=tag,
+            spacing=0.1,
+            combined=False,
+            file_name=filename,
+        )
+        db.add(part)
+        parts_by_tag[tag] = part
+
+    for part in list(parts_by_tag.values()):
         part_tags = [t.strip() for t in part.tag.split(" + ")]
         if not all(t in tags_set for t in part_tags if t):
             db.delete(part)

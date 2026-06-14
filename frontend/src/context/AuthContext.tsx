@@ -14,7 +14,7 @@ type AuthContextValue = {
   loading: boolean
   googleEnabled: boolean
   refresh: () => Promise<void>
-  loginWithGoogle: (accessToken: string) => Promise<void>
+  loginWithGoogle: (idToken: string) => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -46,8 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const loginWithGoogle = useCallback(async (accessToken: string) => {
-    const data = await googleLogin(accessToken)
+  const loginWithGoogle = useCallback(async (idToken: string) => {
+    const data = await googleLogin(idToken)
     setUser(data.user)
   }, [])
 
