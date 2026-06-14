@@ -1,5 +1,13 @@
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google'
-import { type CSSProperties, type ReactNode } from 'react'
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
+import { createPortal } from 'react-dom'
 
 type Props = {
   onLogin: (idToken: string) => Promise<void>
@@ -8,8 +16,8 @@ type Props = {
   style?: CSSProperties
 }
 
-/** GIS button width; overlay is out-of-flow so this does not widen the menu. */
-const OVERLAY_WIDTH = 120
+/** GIS iframe minimum; clipped to the link box in the portaled overlay. */
+const GOOGLE_BUTTON_WIDTH = 120
 
 export function GoogleSignInLink({
   onLogin,
@@ -17,6 +25,47 @@ export function GoogleSignInLink({
   className,
   style,
 }: Props) {
+  const anchorRef = useRef<HTMLAnchorElement>(null)
+  const [overlayStyle, setOverlayStyle] = useState<CSSProperties>({ display: 'none' })
+
+  const syncOverlay = useCallback(() => {
+    const anchor = anchorRef.current
+    if (!anchor) return
+    const rect = anchor.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) {
+      setOverlayStyle({ display: 'none' })
+      return
+    }
+    setOverlayStyle({
+      position: 'fixed',
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: Math.max(rect.height, 40),
+      opacity: 0,
+      overflow: 'hidden',
+      zIndex: 10000,
+      cursor: 'pointer',
+    })
+  }, [])
+
+  useLayoutEffect(() => {
+    syncOverlay()
+    const anchor = anchorRef.current
+    if (!anchor) return undefined
+
+    const observer = new ResizeObserver(syncOverlay)
+    observer.observe(anchor)
+    window.addEventListener('resize', syncOverlay)
+    window.addEventListener('scroll', syncOverlay, true)
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', syncOverlay)
+      window.removeEventListener('scroll', syncOverlay, true)
+    }
+  }, [syncOverlay, children])
+
   const handleSuccess = (response: CredentialResponse) => {
     const credential = response.credential
     if (!credential) {
@@ -29,32 +78,30 @@ export function GoogleSignInLink({
   }
 
   return (
-    <span className={className} style={{ position: 'relative', display: 'inline', ...style }}>
-      {children}
-      <span
-        aria-label="Sign in with Google"
-        style={{
-          position: 'absolute',
-          left: 0,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          width: OVERLAY_WIDTH,
-          height: 40,
-          opacity: 0,
-          overflow: 'hidden',
-          cursor: 'pointer',
-        }}
+    <>
+      <a
+        ref={anchorRef}
+        href="#"
+        className={className}
+        style={style}
+        onClick={(e) => e.preventDefault()}
       >
-        <GoogleLogin
-          onSuccess={handleSuccess}
-          onError={() => window.alert('Google sign in failed')}
-          useOneTap={false}
-          type="standard"
-          size="medium"
-          text="signin_with"
-          width={OVERLAY_WIDTH}
-        />
-      </span>
-    </span>
+        {children}
+      </a>
+      {createPortal(
+        <div aria-label="Sign in with Google" style={overlayStyle}>
+          <GoogleLogin
+            onSuccess={handleSuccess}
+            onError={() => window.alert('Google sign in failed')}
+            useOneTap={false}
+            type="standard"
+            size="medium"
+            text="signin_with"
+            width={GOOGLE_BUTTON_WIDTH}
+          />
+        </div>,
+        document.body,
+      )}
+    </>
   )
 }
