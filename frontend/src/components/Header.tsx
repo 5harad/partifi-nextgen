@@ -1,33 +1,8 @@
-import { useGoogleLogin } from '@react-oauth/google'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { GoogleSignInLink } from './GoogleSignInLink'
 
 const PLACEHOLDER = 'search for music'
-
-function GoogleSignInLink({ onLogin }: { onLogin: (accessToken: string) => Promise<void> }) {
-  const login = useGoogleLogin({
-    scope: 'openid profile email',
-    onSuccess: (response) => {
-      void onLogin(response.access_token).catch((err: unknown) => {
-        window.alert(err instanceof Error ? err.message : 'Login failed')
-      })
-    },
-    onError: () => window.alert('Google sign in failed'),
-  })
-
-  return (
-    <a
-      href="#"
-      style={{ marginLeft: 15 }}
-      onClick={(e) => {
-        e.preventDefault()
-        login()
-      }}
-    >
-      Sign In
-    </a>
-  )
-}
 
 export function Header() {
   const navigate = useNavigate()
@@ -85,7 +60,7 @@ export function Header() {
           </>
         )}
         {!loading && !user && googleEnabled && (
-          <GoogleSignInLink onLogin={loginWithGoogle} />
+          <GoogleSignInLink onLogin={loginWithGoogle} style={{ marginLeft: 15 }} />
         )}
         <Link to="/howto" style={{ marginLeft: 15 }}>
           Help

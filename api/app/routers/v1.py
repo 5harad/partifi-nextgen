@@ -52,6 +52,7 @@ from app.schemas.preview import (
 )
 from app.services.preview import (
     combine_parts,
+    ensure_parts_if_needed,
     get_parts_data,
     get_preview_data,
     partgen_progress_payload,
@@ -561,7 +562,57 @@ def parts_by_access_id(access_id: str, db: Session = Depends(get_db)) -> PartsDa
         payload = get_parts_data(db, partset, mode=mode)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not partset.parts_ready and payload["parts"]:
+        ensure_parts_if_needed(db, partset)
     return PartsDataResponse(**payload)
+
+
+@router.post(
+    "/access/{access_id}/ensure-parts",
+    response_model=GeneratePartsResponse,
+)
+def ensure_parts(access_id: str, db: Session = Depends(get_db)) -> GeneratePartsResponse:
+    resolved = resolve_partset_access(db, access_id)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    partset, _mode = resolved
+    job_id = ensure_parts_if_needed(db, partset)
+    return GeneratePartsResponse(status="success", job_id=job_id)
+
+
+@router.get(
+    "/access/{access_id}/partgen-status",
+    response_model=PartgenProgressResponse,
+)
+def partgen_status_by_access(
+    access_id: str, db: Session = Depends(get_db)
+) -> PartgenProgressResponse:
+    resolved = resolve_partset_access(db, access_id)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    partset, _mode = resolved
+    return PartgenProgressResponse(**partgen_progress_payload(partset))
+
+
+@router.post(
+    "/access/{access_id}/retry-pipeline",
+    response_model=RetryPipelineResponse,
+)
+def retry_pipeline_by_access(
+    access_id: str,
+    x_csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+    db: Session = Depends(get_db),
+) -> RetryPipelineResponse:
+    verify_csrf(x_csrf_token)
+    resolved = resolve_partset_access(db, access_id)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    partset, _mode = resolved
+    try:
+        stage, job_id = retry_partset_pipeline(db, partset)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RetryPipelineResponse(stage=stage, job_id=job_id)
 
 
 @router.get(

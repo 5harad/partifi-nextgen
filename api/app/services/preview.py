@@ -339,6 +339,16 @@ def combine_parts(db: Session, partset: Partset, action: str, tag: str) -> None:
     db.commit()
 
 
+def ensure_parts_if_needed(db: Session, partset: Partset) -> str | None:
+    """Enqueue gen_parts when PDFs are not in cache. Idempotent while a job is running."""
+    if partset.parts_ready:
+        return None
+    try:
+        return start_part_generation(db, partset)
+    except ValueError:
+        return None
+
+
 def start_part_generation(db: Session, partset: Partset) -> str | None:
     if partset.parts_ready:
         return None

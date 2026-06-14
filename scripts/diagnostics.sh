@@ -131,7 +131,8 @@ ORDER BY COALESCE(mod_ts, create_ts) DESC;
 
 filter_error_lines() {
   # Match real failures; skip benign Caddy client disconnects and Ghostscript PDF warnings.
-  grep -iE ' ERROR |exception|failed|timed out|exit 137|OOM|Traceback|ValueError|Could not' \
+  # Use word-boundary OOM (not score ids like 56oom); exit 137 = typical OOM kill.
+  grep -iE ' ERROR |exception|failed|timed out|exit 137(\s|$)|\bOOM\b|Out of memory|Traceback|ValueError|Could not' \
     | grep -viE 'aborting with incomplete response|http2: stream closed|repaired or ignored|The following errors were encountered'
 }
 

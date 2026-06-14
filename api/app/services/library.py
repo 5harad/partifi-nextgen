@@ -54,27 +54,25 @@ def list_library(db: Session, user_id: str) -> list[dict]:
 
     items: list[dict] = []
     for favorite, partset in rows:
-        parts_payload: list[dict] = []
-        score_pdf_url = None
         link_mode = "owner" if favorite.admin and partset.private_id else "public"
-        if partset.parts_ready:
-            parts = (
-                db.query(Part)
-                .filter(Part.partset_id == partset.id)
-                .order_by(Part.combined, Part.tag)
-                .all()
+        parts = (
+            db.query(Part)
+            .filter(Part.partset_id == partset.id)
+            .order_by(Part.combined, Part.tag)
+            .all()
+        )
+        parts_payload: list[dict] = []
+        for part in parts:
+            letter_name = f"{partset.id}_{part.file_name}"
+            a4_name = f"{partset.id}_a4_{part.file_name}"
+            parts_payload.append(
+                {
+                    "tag": part.tag,
+                    "file_name": part.file_name or "",
+                    "letter_url": part_file_url(partset, letter_name, mode=link_mode),
+                    "a4_url": part_file_url(partset, a4_name, mode=link_mode),
+                }
             )
-            for part in parts:
-                letter_name = f"{partset.id}_{part.file_name}"
-                a4_name = f"{partset.id}_a4_{part.file_name}"
-                parts_payload.append(
-                    {
-                        "tag": part.tag,
-                        "file_name": part.file_name or "",
-                        "letter_url": part_file_url(partset, letter_name, mode=link_mode),
-                        "a4_url": part_file_url(partset, a4_name, mode=link_mode),
-                    }
-                )
         score_pdf_url = score_pdf_url_for_partset(partset, mode=link_mode)
 
         items.append(
@@ -129,6 +127,8 @@ def update_favorite(
 
     if action == "add":
         admin = mode == "owner"
+        if admin:
+            claim_partset_for_user(db, partset, user_id)
         existing = (
             db.query(Favorite)
             .filter(Favorite.partset_id == partset.id, Favorite.user_id == user_id)

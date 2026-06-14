@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Layout } from '../components/Layout'
+import { PartsetMetadata, usePartsetMetadata } from '../components/PartsetMetadata'
+import { PartDownloadLinks } from '../components/parts/PartDownloadLinks'
 import { useAuth } from '../context/AuthContext'
 import { deletePartset, getCsrfToken, updatePartsetMetadata } from '../lib/api'
 import { fetchLibrary, updateFavorite } from '../lib/authApi'
@@ -14,42 +16,46 @@ function LibraryItemPane({
   item,
   onRemove,
   onDelete,
+  onMetadataSaved,
 }: {
   item: LibraryItem
   onRemove: () => void
   onDelete: () => void
+  onMetadataSaved: (partsetId: string, fields: { title: string; composer: string; publisher: string }) => void
 }) {
-  const [editing, setEditing] = useState(false)
-  const [title, setTitle] = useState(item.title ?? '')
-  const [composer, setComposer] = useState(item.composer ?? '')
-  const [publisher, setPublisher] = useState(item.publisher ?? '')
-  const [error, setError] = useState<string | null>(null)
-
   const privateId = item.private_id ?? ''
   const editorLink = privateId ? partsetUrl(`/${privateId}`) : ''
   const downloadLink = partsetUrl(`/${item.partset_id}`)
+  const partgenAccessId = privateId || item.partset_id
 
-  const saveMetadata = async () => {
+  const metadata = usePartsetMetadata(item)
+  const [display, setDisplay] = useState({
+    title: item.title,
+    composer: item.composer,
+    publisher: item.publisher,
+  })
+
+  useEffect(() => {
+    setDisplay({
+      title: item.title,
+      composer: item.composer,
+      publisher: item.publisher,
+    })
+  }, [item.title, item.composer, item.publisher, item.partset_id])
+
+  const saveMetadata = useCallback(async () => {
     if (!privateId) return
-    const nextTitle = title.trim()
-    const nextComposer = composer.trim()
-    if (!nextTitle || !nextComposer) {
-      setError('Please provide a title and composer.')
-      return
-    }
-    try {
+    await metadata.save(async (fields) => {
       const csrf = await getCsrfToken()
-      await updatePartsetMetadata(
-        privateId,
-        { title: nextTitle, composer: nextComposer, publisher: publisher.trim() },
-        csrf,
-      )
-      setEditing(false)
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save metadata')
-    }
-  }
+      await updatePartsetMetadata(privateId, fields, csrf)
+      setDisplay({
+        title: fields.title,
+        composer: fields.composer,
+        publisher: fields.publisher || null,
+      })
+      onMetadataSaved(item.partset_id, fields)
+    })
+  }, [privateId, metadata, item.partset_id, onMetadataSaved])
 
   const handleDelete = async () => {
     if (!privateId) return
@@ -59,7 +65,9 @@ function LibraryItemPane({
       await deletePartset(privateId, csrf)
       onDelete()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete partset')
+      metadata.cancelEdit()
+      // Surface via metadata error by reusing save error path — use alert for delete-only errors
+      window.alert(err instanceof Error ? err.message : 'Failed to delete partset')
     }
   }
 
@@ -69,7 +77,7 @@ function LibraryItemPane({
       await updateFavorite(item.partset_id, 'remove')
       onRemove()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove from library')
+      window.alert(err instanceof Error ? err.message : 'Failed to remove from library')
     }
   }
 
@@ -79,7 +87,7 @@ function LibraryItemPane({
         edit parts
       </Link>
       {' | '}
-      <a href="#" className="red" onClick={(e) => { e.preventDefault(); setEditing(true) }}>
+      <a href="#" className="red" onClick={(e) => { e.preventDefault(); metadata.startEdit() }}>
         edit metadata
       </a>
       {' | '}
@@ -105,63 +113,20 @@ function LibraryItemPane({
       {menu}
 
       <div className="partset-info">
-        {editing ? (
-          <>
-            <div className="score-title">
-              <input
-                type="text"
-                className="metadata-edit"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </div>
-            <div className="score-composer">
-              <input
-                type="text"
-                className="metadata-edit"
-                value={composer}
-                onChange={(e) => setComposer(e.target.value)}
-              />
-            </div>
-            <div className="score-publisher">
-              <input
-                type="text"
-                className="metadata-edit"
-                value={publisher}
-                onChange={(e) => setPublisher(e.target.value)}
-              />
-            </div>
-            <div
-              className="save-button"
-              style={{ display: 'block' }}
-              role="button"
-              tabIndex={0}
-              onClick={() => void saveMetadata()}
-              onKeyDown={() => {}}
-            >
-              Save
-            </div>
-            <div
-              className="cancel-button"
-              style={{ display: 'block' }}
-              role="button"
-              tabIndex={0}
-              onClick={() => setEditing(false)}
-              onKeyDown={() => {}}
-            >
-              Cancel
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="score-title">{item.title}</div>
-            <div style={{ height: 5 }} />
-            <div className="score-composer">{item.composer}</div>
-            <div style={{ height: 5 }} />
-            <div className="score-publisher">{item.publisher}</div>
-          </>
-        )}
-        {error && <p className="red">{error}</p>}
+        <PartsetMetadata
+          display={display}
+          editing={metadata.editing}
+          saving={metadata.saving}
+          error={metadata.error}
+          title={metadata.title}
+          composer={metadata.composer}
+          publisher={metadata.publisher}
+          onTitleChange={metadata.setTitle}
+          onComposerChange={metadata.setComposer}
+          onPublisherChange={metadata.setPublisher}
+          onSave={() => void saveMetadata()}
+          onCancel={metadata.cancelEdit}
+        />
       </div>
 
       <div className="partset-download">
@@ -174,20 +139,13 @@ function LibraryItemPane({
             <br />
           </>
         )}
-        {!item.parts_ready && <span>Parts are not ready for download yet.</span>}
-        {item.parts.map((part) => (
-          <span key={part.tag}>
-            {part.tag}:{' '}
-            <a className="red" href={part.letter_url}>
-              letter size
-            </a>
-            {' / '}
-            <a className="red" href={part.a4_url}>
-              a4
-            </a>
-            <br />
-          </span>
-        ))}
+        <PartDownloadLinks
+          partsetId={item.partset_id}
+          parts={item.parts}
+          partsReady={item.parts_ready}
+          partgenAccessId={partgenAccessId}
+          ensureOnClick
+        />
       </div>
 
       <div className="partset-links">
@@ -265,6 +223,24 @@ export function LibraryPage() {
     })
   }, [])
 
+  const handleMetadataSaved = useCallback(
+    (partsetId: string, fields: { title: string; composer: string; publisher: string }) => {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.partset_id === partsetId
+            ? {
+                ...item,
+                title: fields.title,
+                composer: fields.composer,
+                publisher: fields.publisher || null,
+              }
+            : item,
+        ),
+      )
+    },
+    [],
+  )
+
   const loadLibrary = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -334,6 +310,7 @@ export function LibraryPage() {
                     item={selectedItem}
                     onRemove={() => removeItem(selectedItem.partset_id)}
                     onDelete={() => removeItem(selectedItem.partset_id)}
+                    onMetadataSaved={handleMetadataSaved}
                   />
                 )}
               </div>

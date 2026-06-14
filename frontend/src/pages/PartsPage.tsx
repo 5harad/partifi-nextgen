@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { PartsDownloadPane } from '../components/parts/PartsDownloadPane'
@@ -10,6 +10,13 @@ export function PartsPage() {
   const { accessId } = useParams<{ accessId: string }>()
   const [data, setData] = useState<PartsDataResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const handleDataChange = useCallback((update: React.SetStateAction<PartsDataResponse>) => {
+    setData((prev) => {
+      if (!prev) return prev
+      return typeof update === 'function' ? update(prev) : update
+    })
+  }, [])
 
   useEffect(() => {
     if (!isPartsetAccessId(accessId)) {
@@ -67,7 +74,7 @@ export function PartsPage() {
           style={{ position: 'absolute', left: 0, top: 200, zIndex: -1, opacity: 0.3 }}
           alt=""
         />
-        <PartsDownloadPane data={data} onDataChange={setData} />
+        <PartsDownloadPane data={data} onDataChange={handleDataChange} />
       </div>
     </Layout>
   )

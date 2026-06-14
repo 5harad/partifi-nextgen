@@ -1610,6 +1610,12 @@ a.red:hover
 	white-space: nowrap;
 }
 
+.owner-sign-in-hint {
+	margin: 0 20px 12px;
+	padding: 0;
+	text-align: center;
+}
+
 .partset-info {
 	font-family: 'IM Fell DW Pica SC', serif;
 	font-size: 16px;

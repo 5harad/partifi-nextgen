@@ -85,6 +85,21 @@ export async function retryPartsetPipeline(
   return res.json()
 }
 
+export async function retryPartsetPipelineByAccessId(
+  accessId: string,
+  csrfToken: string,
+): Promise<{ status: string; stage: string; job_id: string | null }> {
+  const res = await apiFetch(`/api/v1/access/${accessId}/retry-pipeline`, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': csrfToken },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to retry')
+  }
+  return res.json()
+}
+
 export async function getSegmentData(privateId: string): Promise<SegmentDataResponse> {
   const res = await apiFetch(`/api/v1/partsets/${privateId}/segment-data`)
   if (!res.ok) {
@@ -199,6 +214,22 @@ export async function getPartgenStatus(privateId: string): Promise<PartgenProgre
   const res = await apiFetch(`/api/v1/partsets/${privateId}/partgen-status`)
   if (!res.ok) throw new Error('Failed to fetch part generation status')
   return res.json()
+}
+
+export async function getPartgenStatusByAccessId(
+  accessId: string,
+): Promise<PartgenProgressResponse> {
+  const res = await apiFetch(`/api/v1/access/${accessId}/partgen-status`)
+  if (!res.ok) throw new Error('Failed to fetch part generation status')
+  return res.json()
+}
+
+export async function ensurePartsByAccessId(accessId: string): Promise<void> {
+  const res = await apiFetch(`/api/v1/access/${accessId}/ensure-parts`, { method: 'POST' })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to start part generation')
+  }
 }
 
 export async function getPartsByAccessId(accessId: string): Promise<PartsDataResponse> {

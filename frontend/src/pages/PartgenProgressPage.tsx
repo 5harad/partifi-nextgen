@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { getCsrfToken, getPartgenStatus, retryPartsetPipeline } from '../lib/api'
+import {
+  getCsrfToken,
+  getPartgenStatusByAccessId,
+  retryPartsetPipelineByAccessId,
+} from '../lib/api'
+import { triggerPartFileDownload } from '../lib/partDownloads'
 import { pipelineErrorMessage, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
 
 export function PartgenProgressPage() {
-  const { privateId } = useParams<{ privateId: string }>()
+  const { privateId: accessId } = useParams<{ privateId: string }>()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [progress, setProgress] = useState(0)
@@ -12,6 +17,7 @@ export function PartgenProgressPage() {
   const [retrying, setRetrying] = useState(false)
   const pollRef = useRef<(() => void) | null>(null)
   const previewError = import.meta.env.DEV ? searchParams.get('previewError') : null
+  const pendingDownloadUrl = searchParams.get('download')
 
   useEffect(() => {
     if (previewError) {
@@ -19,7 +25,7 @@ export function PartgenProgressPage() {
       return
     }
 
-    if (!privateId) return
+    if (!accessId) return
 
     let cancelled = false
     let timeoutId: number
@@ -27,7 +33,7 @@ export function PartgenProgressPage() {
 
     const poll = async () => {
       try {
-        const data = await getPartgenStatus(privateId)
+        const data = await getPartgenStatusByAccessId(accessId)
         if (cancelled) return
 
         if (data.error) {
@@ -39,7 +45,13 @@ export function PartgenProgressPage() {
         failedAttempts = 0
 
         if (data.is_complete) {
-          navigate(`/${privateId}`)
+          if (pendingDownloadUrl) {
+            void triggerPartFileDownload(pendingDownloadUrl).finally(() => {
+              if (!cancelled) navigate(`/${accessId}`)
+            })
+          } else {
+            navigate(`/${accessId}`)
+          }
           return
         }
       } catch {
@@ -68,11 +80,11 @@ export function PartgenProgressPage() {
       cancelled = true
       window.clearTimeout(timeoutId)
     }
-  }, [privateId, navigate, previewError])
+  }, [accessId, navigate, previewError, pendingDownloadUrl])
 
   const handleRetry = async () => {
     if (previewError) return
-    if (!privateId || retrying) return
+    if (!accessId || retrying) return
 
     if (errorMessage === POLLING_FAILED_MESSAGE) {
       setErrorMessage(null)
@@ -83,7 +95,7 @@ export function PartgenProgressPage() {
     setRetrying(true)
     try {
       const csrf = await getCsrfToken()
-      await retryPartsetPipeline(privateId, csrf)
+      await retryPartsetPipelineByAccessId(accessId, csrf)
       setErrorMessage(null)
       setProgress(0)
       pollRef.current?.()
@@ -121,12 +133,12 @@ export function PartgenProgressPage() {
               </div>
               <div
                 className="copy-button"
-                onClick={() => privateId && navigate(`/${privateId}/preview`)}
+                onClick={() => accessId && navigate(`/${accessId}`)}
                 onKeyDown={() => {}}
                 role="button"
                 tabIndex={0}
               >
-                Back to preview
+                Back to download
               </div>
             </div>
           </>

@@ -150,7 +150,8 @@ CREATE TABLE IF NOT EXISTS favorites (
     user_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
     admin BOOLEAN,
     ts DATETIME,
-    PRIMARY KEY (partset_id, user_id)
+    PRIMARY KEY (partset_id, user_id),
+    INDEX idx_favorites_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS users (

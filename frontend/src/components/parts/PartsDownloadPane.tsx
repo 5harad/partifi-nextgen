@@ -3,16 +3,20 @@ import { Link } from 'react-router-dom'
 import {
   deletePartset,
   getCsrfToken,
+  getPartgenStatusByAccessId,
   updatePartsetMetadata,
 } from '../../lib/api'
 import { fetchFavoriteStatus, updateFavorite } from '../../lib/authApi'
 import { useAuth } from '../../context/AuthContext'
+import { PartsetMetadata, usePartsetMetadata } from '../PartsetMetadata'
 import { HelpTip } from '../HelpTip'
+import { GoogleSignInLink } from '../GoogleSignInLink'
+import { PartDownloadLinks } from './PartDownloadLinks'
 import type { PartsDataResponse } from '../../types/preview'
 
 type Props = {
   data: PartsDataResponse
-  onDataChange: (data: PartsDataResponse) => void
+  onDataChange: React.Dispatch<React.SetStateAction<PartsDataResponse>>
 }
 
 function partsetUrl(path: string) {
@@ -24,74 +28,116 @@ async function copyLink(text: string) {
 }
 
 export function PartsDownloadPane({ data, onDataChange }: Props) {
-  const { user } = useAuth()
+  const { user, googleEnabled, loginWithGoogle } = useAuth()
   const isOwner = data.mode === 'owner'
   const privateId = data.private_id ?? ''
   const publicId = data.public_id
   const accessId = isOwner ? privateId : publicId
 
-  const [editing, setEditing] = useState(false)
-  const [title, setTitle] = useState(data.title ?? '')
-  const [composer, setComposer] = useState(data.composer ?? '')
-  const [publisher, setPublisher] = useState(data.publisher ?? '')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const metadata = usePartsetMetadata(data)
+  const [display, setDisplay] = useState({
+    title: data.title,
+    composer: data.composer,
+    publisher: data.publisher,
+  })
   const [favorite, setFavorite] = useState(false)
+
+  useEffect(() => {
+    setDisplay({
+      title: data.title,
+      composer: data.composer,
+      publisher: data.publisher,
+    })
+  }, [data.title, data.composer, data.publisher, data.partset_id])
 
   useEffect(() => {
     if (!user) {
       setFavorite(false)
       return
     }
-    void fetchFavoriteStatus(accessId).then(setFavorite)
-  }, [user, accessId])
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const isFavorite = await fetchFavoriteStatus(accessId)
+        if (cancelled) return
+        if (isFavorite) {
+          setFavorite(true)
+          return
+        }
+        if (isOwner) {
+          const added = await updateFavorite(accessId, 'add')
+          if (!cancelled) setFavorite(added)
+        } else {
+          setFavorite(false)
+        }
+      } catch {
+        if (!cancelled) setFavorite(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [user, accessId, isOwner])
+
+  useEffect(() => {
+    if (data.parts_ready || data.parts.length === 0) return
+
+    let cancelled = false
+    let timeoutId: number
+
+    const poll = async () => {
+      try {
+        const status = await getPartgenStatusByAccessId(accessId)
+        if (cancelled) return
+        if (status.is_complete) {
+          onDataChange((prev) => ({ ...prev, parts_ready: true }))
+          return
+        }
+      } catch {
+        // Ignore transient polling errors; user can still click a part link.
+      }
+
+      if (!cancelled) {
+        timeoutId = window.setTimeout(poll, 1000)
+      }
+    }
+
+    void poll()
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [accessId, data.parts_ready, data.parts.length, data.partset_id, onDataChange])
 
   const editorLink = partsetUrl(`/${privateId}`)
   const downloadLink = partsetUrl(`/${publicId}`)
 
-  const startEdit = useCallback(() => {
-    setTitle(data.title ?? '')
-    setComposer(data.composer ?? '')
-    setPublisher(data.publisher ?? '')
-    setEditing(true)
-    setError(null)
-  }, [data.title, data.composer, data.publisher])
-
-  const cancelEdit = useCallback(() => {
-    setEditing(false)
-    setError(null)
-  }, [])
-
   const saveMetadata = useCallback(async () => {
-    const nextTitle = title.trim()
-    const nextComposer = composer.trim()
-    const nextPublisher = publisher.trim()
-    if (!nextTitle || !nextComposer) {
-      setError('Please provide a title and composer.')
-      return
-    }
-    setSaving(true)
-    setError(null)
-    try {
+    await metadata.save(async (fields) => {
       const csrf = await getCsrfToken()
-      await updatePartsetMetadata(
-        privateId,
-        { title: nextTitle, composer: nextComposer, publisher: nextPublisher },
-        csrf,
-      )
-      onDataChange({
+      await updatePartsetMetadata(privateId, fields, csrf)
+      const next = {
         ...data,
-        title: nextTitle,
-        composer: nextComposer,
-        publisher: nextPublisher || null,
+        title: fields.title,
+        composer: fields.composer,
+        publisher: fields.publisher || null,
+      }
+      setDisplay({
+        title: next.title,
+        composer: next.composer,
+        publisher: next.publisher,
       })
-      setEditing(false)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save metadata')
-    } finally {
-      setSaving(false)
-    }
-  }, [title, composer, publisher, privateId, data, onDataChange])
+      onDataChange((prev) => ({
+        ...prev,
+        title: fields.title,
+        composer: fields.composer,
+        publisher: fields.publisher || null,
+      }))
+    })
+  }, [metadata, privateId, data, onDataChange])
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm('Are you sure you want to delete these parts?')) return
@@ -100,7 +146,7 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
       await deletePartset(privateId, csrf)
       window.location.href = '/'
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete partset')
+      window.alert(err instanceof Error ? err.message : 'Failed to delete partset')
     }
   }, [privateId])
 
@@ -128,7 +174,7 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
                 edit parts
               </Link>
               {' | '}
-              <a href="#" className="red" onClick={(e) => { e.preventDefault(); startEdit() }}>
+              <a href="#" className="red" onClick={(e) => { e.preventDefault(); metadata.startEdit() }}>
                 edit metadata
               </a>
               {' | '}
@@ -147,67 +193,37 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
           )}
         </div>
       )}
+      {isOwner && !user && (
+        <p className="red owner-sign-in-hint">
+          {googleEnabled ? (
+            <>
+              <GoogleSignInLink onLogin={loginWithGoogle} className="red">
+                Sign in
+              </GoogleSignInLink>
+              {' '}to save this score to your library and return later to edit the parts.
+            </>
+          ) : (
+            'Sign in to save this score to your library and return later to edit the parts.'
+          )}
+        </p>
+      )}
       <div className="partset-info">
-        {editing ? (
-          <>
-            <div className="score-title">
-              <input
-                type="text"
-                className="metadata-edit"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </div>
-            <div style={{ height: 5 }} />
-            <div className="score-composer">
-              <input
-                type="text"
-                className="metadata-edit"
-                value={composer}
-                onChange={(e) => setComposer(e.target.value)}
-              />
-            </div>
-            <div style={{ height: 5 }} />
-            <div className="score-publisher">
-              <input
-                type="text"
-                className="metadata-edit"
-                value={publisher}
-                onChange={(e) => setPublisher(e.target.value)}
-              />
-            </div>
-            <div
-              className="save-button"
-              style={{ display: 'block' }}
-              onClick={() => void saveMetadata()}
-              onKeyDown={() => {}}
-              role="button"
-              tabIndex={0}
-            >
-              {saving ? 'Saving…' : 'Save'}
-            </div>
-            <div
-              className="cancel-button"
-              style={{ display: 'block' }}
-              onClick={cancelEdit}
-              onKeyDown={() => {}}
-              role="button"
-              tabIndex={0}
-            >
-              Cancel
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="score-title">{data.title}</div>
-            <div style={{ height: 5 }} />
-            <div className="score-composer">{data.composer}</div>
-            <div style={{ height: 5 }} />
-            <div className="score-publisher">{data.publisher}</div>
-          </>
-        )}
+        <PartsetMetadata
+          display={display}
+          editing={metadata.editing}
+          saving={metadata.saving}
+          error={metadata.error}
+          title={metadata.title}
+          composer={metadata.composer}
+          publisher={metadata.publisher}
+          onTitleChange={metadata.setTitle}
+          onComposerChange={metadata.setComposer}
+          onPublisherChange={metadata.setPublisher}
+          onSave={() => void saveMetadata()}
+          onCancel={metadata.cancelEdit}
+          errorClassName="red"
+        />
       </div>
-      {error && <p className="red" style={{ padding: '0 20px' }}>{error}</p>}
       <div className="partset-download">
         <div className="download-title">Download</div>
         {data.score_pdf_url && (
@@ -222,29 +238,12 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
             <br />
           </>
         )}
-        {!data.parts_ready && <span>Parts are not ready for download yet.</span>}
-        {data.parts_ready &&
-          data.parts.map((part) => (
-            <span key={part.tag}>
-              {part.tag}:{' '}
-              <a
-                className="red"
-                href={part.letter_url}
-                download={`${data.partset_id}_${part.file_name}`}
-              >
-                letter size
-              </a>{' '}
-              /{' '}
-              <a
-                className="red"
-                href={part.a4_url}
-                download={`${data.partset_id}_a4_${part.file_name}`}
-              >
-                a4
-              </a>
-              <br />
-            </span>
-          ))}
+        <PartDownloadLinks
+          partsetId={data.partset_id}
+          parts={data.parts}
+          partsReady={data.parts_ready}
+          partgenAccessId={accessId}
+        />
       </div>
       <div className="partset-links">
         {isOwner && (
@@ -262,7 +261,12 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
             <div
               className="copy-button"
               onClick={() => void copyLink(editorLink)}
-              onKeyDown={() => {}}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  void copyLink(editorLink)
+                }
+              }}
               role="button"
               tabIndex={0}
             >
@@ -286,7 +290,12 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
           <div
             className="copy-button"
             onClick={() => void copyLink(downloadLink)}
-            onKeyDown={() => {}}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                void copyLink(downloadLink)
+              }
+            }}
             role="button"
             tabIndex={0}
           >
