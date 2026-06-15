@@ -33,3 +33,36 @@ def test_run_subprocess_with_repair_retries_after_repair() -> None:
         )
     repair.assert_called_once_with("page.pdf", "page.repaired.pdf")
     assert check.call_args_list[-1].args[0][-1] == "page.repaired.pdf"
+
+
+def test_burst_score_pages_uses_original_when_pdftk_succeeds() -> None:
+    from pdf_repair import burst_score_pages
+
+    with (
+        patch("pdf_repair._pdftk_burst") as burst,
+        patch("pdf_repair.glob.glob", side_effect=[[], ["/tmp/partifi/x/page-1.pdf"]]),
+        patch("pdf_repair.normalize_pdf_for_convert") as normalize,
+    ):
+        burst_score_pages("/tmp/in.pdf", "/tmp/partifi/x")
+
+    burst.assert_called_once_with("/tmp/in.pdf", "/tmp/partifi/x/page-%d.pdf")
+    normalize.assert_not_called()
+
+
+def test_burst_score_pages_normalizes_when_pdftk_fails() -> None:
+    from pdf_repair import burst_score_pages
+
+    with (
+        patch("pdf_repair._pdftk_burst", side_effect=subprocess.CalledProcessError(1, "pdftk")),
+        patch("pdf_repair.glob.glob", return_value=[]),
+        patch("pdf_repair.normalize_pdf_for_convert") as normalize,
+        patch("pdf_repair.run_subprocess_with_repair") as burst_repair,
+    ):
+        burst_score_pages("/tmp/in.pdf", "/tmp/partifi/x")
+
+    normalize.assert_called_once_with(
+        "/tmp/in.pdf",
+        "/tmp/partifi/x/score.pdf",
+        repair_path="/tmp/partifi/x/score_repair_input.pdf",
+    )
+    burst_repair.assert_called_once()

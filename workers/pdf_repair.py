@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import glob
+import os
 import subprocess
 
 logger = logging.getLogger(__name__)
@@ -47,3 +49,39 @@ def run_subprocess_with_repair(
         input_idx = retry_cmd.index(input_pdf)
         retry_cmd[input_idx] = repair_path
         subprocess.check_call(retry_cmd)
+
+
+def _pdftk_burst(input_pdf: str, burst_pattern: str) -> None:
+    subprocess.check_call(["pdftk", input_pdf, "burst", "output", burst_pattern])
+
+
+def burst_score_pages(pdffile: str, tempdir: str) -> None:
+    """Split a score PDF into per-page files, normalizing only when burst fails."""
+    burst_pattern = os.path.join(tempdir, "page-%d.pdf")
+
+    for leftover in glob.glob(os.path.join(tempdir, "page*.pdf")):
+        os.remove(leftover)
+
+    try:
+        _pdftk_burst(pdffile, burst_pattern)
+        if glob.glob(os.path.join(tempdir, "page*.pdf")):
+            logger.info("Burst original PDF with pdftk")
+            return
+        logger.warning("pdftk burst on original produced no pages; normalizing PDF")
+    except subprocess.CalledProcessError as exc:
+        logger.warning("pdftk burst on original failed (%s); normalizing PDF", exc)
+
+    for leftover in glob.glob(os.path.join(tempdir, "page*.pdf")):
+        os.remove(leftover)
+
+    score_pdf = os.path.join(tempdir, "score.pdf")
+    repair_input = os.path.join(tempdir, "score_repair_input.pdf")
+    normalize_pdf_for_convert(pdffile, score_pdf, repair_path=repair_input)
+
+    burst_repair = os.path.join(tempdir, "score_burst_repair.pdf")
+    run_subprocess_with_repair(
+        ["pdftk", score_pdf, "burst", "output", burst_pattern],
+        input_pdf=score_pdf,
+        repair_path=burst_repair,
+        label="pdftk burst",
+    )

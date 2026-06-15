@@ -14,7 +14,7 @@ from pathlib import Path
 from PIL import Image
 
 import db_conn
-from pdf_repair import normalize_pdf_for_convert, run_subprocess_with_repair
+from pdf_repair import burst_score_pages, run_subprocess_with_repair
 from pipeline.cut_segments import default_pool_size
 from pipeline.parallel import map_in_parallel
 
@@ -91,19 +91,7 @@ def par_pdf2png(
     origpath = os.getcwd()
 
     os.chdir(tempdir)
-    score_pdf = os.path.join(tempdir, "score.pdf")
-    repair_input = os.path.join(tempdir, "score_repair_input.pdf")
-    normalize_pdf_for_convert(pdffile, score_pdf, repair_path=repair_input)
-
-    burst_pattern = os.path.join(tempdir, "page-%d.pdf")
-    burst_cmd = ["pdftk", score_pdf, "burst", "output", burst_pattern]
-    burst_repair = os.path.join(tempdir, "score_burst_repair.pdf")
-    run_subprocess_with_repair(
-        burst_cmd,
-        input_pdf=score_pdf,
-        repair_path=burst_repair,
-        label="pdftk burst",
-    )
+    burst_score_pages(pdffile, tempdir)
     os.chdir(origpath)
 
     for sub in ("highres", "lowres", "thumbs"):
