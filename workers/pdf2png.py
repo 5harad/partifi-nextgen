@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import logging
 import os
 import shutil
 import subprocess
@@ -13,8 +14,11 @@ from pathlib import Path
 from PIL import Image
 
 import db_conn
+from pdf_repair import normalize_pdf_for_convert, run_subprocess_with_repair
 from pipeline.cut_segments import default_pool_size
 from pipeline.parallel import map_in_parallel
+
+logger = logging.getLogger(__name__)
 
 
 def pdf2png(
@@ -39,7 +43,15 @@ def pdf2png(
         f"-sOutputFile={highres_file}",
         pdffile,
     ]
-    subprocess.check_call(gs_cmd)
+    repair_path = pdffile + ".repaired.pdf"
+    run_subprocess_with_repair(
+        gs_cmd,
+        input_pdf=pdffile,
+        repair_path=repair_path,
+        label="Page PNG convert",
+    )
+    if os.path.exists(repair_path):
+        os.remove(repair_path)
 
     im = Image.open(highres_file)
     lowres_im = im.resize((600, 776), Image.LANCZOS)
@@ -79,10 +91,19 @@ def par_pdf2png(
     origpath = os.getcwd()
 
     os.chdir(tempdir)
-    subprocess.check_call(
-        ["gs", "-o", os.path.join(tempdir, "score.pdf"), "-sDEVICE=pdfwrite", "-dPDFSETTINGS=/prepress", pdffile]
+    score_pdf = os.path.join(tempdir, "score.pdf")
+    repair_input = os.path.join(tempdir, "score_repair_input.pdf")
+    normalize_pdf_for_convert(pdffile, score_pdf, repair_path=repair_input)
+
+    burst_pattern = os.path.join(tempdir, "page-%d.pdf")
+    burst_cmd = ["pdftk", score_pdf, "burst", "output", burst_pattern]
+    burst_repair = os.path.join(tempdir, "score_burst_repair.pdf")
+    run_subprocess_with_repair(
+        burst_cmd,
+        input_pdf=score_pdf,
+        repair_path=burst_repair,
+        label="pdftk burst",
     )
-    subprocess.check_call(["pdftk", os.path.join(tempdir, "score.pdf"), "burst", "output", os.path.join(tempdir, "page-%d.pdf")])
     os.chdir(origpath)
 
     for sub in ("highres", "lowres", "thumbs"):

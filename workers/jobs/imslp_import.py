@@ -51,6 +51,23 @@ def _mark_import_size_error(
 ) -> None:
     mark_partset_error(partset_id, "import_size", message=message, job_id=job_id)
 
+
+def _existing_score_for_imslp(imslp_id: str):
+    return db_conn.fetchone(
+        "SELECT id FROM scores WHERE imslp_id = :imslp_id AND file_size IS NOT NULL AND file_size > 0",
+        {"imslp_id": imslp_id},
+    )
+
+
+def _attach_score_and_run_pipeline(partset_id: str, score_id: str, *, job_id: str | None) -> None:
+    db_conn.execute(
+        "UPDATE partsets SET score_id = :score_id, import_complete = NOW(), import_progress = 100 "
+        "WHERE id = :id",
+        {"score_id": score_id, "id": partset_id},
+    )
+    run_import_pipeline(partset_id, score_id, job_id=job_id)
+
+
 def run_imslp_import(
     partset_id: str,
     imslp_id: str,
@@ -66,6 +83,18 @@ def run_imslp_import(
     pdf_path = workdir / "score.pdf"
 
     try:
+        existing = _existing_score_for_imslp(imslp_id)
+        if existing:
+            logger.info(
+                "Reusing existing score %s for IMSLP %s (partset %s); skipping download",
+                existing.id,
+                imslp_id,
+                partset_id,
+            )
+            _set_import_progress(partset_id, 100.0)
+            _attach_score_and_run_pipeline(partset_id, existing.id, job_id=job_id)
+            return
+
         logger.info(
             "Downloading IMSLP %s for partset %s%s",
             imslp_id,
@@ -120,13 +149,7 @@ def run_imslp_import(
             )
             upload_file(pdf_path, score_pdf_s3_key(score_id), "application/pdf")
 
-        db_conn.execute(
-            "UPDATE partsets SET score_id = :score_id, import_complete = NOW(), import_progress = 100 "
-            "WHERE id = :id",
-            {"score_id": score_id, "id": partset_id},
-        )
-
-        run_import_pipeline(partset_id, score_id, job_id=job_id)
+        _attach_score_and_run_pipeline(partset_id, score_id, job_id=job_id)
     except ScoreTooLargeError as exc:
         logger.error("IMSLP %s exceeds size limit for partset %s", imslp_id, partset_id)
         _mark_import_size_error(partset_id, message=str(exc), job_id=job_id)
