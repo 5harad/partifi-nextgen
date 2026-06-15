@@ -69,6 +69,14 @@ def test_ensure_score_page_skips_download_when_cached(tmp_path: Path) -> None:
     assert calls == []
 
 
+def test_ensure_score_page_raises_when_missing(tmp_path: Path) -> None:
+    import pytest
+
+    cache = _cache(tmp_path)
+    with pytest.raises(FileNotFoundError, match="not in local cache"):
+        cache.ensure_score_page("abc", "highres", 1)
+
+
 def test_write_preview_publishes_complete_dir(tmp_path: Path) -> None:
     cache = _cache(tmp_path)
     segments = tmp_path / "segments"

@@ -93,16 +93,6 @@ def presigned_get_url(
     )
 
 
-def score_page_images_on_s3(score_id: str) -> bool:
-    settings = get_settings()
-    response = get_s3_client().list_objects_v2(
-        Bucket=settings.s3_bucket,
-        Prefix=f"scores/{score_id}/lowres/",
-        MaxKeys=1,
-    )
-    return bool(response.get("KeyCount"))
-
-
 def delete_object(key: str) -> None:
     settings = get_settings()
     get_s3_client().delete_object(Bucket=settings.s3_bucket, Key=key)

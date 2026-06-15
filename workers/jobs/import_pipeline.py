@@ -10,7 +10,7 @@ from pathlib import Path
 from find_segments import analyze_score
 from local_cache import ensure_lowres_files, get_local_cache
 from pdf2png import convert_score
-from s3_storage import download_file, score_images_exist, score_pdf_s3_key
+from s3_storage import download_file, score_pdf_s3_key
 from score_cache import (
     copy_partset_segs_to_score,
     copy_score_segs_to_partset,
@@ -52,10 +52,7 @@ def _mark_convert_complete(partset_id: str, score_id: str, num_pages: int | None
 
 
 def _score_pages_available(score_id: str) -> bool:
-    cache = get_local_cache()
-    if cache.score_has_pages(score_id):
-        return True
-    return score_images_exist(score_id)
+    return get_local_cache().score_has_pages(score_id)
 
 
 def _run_convert(partset_id: str, score_id: str, workdir: Path) -> int:

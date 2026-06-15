@@ -62,28 +62,3 @@ def upload_directory(local_dir: Path, prefix: str) -> None:
             upload_file(path, f"{prefix}/{rel}", content_type)
 
 
-def score_images_exist(score_id: str) -> bool:
-    settings = get_settings()
-
-    def _list() -> bool:
-        response = get_s3_client().list_objects_v2(
-            Bucket=settings.s3_bucket,
-            Prefix=f"scores/{score_id}/lowres/",
-            MaxKeys=1,
-        )
-        return bool(response.get("KeyCount"))
-
-    return call_with_s3_retries(f"list scores/{score_id}/lowres/", _list)
-
-
-def download_prefix(prefix: str, dest_dir: Path) -> None:
-    settings = get_settings()
-    client = get_s3_client()
-    paginator = client.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=settings.s3_bucket, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            if key.endswith("/"):
-                continue
-            rel = key[len(prefix) :].lstrip("/")
-            download_file(key, dest_dir / rel)

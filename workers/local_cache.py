@@ -3,7 +3,7 @@ from pathlib import Path
 
 from config import get_settings
 from pipeline.local_cache import LocalCache
-from s3_storage import download_file, download_prefix
+from s3_storage import download_file
 
 
 def _download(key: str, dest: Path) -> None:
@@ -24,6 +24,7 @@ def ensure_lowres_files(score_id: str) -> list[Path]:
     existing = sorted(lowres_dir.glob("page-*.png"))
     if existing:
         return existing
-    lowres_dir.mkdir(parents=True, exist_ok=True)
-    download_prefix(f"scores/{score_id}/lowres/", lowres_dir)
+    from score_page_cache import build_score_page_cache
+
+    build_score_page_cache(score_id)
     return sorted(lowres_dir.glob("page-*.png"))

@@ -1,0 +1,64 @@
+from unittest.mock import MagicMock, patch
+
+from jobs import gen_parts
+
+
+@patch("jobs.gen_parts.build_score_page_cache")
+@patch("jobs.gen_parts.get_local_cache")
+@patch("jobs.gen_parts._fetch_part_files", return_value=[])
+@patch("jobs.gen_parts._fetch_spacings", return_value={})
+@patch("jobs.gen_parts._fetch_breaks", return_value={})
+@patch("jobs.gen_parts._fetch_combined_tags", return_value=[])
+@patch("jobs.gen_parts.build_part_segment_map", return_value=({}, [], [], []))
+@patch("jobs.gen_parts.cut_segment_tasks")
+@patch("jobs.gen_parts.fetchone")
+@patch("jobs.gen_parts._fetch_segment_rows")
+@patch("jobs.gen_parts.execute")
+def test_gen_parts_warms_cache_when_highres_missing(
+    _execute: MagicMock,
+    mock_segments: MagicMock,
+    mock_fetchone: MagicMock,
+    _cut: MagicMock,
+    _map: MagicMock,
+    _combined: MagicMock,
+    _breaks: MagicMock,
+    _spacings: MagicMock,
+    _parts: MagicMock,
+    mock_cache_fn: MagicMock,
+    mock_warm: MagicMock,
+) -> None:
+    mock_segments.return_value = [
+        {
+            "page": 1,
+            "rotation": 0.0,
+            "left_margin": 0.0,
+            "right_margin": 100.0,
+            "top": 0.0,
+            "bottom": 10.0,
+            "tags": "violin",
+            "label": "",
+        }
+    ]
+    mock_fetchone.return_value = MagicMock(score_id="abc12", title="T", composer="C")
+
+    cache = MagicMock()
+    cache.score_has_kind.return_value = False
+    page_path = MagicMock()
+    page_path.read_bytes.return_value = b"png"
+    cache.ensure_score_page.return_value = page_path
+    mock_cache_fn.return_value = cache
+
+    workdir = MagicMock()
+    workdir.exists.return_value = False
+    pages_dir = MagicMock()
+    segments_dir = MagicMock()
+    outdir = MagicMock()
+    workdir.__truediv__.side_effect = lambda name: {
+        "pages": pages_dir,
+        "segments": segments_dir,
+        "parts": outdir,
+    }[name]
+
+    gen_parts._run_gen_parts("part01", workdir, job_id="job1")
+
+    mock_warm.assert_called_once_with("abc12", job_id="job1")

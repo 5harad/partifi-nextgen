@@ -27,6 +27,7 @@ from pipeline.cutpaste import (
 )
 from pipeline.paste_segments import create_parts
 from gen_parts_lock import release_gen_parts_lock
+from score_page_cache import build_score_page_cache
 from local_cache import get_local_cache
 
 logger = logging.getLogger("partifi.gen_parts")
@@ -120,7 +121,7 @@ def run_gen_parts(partset_id: str, *, job_id: str | None = None) -> None:
     suffix = job_id or "unknown"
     workdir = Path(f"/tmp/partifi/{partset_id}/gen-{suffix}")
     try:
-        _run_gen_parts(partset_id, workdir)
+        _run_gen_parts(partset_id, workdir, job_id=job_id)
     except Exception as exc:
         logger.exception("Part generation failed for partset %s", partset_id)
         mark_partset_error(partset_id, message=str(exc), job_id=job_id)
@@ -130,7 +131,7 @@ def run_gen_parts(partset_id: str, *, job_id: str | None = None) -> None:
         release_gen_parts_lock(partset_id)
 
 
-def _run_gen_parts(partset_id: str, workdir: Path) -> None:
+def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None) -> None:
     partset = fetchone(
         "SELECT score_id, title, composer FROM partsets WHERE id = :id",
         {"id": partset_id},
@@ -166,6 +167,10 @@ def _run_gen_parts(partset_id: str, workdir: Path) -> None:
 
     pages_needed = sorted({row["page"] for row in segment_rows})
     cache = get_local_cache()
+    if not cache.score_has_kind(score_id, "highres"):
+        logger.info("Score %s highres pages missing from cache; warming from PDF", score_id)
+        build_score_page_cache(score_id, job_id=job_id)
+
     for page in pages_needed:
         local_page = pages_dir / f"page-{page}.png"
         cached = cache.ensure_score_page(score_id, "highres", page)

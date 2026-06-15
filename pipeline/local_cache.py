@@ -36,9 +36,6 @@ class LocalCache:
     def score_page_path(self, score_id: str, kind: ScoreKind, page: int) -> Path:
         return self.score_kind_dir(score_id, kind) / f"page-{page}.png"
 
-    def score_page_s3_key(self, score_id: str, kind: ScoreKind, page: int) -> str:
-        return f"scores/{score_id}/{kind}/page-{page}.png"
-
     def score_pdf_path(self, score_id: str) -> Path:
         return self.score_root(score_id) / "score.pdf"
 
@@ -78,21 +75,9 @@ class LocalCache:
         if path.is_file():
             self._touch(path)
             return path
-
-        key = self.score_page_s3_key(score_id, kind, page)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self._temp_path(path)
-        try:
-            self.download(key, tmp)
-            self._install_file(tmp, path)
-        except Exception:
-            tmp.unlink(missing_ok=True)
-            if path.is_file():
-                self._touch(path)
-                return path
-            raise
-        self._touch(path)
-        return path
+        raise FileNotFoundError(
+            f"Score page not in local cache: score_id={score_id} kind={kind} page={page}"
+        )
 
     def copy_pages_tree(self, score_id: str, pages_dir: Path) -> None:
         """Copy convert output (lowres/, highres/, thumbs/) into cache."""
@@ -216,28 +201,7 @@ class LocalCache:
         if path.is_file():
             self._touch(path)
             return path
-
-        key = f"parts/{partset_id}/{filename}"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self._temp_path(path)
-        try:
-            self.download(key, tmp)
-        except Exception:
-            tmp.unlink(missing_ok=True)
-            if path.is_file():
-                self._touch(path)
-                return path
-            return None
-
-        if not tmp.is_file() or tmp.stat().st_size == 0:
-            tmp.unlink(missing_ok=True)
-            return path if path.is_file() else None
-
-        self._install_file(tmp, path)
-        if not path.is_file():
-            return None
-        self._touch(path)
-        return path
+        return None
 
     def invalidate_parts(self, partset_id: str) -> None:
         shutil.rmtree(self.parts_dir(partset_id), ignore_errors=True)
