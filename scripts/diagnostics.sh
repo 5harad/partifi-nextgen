@@ -113,20 +113,30 @@ LIMIT 10;
 "
 
 section "Failed / stuck partsets (last ${DAYS} days)"
+# Activity window uses error_ts / paste_start / last_access so legacy rows (old create_ts)
+# still appear when they fail or stall recently. Stuck partgen requires paste_start set
+# and >1h without paste_complete — avoids flagging users who never opened download.
 compose exec -T mysql mysql -u partifi -p"$MYSQL_PASSWORD" partifi -e "
 SELECT id, title, status, error, error_message, error_ts, last_job_id,
        ROUND(import_progress) AS imp,
        ROUND(convert_progress) AS conv,
        ROUND(analysis_progress) AS anal,
-       parts_ready,
+       parts_ready, paste_start, paste_complete,
        create_ts, mod_ts, last_access
 FROM partsets
-WHERE COALESCE(mod_ts, create_ts) >= NOW() - INTERVAL ${DAYS} DAY
+WHERE COALESCE(error_ts, paste_start, mod_ts, last_access, create_ts)
+        >= NOW() - INTERVAL ${DAYS} DAY
   AND (
     error IS NOT NULL
     OR (import_complete IS NULL AND create_ts < NOW() - INTERVAL 1 HOUR)
+    OR (
+      paste_start IS NOT NULL
+      AND paste_complete IS NULL
+      AND parts_ready = 0
+      AND paste_start < NOW() - INTERVAL 1 HOUR
+    )
   )
-ORDER BY COALESCE(mod_ts, create_ts) DESC;
+ORDER BY COALESCE(error_ts, paste_start, mod_ts, last_access, create_ts) DESC;
 "
 
 filter_error_lines() {
