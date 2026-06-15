@@ -70,7 +70,7 @@ def test_start_part_generation_retries_when_stuck_in_cut(
 @patch("app.services.preview.try_acquire_gen_parts_lock", return_value=False)
 @patch("app.services.preview.sync_part_rows_from_tags")
 def test_start_part_generation_skips_when_lock_held(
-    _mock_sync: Mock,
+    mock_sync: Mock,
     _mock_lock: Mock,
     mock_enqueue: Mock,
     db: Session,
@@ -81,4 +81,28 @@ def test_start_part_generation_skips_when_lock_held(
     job_id = start_part_generation(db, partset)
 
     assert job_id is None
+    mock_sync.assert_not_called()
+    mock_enqueue.assert_not_called()
+
+
+@patch("app.services.preview.enqueue_job")
+@patch("app.services.preview.try_acquire_gen_parts_lock")
+@patch("app.services.preview.sync_part_rows_from_tags")
+def test_start_part_generation_skips_when_paste_in_progress(
+    mock_sync: Mock,
+    mock_lock: Mock,
+    mock_enqueue: Mock,
+    db: Session,
+) -> None:
+    partset = db.get(Partset, "pub1")
+    assert partset is not None
+    partset.error = None
+    partset.paste_start = datetime.now(UTC)
+    partset.paste_complete = None
+
+    job_id = start_part_generation(db, partset)
+
+    assert job_id is None
+    mock_lock.assert_not_called()
+    mock_sync.assert_not_called()
     mock_enqueue.assert_not_called()
