@@ -21,7 +21,8 @@ def resolve_public_partset_id(db: Session, access_id: str) -> str | None:
 
 
 def claim_partset_for_user(db: Session, partset: Partset, user_id: str) -> None:
-    partset.user_id = user_id
+    if partset.user_id is None:
+        partset.user_id = user_id
     existing = (
         db.query(Favorite)
         .filter(Favorite.partset_id == partset.id, Favorite.user_id == user_id)
@@ -136,23 +137,23 @@ def update_favorite(
         admin = mode == "owner"
         if admin:
             claim_partset_for_user(db, partset, user_id)
-        existing = (
-            db.query(Favorite)
-            .filter(Favorite.partset_id == partset.id, Favorite.user_id == user_id)
-            .first()
-        )
-        if existing:
-            existing.admin = existing.admin or admin
-            existing.ts = datetime.utcnow()
         else:
-            db.add(
-                Favorite(
-                    partset_id=partset.id,
-                    user_id=user_id,
-                    admin=admin,
-                    ts=datetime.utcnow(),
-                )
+            existing = (
+                db.query(Favorite)
+                .filter(Favorite.partset_id == partset.id, Favorite.user_id == user_id)
+                .first()
             )
+            if existing:
+                existing.ts = datetime.utcnow()
+            else:
+                db.add(
+                    Favorite(
+                        partset_id=partset.id,
+                        user_id=user_id,
+                        admin=False,
+                        ts=datetime.utcnow(),
+                    )
+                )
         db.commit()
         return
 
