@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   getCsrfToken,
   getPartgenStatusByAccessId,
+  ensurePartsByAccessId,
   retryPartsetPipelineByAccessId,
 } from '../lib/api'
 import { triggerPartFileDownload } from '../lib/partDownloads'
@@ -30,6 +31,10 @@ export function PartgenProgressPage() {
     let cancelled = false
     let timeoutId: number
     let failedAttempts = 0
+
+    void ensurePartsByAccessId(accessId).catch(() => {
+      // Polling will surface errors; ensure is best-effort on entry.
+    })
 
     const poll = async () => {
       try {

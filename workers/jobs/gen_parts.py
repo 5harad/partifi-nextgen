@@ -159,17 +159,23 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
         )
         return
 
+    pages_needed = sorted({row["page"] for row in segment_rows})
+    cache = get_local_cache()
+    if not cache.score_has_kind(score_id, "highres"):
+        logger.info("Score %s highres pages missing from cache; warming from PDF", score_id)
+        execute(
+            "UPDATE partsets SET status = 'convert', convert_progress = 0, "
+            "cut_start = NULL, cut_complete = NULL, cut_progress = 0, "
+            "paste_start = NULL, paste_complete = NULL, paste_progress = 0 WHERE id = :id",
+            {"id": partset_id},
+        )
+        build_score_page_cache(score_id, job_id=job_id)
+
     execute(
         "UPDATE partsets SET status = 'cut', cut_start = NOW(), cut_progress = 0, "
         "paste_start = NULL, paste_complete = NULL, paste_progress = 0 WHERE id = :id",
         {"id": partset_id},
     )
-
-    pages_needed = sorted({row["page"] for row in segment_rows})
-    cache = get_local_cache()
-    if not cache.score_has_kind(score_id, "highres"):
-        logger.info("Score %s highres pages missing from cache; warming from PDF", score_id)
-        build_score_page_cache(score_id, job_id=job_id)
 
     for page in pages_needed:
         local_page = pages_dir / f"page-{page}.png"

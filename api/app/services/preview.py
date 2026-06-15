@@ -365,13 +365,7 @@ def start_part_generation(db: Session, partset: Partset) -> str | None:
     if num_parts == 0:
         raise ValueError("No parts tagged for generation")
 
-    if partset.status in ("cut", "paste"):
-        clear_partset_failure(partset)
-        db.commit()
-        return None
-
     if not try_acquire_gen_parts_lock(partset.id):
-        clear_partset_failure(partset)
         db.commit()
         return None
 

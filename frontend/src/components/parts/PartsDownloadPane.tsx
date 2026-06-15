@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   deletePartset,
+  ensurePartsByAccessId,
   getCsrfToken,
   getPartgenStatusByAccessId,
   updatePartsetMetadata,
@@ -75,6 +76,10 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
 
   useEffect(() => {
     if (data.parts_ready || data.parts.length === 0) return
+
+    void ensurePartsByAccessId(accessId).catch(() => {
+      // Polling below reflects generation status.
+    })
 
     let cancelled = false
     let timeoutId: number
