@@ -13,6 +13,8 @@ from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
+from pipeline.pdf_fonts import set_header_font
+
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 LOGO_PATH = ASSETS_DIR / "scroll.png"
 RESOLUTION = 300.0
@@ -50,11 +52,16 @@ def _add_page_info(
     if reader := _logo_image_reader():
         doc.drawImage(reader, left_in, top_in - 24, 24, 24)
 
-    doc.setFont("Times-Roman", 11)
+    set_header_font(doc, title, 11)
     doc.drawString(left_in + 28, top_in - 12, title)
+    set_header_font(doc, composer, 11)
     doc.drawString(left_in + 28, top_in - 24, composer)
-    doc.drawRightString(right_in, top_in - 12, str(part_name))
+    part_name_text = str(part_name)
+    set_header_font(doc, part_name_text, 11)
+    doc.drawRightString(right_in, top_in - 12, part_name_text)
+    set_header_font(doc, partset_id, 11)
     doc.drawRightString(right_in, top_in - 24, f"partifi.org/{partset_id}")
+    set_header_font(doc, "Page", 11)
     doc.drawCentredString(center_in, bottom_in, f"Page {page_num}")
     doc.line(left_in, top_in - 36, right_in, top_in - 36)
 
@@ -98,6 +105,7 @@ def _add_images(
 
                 doc.rect(x_in - inch / 4, y_in + (h - inch / 2) / 2, inch / 5, inch / 2, stroke=1)
                 doc.rotate(90)
+                set_header_font(doc, label, 11)
                 doc.drawCentredString(y_in + h / 2, -x_in + inch / 10, label)
                 doc.rotate(-90)
 
