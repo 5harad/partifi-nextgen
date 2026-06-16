@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { PartsetMetadata, usePartsetMetadata } from '../components/PartsetMetadata'
 import { PartDownloadLinks } from '../components/parts/PartDownloadLinks'
@@ -140,6 +140,7 @@ function LibraryItemPane({
           partsReady={item.parts_ready}
           partgenAccessId={partgenAccessId}
           ensureOnClick
+          returnTo={`/library?partset=${encodeURIComponent(item.partset_id)}`}
         />
       </div>
 
@@ -184,6 +185,7 @@ function LibraryListItem({
 
 export function LibraryPage() {
   const { user, loading: authLoading } = useAuth()
+  const [searchParams] = useSearchParams()
   const [items, setItems] = useState<LibraryItem[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -228,7 +230,12 @@ export function LibraryPage() {
     try {
       const data = await fetchLibrary()
       setItems(data.items)
-      setSelectedId(data.items[0]?.partset_id ?? null)
+      const fromQuery = searchParams.get('partset')
+      const selected =
+        fromQuery && data.items.some((item) => item.partset_id === fromQuery)
+          ? fromQuery
+          : data.items[0]?.partset_id ?? null
+      setSelectedId(selected)
     } catch (err) {
       setItems([])
       setSelectedId(null)
@@ -236,7 +243,14 @@ export function LibraryPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [searchParams])
+
+  useEffect(() => {
+    const fromQuery = searchParams.get('partset')
+    if (fromQuery && items.some((item) => item.partset_id === fromQuery)) {
+      setSelectedId(fromQuery)
+    }
+  }, [searchParams, items])
 
   useEffect(() => {
     if (authLoading) return

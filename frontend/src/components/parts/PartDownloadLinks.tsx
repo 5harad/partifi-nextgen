@@ -14,6 +14,8 @@ type Props = {
   partgenAccessId: string
   /** When true, enqueue gen_parts on first part click (library). When false, rely on silent regen (download page). */
   ensureOnClick?: boolean
+  /** After partgen completes, navigate here instead of the download page. */
+  returnTo?: string
 }
 
 export function PartDownloadLinks({
@@ -22,6 +24,7 @@ export function PartDownloadLinks({
   partsReady,
   partgenAccessId,
   ensureOnClick = false,
+  returnTo,
 }: Props) {
   const navigate = useNavigate()
 
@@ -42,7 +45,7 @@ export function PartDownloadLinks({
       }
     }
 
-    navigateToPartgen(navigate, partgenAccessId, url)
+    navigateToPartgen(navigate, partgenAccessId, url, returnTo)
   }
 
   if (parts.length === 0) {

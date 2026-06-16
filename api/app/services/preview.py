@@ -49,6 +49,22 @@ def _partgen_total_progress(status: str | None, progress: float) -> float:
     return 0.0
 
 
+def _partgen_in_progress(partset: Partset) -> bool:
+    if partset.error:
+        return False
+    if (
+        partset.status == "convert"
+        and partset.cut_start is None
+        and partset.paste_complete is None
+    ):
+        return True
+    if partset.cut_start is not None and partset.cut_complete is None:
+        return True
+    if partset.paste_start is not None and partset.paste_complete is None:
+        return True
+    return False
+
+
 def partgen_progress_payload(partset: Partset) -> dict:
     is_complete = bool(partset.parts_ready) and not partset.error
     progress = 0.0
@@ -59,11 +75,19 @@ def partgen_progress_payload(partset: Partset) -> dict:
     elif partset.status == "convert":
         progress = partset.convert_progress or 0.0
 
+    if is_complete:
+        total_progress = 100.0
+    elif not _partgen_in_progress(partset):
+        progress = 0.0
+        total_progress = 0.0
+    else:
+        total_progress = _partgen_total_progress(partset.status, progress)
+
     return {
         "error": partset.error,
         "status": partset.status,
         "progress": progress,
-        "total_progress": 100.0 if is_complete else _partgen_total_progress(partset.status, progress),
+        "total_progress": total_progress,
         "is_complete": is_complete,
     }
 

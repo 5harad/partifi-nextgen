@@ -11,18 +11,29 @@ export function partDownloadFilename(partsetId: string, fileName: string, format
   return format === 'letter' ? `${partsetId}_${fileName}` : `${partsetId}_a4_${fileName}`
 }
 
-export function partgenPath(accessId: string, downloadUrl?: string) {
-  const base = `/${accessId}/partgen`
-  if (!downloadUrl) return base
-  return `${base}?download=${encodeURIComponent(downloadUrl)}`
+export function partgenPath(accessId: string, downloadUrl?: string, returnTo?: string) {
+  const params = new URLSearchParams()
+  if (downloadUrl) params.set('download', downloadUrl)
+  if (returnTo) params.set('return', returnTo)
+  const query = params.toString()
+  return query ? `/${accessId}/partgen?${query}` : `/${accessId}/partgen`
 }
 
 export function navigateToPartgen(
   navigate: NavigateFunction,
   accessId: string,
   downloadUrl?: string,
+  returnTo?: string,
 ) {
-  navigate(partgenPath(accessId, downloadUrl))
+  navigate(partgenPath(accessId, downloadUrl, returnTo))
+}
+
+export function partgenReturnPath(searchParams: URLSearchParams, accessId: string): string {
+  const returnTo = searchParams.get('return')
+  if (returnTo?.startsWith('/') && !returnTo.startsWith('//')) {
+    return returnTo
+  }
+  return `/${accessId}`
 }
 
 export async function triggerPartFileDownload(url: string): Promise<void> {

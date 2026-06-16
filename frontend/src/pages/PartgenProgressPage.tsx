@@ -6,7 +6,7 @@ import {
   ensurePartsByAccessId,
   retryPartsetPipelineByAccessId,
 } from '../lib/api'
-import { triggerPartFileDownload } from '../lib/partDownloads'
+import { triggerPartFileDownload, partgenReturnPath } from '../lib/partDownloads'
 import { pipelineErrorMessage, LOCK_BUSY_MESSAGE, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
 
 export function PartgenProgressPage() {
@@ -19,6 +19,8 @@ export function PartgenProgressPage() {
   const pollRef = useRef<(() => void) | null>(null)
   const previewError = import.meta.env.DEV ? searchParams.get('previewError') : null
   const pendingDownloadUrl = searchParams.get('download')
+  const returnPath = accessId ? partgenReturnPath(searchParams, accessId) : '/'
+  const backLabel = returnPath.startsWith('/library') ? 'Back to library' : 'Back to download'
 
   useEffect(() => {
     if (previewError) {
@@ -52,10 +54,10 @@ export function PartgenProgressPage() {
         if (data.is_complete) {
           if (pendingDownloadUrl) {
             void triggerPartFileDownload(pendingDownloadUrl).finally(() => {
-              if (!cancelled) navigate(`/${accessId}`)
+              if (!cancelled) navigate(returnPath)
             })
           } else {
-            navigate(`/${accessId}`)
+            navigate(returnPath)
           }
           return
         }
@@ -85,7 +87,7 @@ export function PartgenProgressPage() {
       cancelled = true
       window.clearTimeout(timeoutId)
     }
-  }, [accessId, navigate, previewError, pendingDownloadUrl])
+  }, [accessId, navigate, previewError, pendingDownloadUrl, returnPath])
 
   const handleRetry = async () => {
     if (previewError) return
@@ -142,12 +144,12 @@ export function PartgenProgressPage() {
               </div>
               <div
                 className="copy-button"
-                onClick={() => accessId && navigate(`/${accessId}`)}
+                onClick={() => accessId && navigate(returnPath)}
                 onKeyDown={() => {}}
                 role="button"
                 tabIndex={0}
               >
-                Back to download
+                {backLabel}
               </div>
             </div>
           </>
