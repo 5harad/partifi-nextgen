@@ -186,7 +186,7 @@ def get_preview_data(db: Session, partset: Partset) -> dict:
     if not partset.score_id:
         raise ValueError("Partset has no score")
 
-    image_status = ensure_score_pages_warming(partset.score_id)
+    image_status = ensure_score_pages_warming(db, partset.score_id)
     if not image_status["images_ready"]:
         return {
             "partset_id": partset.id,

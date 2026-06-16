@@ -8,6 +8,7 @@ from pathlib import Path
 
 from local_cache import get_local_cache
 from pdf2png import par_pdf2png
+from pipeline.pdf_validate import validate_downloaded_pdf
 from s3_storage import download_file, score_pdf_s3_key
 
 logger = logging.getLogger("partifi.score_page_cache")
@@ -29,6 +30,7 @@ def build_score_page_cache(score_id: str, *, job_id: str | None = None) -> None:
         pdf_path = workdir / "score.pdf"
         logger.info("Converting score %s PDF to local page images", score_id)
         download_file(score_pdf_s3_key(score_id), pdf_path)
+        validate_downloaded_pdf(pdf_path)
 
         pages_dir = workdir / "pages"
         pages_dir.mkdir(parents=True, exist_ok=True)

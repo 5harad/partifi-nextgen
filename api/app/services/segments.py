@@ -124,7 +124,7 @@ def get_segments_data(db: Session, partset: Partset) -> dict:
 
     num_pages = get_num_pages(db, partset.id, partset.score_id)
     private_id = partset.private_id or ""
-    image_status = ensure_score_pages_warming(partset.score_id)
+    image_status = ensure_score_pages_warming(db, partset.score_id)
     image_urls: dict[str, dict[str, str]] = {"lowres": {}, "thumbs": {}}
     for page in range(1, num_pages + 1):
         image_urls["lowres"][str(page)] = page_image_url(private_id, page, "lowres")

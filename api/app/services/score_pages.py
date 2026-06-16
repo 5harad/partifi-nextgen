@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
+from app.models import Score
 from app.services.local_cache import get_local_cache
 from app.services.queue import enqueue_job
 from app.services.score_pages_lock import (
@@ -9,16 +12,25 @@ from app.services.score_pages_lock import (
     try_acquire_score_pages_lock,
 )
 from app.services.warm_progress import get_warm_progress, reset_warm_progress
+from pipeline.score_pdf import score_has_archived_pdf
 
 
 def score_pages_available(score_id: str) -> bool:
     return get_local_cache().score_has_pages(score_id)
 
 
-def ensure_score_pages_warming(score_id: str) -> dict[str, bool | float]:
+def _images_unavailable() -> dict[str, bool | float]:
+    return {"images_ready": False, "images_warming": False, "image_progress": 0.0}
+
+
+def ensure_score_pages_warming(db: Session, score_id: str) -> dict[str, bool | float]:
     """Return image status; enqueue warm_score_pages when needed."""
     if score_pages_available(score_id):
         return {"images_ready": True, "images_warming": False, "image_progress": 100.0}
+
+    score = db.get(Score, score_id)
+    if not score or not score_has_archived_pdf(s3=score.s3, file_size=score.file_size):
+        return _images_unavailable()
 
     progress = get_warm_progress(score_id)
     if progress >= 100.0:

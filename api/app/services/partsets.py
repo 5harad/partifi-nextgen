@@ -14,8 +14,8 @@ from app.services.score_cache import (
 )
 from app.score_limits import MAX_SCORE_BYTES, ScoreTooLargeError
 from app.utils.ids import gen_partset_ids, gen_score_id
-
-PDF_MAGIC = b"%PDF"
+from pipeline.pdf_validate import PDF_MAGIC
+from pipeline.score_pdf import score_has_archived_pdf
 
 
 def total_progress(status: str | None, progress: float) -> float:
@@ -252,6 +252,8 @@ def create_partset_from_score(
     score = db.get(Score, score_id)
     if not score:
         raise ValueError("Score not found")
+    if not score_has_archived_pdf(s3=score.s3, file_size=score.file_size):
+        raise ValueError("Score PDF is not available")
 
     public_id, private_id = gen_partset_ids(db)
     now = datetime.utcnow()

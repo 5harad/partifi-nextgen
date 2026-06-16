@@ -40,12 +40,15 @@ def search_partsets(db: Session, query: str) -> list[dict]:
     rows = db.execute(
         text(
             """
-            SELECT id, score_id, imslp_id, title, composer, publisher
-            FROM partsets
-            WHERE MATCH (title, composer, publisher, imslp_id) AGAINST (:q IN BOOLEAN MODE)
-              AND copyright = 'before 1923'
-              AND analysis_complete IS NOT NULL
-            ORDER BY num_downloads DESC
+            SELECT p.id, p.score_id, p.imslp_id, p.title, p.composer, p.publisher
+            FROM partsets p
+            JOIN scores s ON s.id = p.score_id
+            WHERE MATCH (p.title, p.composer, p.publisher, p.imslp_id) AGAINST (:q IN BOOLEAN MODE)
+              AND p.copyright = 'before 1923'
+              AND p.analysis_complete IS NOT NULL
+              AND s.s3 = 1
+              AND s.file_size > 0
+            ORDER BY p.num_downloads DESC
             LIMIT :limit
             """
         ),

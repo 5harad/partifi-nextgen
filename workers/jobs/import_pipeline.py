@@ -10,6 +10,7 @@ from pathlib import Path
 from find_segments import analyze_score
 from local_cache import ensure_lowres_files, get_local_cache
 from pdf2png import convert_score
+from pipeline.pdf_validate import validate_downloaded_pdf
 from s3_storage import download_file, score_pdf_s3_key
 from score_cache import (
     copy_partset_segs_to_score,
@@ -59,6 +60,7 @@ def _run_convert(partset_id: str, score_id: str, workdir: Path) -> int:
     pdf_path = workdir / "score.pdf"
     logger.info("Downloading score %s for partset %s", score_id, partset_id)
     download_file(score_pdf_s3_key(score_id), pdf_path)
+    validate_downloaded_pdf(pdf_path)
 
     pages_dir = workdir / "pages"
     pages_dir.mkdir(parents=True, exist_ok=True)
