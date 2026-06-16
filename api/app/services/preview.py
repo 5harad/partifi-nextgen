@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -348,6 +349,21 @@ def ensure_parts_if_needed(db: Session, partset: Partset) -> str | None:
         return start_part_generation(db, partset)
     except ValueError:
         return None
+
+
+def ensure_part_file_on_cache_miss(db: Session, partset: Partset, filename: str) -> None:
+    """Start part regeneration when a cached PDF is missing (evicted or invalidated)."""
+    cache = get_local_cache()
+    if cache.part_is_cached(partset.id, filename):
+        return
+    cleared_ready = False
+    if partset.parts_ready:
+        partset.parts_ready = False
+        partset.mod_ts = datetime.utcnow()
+        cleared_ready = True
+    job_id = ensure_parts_if_needed(db, partset)
+    if cleared_ready and job_id is None:
+        db.commit()
 
 
 def start_part_generation(db: Session, partset: Partset) -> str | None:

@@ -3,8 +3,8 @@ FROM python:3.12-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    fonts-noto-cjk \
     fonts-noto-core \
+    fonts-wqy-zenhei \
     ghostscript \
     pdftk \
     && rm -rf /var/lib/apt/lists/*

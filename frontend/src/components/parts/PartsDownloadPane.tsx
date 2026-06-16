@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   deletePartset,
+  ensurePartsByAccessId,
   getCsrfToken,
   getPartgenStatusByAccessId,
   updatePartsetMetadata,
@@ -81,6 +82,7 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
 
     const poll = async () => {
       try {
+        await ensurePartsByAccessId(accessId)
         const status = await getPartgenStatusByAccessId(accessId)
         if (cancelled) return
         if (status.is_complete) {
@@ -124,9 +126,15 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
         title: fields.title,
         composer: fields.composer,
         publisher: fields.publisher || null,
+        parts_ready: false,
       }))
+      try {
+        await ensurePartsByAccessId(accessId)
+      } catch {
+        // Part click or polling will retry ensure-parts.
+      }
     })
-  }, [metadata, privateId, data, onDataChange])
+  }, [metadata, privateId, data, onDataChange, accessId])
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm('Are you sure you want to delete these parts?')) return

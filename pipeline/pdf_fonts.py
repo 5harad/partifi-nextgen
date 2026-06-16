@@ -38,11 +38,16 @@ NOTO_SANS_CANDIDATES = (
     Path("/usr/share/fonts/google-noto/NotoSans-Regular.ttf"),
 )
 
-NOTO_CJK_CANDIDATES = (
-    ASSETS_FONTS / "NotoSansCJK-Regular.ttc",
-    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
-    Path("/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc"),
+# ReportLab only supports TrueType outlines. Debian's Noto CJK .ttc files use
+# PostScript outlines and fail to load; wqy-zenhei works for CJK header text.
+CJK_FONT_CANDIDATES = (
+    ASSETS_FONTS / "NotoSansCJK-Regular.ttf",
+    ASSETS_FONTS / "wqy-zenhei.ttc",
+    Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
 )
+
+# Backwards-compatible alias for tests.
+NOTO_CJK_CANDIDATES = CJK_FONT_CANDIDATES
 
 
 def _in_ranges(codepoint: int, ranges: tuple[tuple[int, int], ...]) -> bool:
@@ -77,6 +82,12 @@ def _find_font(candidates: tuple[Path, ...]) -> Path | None:
     return None
 
 
+def _ttfont_kwargs(path: Path) -> dict:
+    if path.suffix.lower() == ".ttc":
+        return {"subfontIndex": 0}
+    return {}
+
+
 @lru_cache
 def _ensure_fonts_registered() -> None:
     registered = set(pdfmetrics.getRegisteredFontNames())
@@ -90,14 +101,15 @@ def _ensure_fonts_registered() -> None:
         pdfmetrics.registerFont(TTFont(PARTIFI_NOTO_SANS, str(sans_path)))
 
     if PARTIFI_NOTO_CJK not in registered:
-        cjk_path = _find_font(NOTO_CJK_CANDIDATES)
+        cjk_path = _find_font(CJK_FONT_CANDIDATES)
         if cjk_path is None:
             raise RuntimeError(
-                "Noto CJK not found for PDF headers; install fonts-noto-cjk "
-                "or add NotoSansCJK-Regular.ttc under pipeline/assets/fonts/"
+                "CJK font not found for PDF headers; install fonts-wqy-zenhei "
+                "or add a TrueType CJK font under pipeline/assets/fonts/"
             )
-        kwargs: dict = {"subfontIndex": 0} if cjk_path.suffix.lower() == ".ttc" else {}
-        pdfmetrics.registerFont(TTFont(PARTIFI_NOTO_CJK, str(cjk_path), **kwargs))
+        pdfmetrics.registerFont(
+            TTFont(PARTIFI_NOTO_CJK, str(cjk_path), **_ttfont_kwargs(cjk_path))
+        )
 
 
 def header_font_name(text: str) -> str:

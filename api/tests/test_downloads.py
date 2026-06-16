@@ -2,6 +2,7 @@ from app.models import Partset
 from app.services.downloads import (
     part_file_name_from_download_filename,
     part_file_url,
+    partgen_redirect_url,
     score_pdf_url_for_access,
     score_pdf_url_for_owner,
     score_pdf_url_for_partset,
@@ -50,6 +51,13 @@ def test_part_file_urls_encode_plus() -> None:
     assert (
         part_file_url(partset, combined, mode="public")
         == "/api/v1/access/pub01/part-file/pub01_violin_%2B_cello.pdf"
+    )
+
+
+def test_partgen_redirect_url() -> None:
+    assert (
+        partgen_redirect_url("pub01", "/api/v1/access/pub01/part-file/pub01_flute.pdf")
+        == "/pub01/partgen?download=%2Fapi%2Fv1%2Faccess%2Fpub01%2Fpart-file%2Fpub01_flute.pdf"
     )
 
 

@@ -31,6 +31,11 @@ def part_file_url(partset: Partset, filename: str, *, mode: str = "public") -> s
     return f"/api/v1/access/{partset.id}/part-file/{encoded}"
 
 
+def partgen_redirect_url(access_id: str, download_path: str) -> str:
+    """Frontend partgen route that polls until the part PDF is ready."""
+    return f"/{access_id}/partgen?download={quote(download_path, safe='')}"
+
+
 def score_pdf_url_for_partset(partset: Partset, *, mode: str = "public") -> str | None:
     if not partset.score_id:
         return None

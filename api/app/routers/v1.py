@@ -3,7 +3,7 @@ import re
 import threading
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy.orm import Session
 
@@ -58,6 +58,7 @@ from app.schemas.preview import (
 )
 from app.services.preview import (
     combine_parts,
+    ensure_part_file_on_cache_miss,
     ensure_parts_if_needed,
     get_parts_data,
     get_preview_data,
@@ -65,7 +66,7 @@ from app.services.preview import (
     save_layout,
     start_part_generation,
 )
-from app.services.downloads import record_part_download
+from app.services.downloads import partgen_redirect_url, record_part_download
 from app.services.local_cache import get_local_cache
 from app.services.partset_touch import touch_partset_access
 
@@ -108,14 +109,20 @@ def _serve_cached_part(
     filename: str,
     db: Session,
     *,
+    access_id: str,
+    download_path: str,
     user_id: str | None = None,
-) -> FileResponse:
+) -> FileResponse | RedirectResponse:
     if not PART_FILE_PATTERN.match(filename):
         raise HTTPException(status_code=400, detail="Invalid filename")
     cache = get_local_cache()
     path = cache.ensure_part_file(partset.id, filename)
     if not path:
-        raise HTTPException(status_code=404, detail="Part file not found")
+        ensure_part_file_on_cache_miss(db, partset, filename)
+        return RedirectResponse(
+            partgen_redirect_url(access_id, download_path),
+            status_code=302,
+        )
     record_part_download(db, partset, filename, user_id=user_id)
     return FileResponse(path, media_type="application/pdf", filename=filename)
 
@@ -223,27 +230,43 @@ def score_pdf_owner(private_id: str, db: Session = Depends(get_db)) -> FileRespo
 def part_file_owner(
     private_id: str,
     filename: str,
+    request: Request,
     db: Session = Depends(get_db),
     user_id: str | None = Depends(get_current_user_id),
-) -> FileResponse:
+) -> FileResponse | RedirectResponse:
     partset = get_partset_by_private_id(db, private_id)
     if not partset:
         raise HTTPException(status_code=404, detail="Partset not found")
-    return _serve_cached_part(partset, filename, db, user_id=user_id)
+    return _serve_cached_part(
+        partset,
+        filename,
+        db,
+        access_id=private_id,
+        download_path=request.url.path,
+        user_id=user_id,
+    )
 
 
 @router.get("/access/{access_id}/part-file/{filename}")
 def part_file_access(
     access_id: str,
     filename: str,
+    request: Request,
     db: Session = Depends(get_db),
     user_id: str | None = Depends(get_current_user_id),
-) -> FileResponse:
+) -> FileResponse | RedirectResponse:
     resolved = resolve_partset_access(db, access_id)
     if not resolved:
         raise HTTPException(status_code=404, detail="Partset not found")
     partset, _mode = resolved
-    return _serve_cached_part(partset, filename, db, user_id=user_id)
+    return _serve_cached_part(
+        partset,
+        filename,
+        db,
+        access_id=access_id,
+        download_path=request.url.path,
+        user_id=user_id,
+    )
 
 
 @router.post("/partsets", response_model=PartsetCreateResponse)

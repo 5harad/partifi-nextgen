@@ -213,6 +213,7 @@ export function LibraryPage() {
                 title: fields.title,
                 composer: fields.composer,
                 publisher: fields.publisher || null,
+                parts_ready: false,
               }
             : item,
         ),
