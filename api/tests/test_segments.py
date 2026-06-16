@@ -6,8 +6,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import Base
-from app.models import Page, Part, Partset, Score
-from app.services.segments import save_all_page_segments
+from app.models import Page, Part, Partset, Score, Segment
+from app.services.segments import save_all_page_segments, sync_part_rows_from_tags
 
 
 @pytest.fixture
@@ -91,3 +91,51 @@ def test_save_all_page_segments_syncs_part_rows(mock_cache: Mock, db: Session) -
     }
     assert tags == {"violin", "cello"}
     assert partset.parts_ready is False
+
+
+def test_sync_part_rows_from_tags_recovers_when_part_row_races(db: Session) -> None:
+    """If another transaction inserts the part row first, sync reuses it instead of 500ing."""
+    db.add(
+        Segment(
+            partset_id="pub1",
+            page=1,
+            top=10.0,
+            bottom=50.0,
+            tags="violin II",
+        )
+    )
+    db.flush()
+
+    engine = db.get_bind()
+    original_begin_nested = db.begin_nested
+    raced = {"done": False}
+
+    def begin_nested_with_race():
+        ctx = original_begin_nested()
+        if not raced["done"]:
+            other = sessionmaker(bind=engine, autoflush=False, autocommit=False)()
+            try:
+                other.add(
+                    Part(
+                        partset_id="pub1",
+                        tag="violin II",
+                        spacing=0.1,
+                        combined=False,
+                        file_name="violin_II.pdf",
+                    )
+                )
+                other.commit()
+            finally:
+                other.close()
+            raced["done"] = True
+        return ctx
+
+    with patch.object(db, "begin_nested", side_effect=begin_nested_with_race):
+        sync_part_rows_from_tags(db, "pub1")
+
+    violin_parts = (
+        db.query(Part)
+        .filter(Part.partset_id == "pub1", Part.tag == "violin II")
+        .all()
+    )
+    assert len(violin_parts) == 1

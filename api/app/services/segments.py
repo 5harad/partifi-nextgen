@@ -1,4 +1,5 @@
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Page, Part, Partset, Score, Segment
@@ -36,15 +37,27 @@ def _sync_part_rows_from_tags(db: Session, partset_id: str) -> None:
         if tag in parts_by_tag:
             continue
         filename = tag_to_filename(tag)
-        part = Part(
-            partset_id=partset_id,
-            tag=tag,
-            spacing=0.1,
-            combined=False,
-            file_name=filename,
-        )
-        db.add(part)
-        parts_by_tag[tag] = part
+        try:
+            with db.begin_nested():
+                part = Part(
+                    partset_id=partset_id,
+                    tag=tag,
+                    spacing=0.1,
+                    combined=False,
+                    file_name=filename,
+                )
+                db.add(part)
+                db.flush()
+                parts_by_tag[tag] = part
+        except IntegrityError:
+            existing = (
+                db.query(Part)
+                .filter(Part.partset_id == partset_id, Part.tag == tag)
+                .first()
+            )
+            if existing is None:
+                raise
+            parts_by_tag[tag] = existing
 
     for part in list(parts_by_tag.values()):
         part_tags = [t.strip() for t in part.tag.split(" + ")]
