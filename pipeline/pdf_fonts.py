@@ -59,10 +59,7 @@ def _is_latin_char(ch: str) -> bool:
         return True
     if ch.isspace():
         return True
-    codepoint = ord(ch)
-    if codepoint in (0x266D, 0x266E, 0x266F):  # ♭ ♮ ♯
-        return True
-    return _in_ranges(codepoint, _TIMES_ROMAN_RANGES)
+    return _in_ranges(ord(ch), _TIMES_ROMAN_RANGES)
 
 
 def is_latin_only(text: str) -> bool:
