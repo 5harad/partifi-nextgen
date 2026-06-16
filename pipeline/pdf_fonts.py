@@ -118,7 +118,18 @@ def header_font_name(text: str) -> str:
     return PARTIFI_NOTO_SANS
 
 
+def header_font_name_for_fields(*fields: str) -> str:
+    """Pick one header font that can render all fields (strongest requirement wins)."""
+    return header_font_name("".join(fields))
+
+
 def set_header_font(canvas, text: str, size: int = 11) -> str:
     font = header_font_name(text)
+    canvas.setFont(font, size)
+    return font
+
+
+def set_header_font_for_fields(canvas, *fields: str, size: int = 11) -> str:
+    font = header_font_name_for_fields(*fields)
     canvas.setFont(font, size)
     return font

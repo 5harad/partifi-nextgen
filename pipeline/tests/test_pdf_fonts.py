@@ -8,6 +8,7 @@ from pipeline.pdf_fonts import (
     _find_font,
     has_cjk,
     header_font_name,
+    header_font_name_for_fields,
     is_latin_only,
     NOTO_CJK_CANDIDATES,
     NOTO_SANS_CANDIDATES,
@@ -65,6 +66,25 @@ def test_header_font_name(text: str, expected: str) -> None:
     if expected == PARTIFI_NOTO_CJK and _find_font(NOTO_CJK_CANDIDATES) is None:
         pytest.skip("Noto CJK not installed")
     assert header_font_name(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("fields", "expected"),
+    [
+        (("Beethoven", "Ludwig van Beethoven", "violin"), TIMES_ROMAN),
+        (("No. 2 in B♭", "Frédéric Chopin", "piano"), PARTIFI_NOTO_SANS),
+        (("Symphony", "Antonín Dvořák", "violin"), PARTIFI_NOTO_SANS),
+        (("梁祝", "何占豪", "小提琴"), PARTIFI_NOTO_CJK),
+        (("Beethoven", "Beethoven", "Скрипка"), PARTIFI_NOTO_SANS),
+        (("English Title", "English Composer", "小提琴"), PARTIFI_NOTO_CJK),
+    ],
+)
+def test_header_font_name_for_fields(fields: tuple[str, ...], expected: str) -> None:
+    if expected != TIMES_ROMAN and _find_font(NOTO_SANS_CANDIDATES) is None:
+        pytest.skip("Noto Sans not installed")
+    if expected == PARTIFI_NOTO_CJK and _find_font(NOTO_CJK_CANDIDATES) is None:
+        pytest.skip("Noto CJK not installed")
+    assert header_font_name_for_fields(*fields) == expected
 
 
 def test_create_part_with_cjk_title(tmp_path: Path) -> None:
