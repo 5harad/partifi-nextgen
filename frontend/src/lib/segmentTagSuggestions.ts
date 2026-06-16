@@ -2,7 +2,7 @@ import type { PageSegmentData, RegionState } from '../types/segment'
 import {
   BASE_TAGS,
   isConfirmedLabel,
-  isConfirmedPartTag,
+  isPartChainAnchor,
   needsLabelSuggestion,
   needsPartSuggestion,
   splitTags,
@@ -127,7 +127,7 @@ export function computePartAndLabelSuggestions(
       pageStart[page] = ndx
     }
 
-    if (isConfirmedPartTag(val.tags, val.tagIsSuggestion)) {
+    if (isPartChainAnchor(val.tags, val.tagIsSuggestion)) {
       partSuggestions[ndx] = val.tags
     } else if (ndx > 0 && partSuggestions[ndx - 1] in nextTag) {
       partSuggestions[ndx] = nextTag[partSuggestions[ndx - 1]]

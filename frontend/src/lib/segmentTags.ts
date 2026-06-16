@@ -64,8 +64,12 @@ export function isConfirmedPartTag(tags: string, tagIsSuggestion: boolean): bool
   return !tagIsSuggestion && tags !== '' && tags !== '(none)'
 }
 
+export function isPartChainAnchor(tags: string, tagIsSuggestion: boolean): boolean {
+  return !tagIsSuggestion && tags !== ''
+}
+
 export function needsPartSuggestion(tags: string, tagIsSuggestion: boolean): boolean {
-  return tags === '' || tags === '(none)' || tagIsSuggestion
+  return tags === '' || tagIsSuggestion
 }
 
 export function isConfirmedLabel(label: string, labelIsSuggestion: boolean): boolean {
@@ -73,7 +77,7 @@ export function isConfirmedLabel(label: string, labelIsSuggestion: boolean): boo
 }
 
 export function needsLabelSuggestion(label: string, labelIsSuggestion: boolean): boolean {
-  return label === '' || label === '(none)' || labelIsSuggestion
+  return label === '' || labelIsSuggestion
 }
 
 export function formatTagsOnFocus(value: string): string {
