@@ -35,6 +35,8 @@ def update_partset_metadata(
     partset.composer = composer.strip()
     partset.publisher = publisher.strip() or None
     partset.mod_ts = datetime.utcnow()
+    partset.parts_ready = False
+    get_local_cache().invalidate_parts(partset.id)
     db.commit()
 
 
