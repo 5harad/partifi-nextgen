@@ -18,8 +18,10 @@ from pipeline.pdf_fonts import (
     ("text", "expected"),
     [
         ("Beethoven", True),
-        ("Dvořák", True),
         ("Café", True),
+        ("Antonín", True),
+        ("Dvořák", False),
+        ("Symfoni č. 9", False),
         ("No. 2 in B♭", True),
         ("", True),
         ("梁祝", False),
@@ -49,7 +51,9 @@ def test_has_cjk(text: str, expected: bool) -> None:
     ("text", "expected"),
     [
         ("Beethoven", TIMES_ROMAN),
-        ("Dvořák", TIMES_ROMAN),
+        ("Café", TIMES_ROMAN),
+        ("Dvořák", PARTIFI_NOTO_SANS),
+        ("Symfoni č. 9", PARTIFI_NOTO_SANS),
         ("梁祝", PARTIFI_NOTO_CJK),
         ("Пётр", PARTIFI_NOTO_SANS),
     ],

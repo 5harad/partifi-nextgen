@@ -14,11 +14,11 @@ TIMES_ROMAN = "Times-Roman"
 PARTIFI_NOTO_CJK = "PartifiNotoCJK"
 PARTIFI_NOTO_SANS = "PartifiNotoSans"
 
-# Latin blocks used in European score metadata (incl. extended Latin for diacritics).
-_LATIN_RANGES: tuple[tuple[int, int], ...] = (
+# Characters Times-Roman can render (PDF WinAnsi / Latin-1). Extended Latin
+# (e.g. Czech ř, č) needs Noto Sans — Times shows missing-glyph boxes for those.
+_TIMES_ROMAN_RANGES: tuple[tuple[int, int], ...] = (
     (0x0020, 0x007E),  # printable ASCII
-    (0x00A0, 0x024F),  # Latin-1 supplement + extended A/B
-    (0x1E00, 0x1EFF),  # Latin extended additional
+    (0x00A0, 0x00FF),  # Latin-1 supplement (Café, Antonín, etc.)
     (0x2000, 0x206F),  # general punctuation
     (0x2070, 0x209F),  # superscripts/subscripts (e.g. No²)
 )
@@ -62,7 +62,7 @@ def _is_latin_char(ch: str) -> bool:
     codepoint = ord(ch)
     if codepoint in (0x266D, 0x266E, 0x266F):  # ♭ ♮ ♯
         return True
-    return _in_ranges(codepoint, _LATIN_RANGES)
+    return _in_ranges(codepoint, _TIMES_ROMAN_RANGES)
 
 
 def is_latin_only(text: str) -> bool:
