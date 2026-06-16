@@ -33,6 +33,8 @@ _CJK_RANGES: tuple[tuple[int, int], ...] = (
 )
 
 NOTO_SANS_CANDIDATES = (
+    ASSETS_FONTS / "DejaVuSans.ttf",
+    Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
     ASSETS_FONTS / "NotoSans-Regular.ttf",
     Path("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"),
     Path("/usr/share/fonts/google-noto/NotoSans-Regular.ttf"),
@@ -92,8 +94,8 @@ def _ensure_fonts_registered() -> None:
         sans_path = _find_font(NOTO_SANS_CANDIDATES)
         if sans_path is None:
             raise RuntimeError(
-                "Noto Sans not found for PDF headers; install fonts-noto-core "
-                "or add NotoSans-Regular.ttf under pipeline/assets/fonts/"
+                "Sans header font not found; install fonts-dejavu-core "
+                "or add DejaVuSans.ttf under pipeline/assets/fonts/"
             )
         pdfmetrics.registerFont(TTFont(PARTIFI_NOTO_SANS, str(sans_path)))
 
