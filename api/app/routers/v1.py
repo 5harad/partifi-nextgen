@@ -226,14 +226,14 @@ def score_pdf_owner(private_id: str, db: Session = Depends(get_db)) -> FileRespo
     return _serve_score_pdf(partset.score_id)
 
 
-@router.get("/partsets/{private_id}/part-file/{filename}")
+@router.get("/partsets/{private_id}/part-file/{filename}", response_model=None)
 def part_file_owner(
     private_id: str,
     filename: str,
     request: Request,
     db: Session = Depends(get_db),
     user_id: str | None = Depends(get_current_user_id),
-) -> FileResponse | RedirectResponse:
+):
     partset = get_partset_by_private_id(db, private_id)
     if not partset:
         raise HTTPException(status_code=404, detail="Partset not found")
@@ -247,14 +247,14 @@ def part_file_owner(
     )
 
 
-@router.get("/access/{access_id}/part-file/{filename}")
+@router.get("/access/{access_id}/part-file/{filename}", response_model=None)
 def part_file_access(
     access_id: str,
     filename: str,
     request: Request,
     db: Session = Depends(get_db),
     user_id: str | None = Depends(get_current_user_id),
-) -> FileResponse | RedirectResponse:
+):
     resolved = resolve_partset_access(db, access_id)
     if not resolved:
         raise HTTPException(status_code=404, detail="Partset not found")
