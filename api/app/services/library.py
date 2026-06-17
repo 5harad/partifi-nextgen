@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.orm import Session
 
 from app.models import Favorite, Part, Partset
@@ -20,26 +21,54 @@ def resolve_public_partset_id(db: Session, access_id: str) -> str | None:
     return partset.id
 
 
-def claim_partset_for_user(db: Session, partset: Partset, user_id: str) -> None:
-    if partset.user_id is None:
-        partset.user_id = user_id
+def _upsert_favorite(
+    db: Session,
+    *,
+    partset_id: str,
+    user_id: str,
+    admin: bool,
+    ts: datetime,
+) -> None:
+    bind = db.get_bind()
+    if bind.dialect.name == "mysql":
+        stmt = mysql_insert(Favorite).values(
+            partset_id=partset_id,
+            user_id=user_id,
+            admin=admin,
+            ts=ts,
+        ).on_duplicate_key_update(admin=admin, ts=ts)
+        db.execute(stmt)
+        return
+
     existing = (
         db.query(Favorite)
-        .filter(Favorite.partset_id == partset.id, Favorite.user_id == user_id)
+        .filter(Favorite.partset_id == partset_id, Favorite.user_id == user_id)
         .first()
     )
     if existing:
-        existing.admin = True
-        existing.ts = datetime.utcnow()
+        existing.admin = admin
+        existing.ts = ts
     else:
         db.add(
             Favorite(
-                partset_id=partset.id,
+                partset_id=partset_id,
                 user_id=user_id,
-                admin=True,
-                ts=datetime.utcnow(),
+                admin=admin,
+                ts=ts,
             )
         )
+
+
+def claim_partset_for_user(db: Session, partset: Partset, user_id: str) -> None:
+    if partset.user_id is None:
+        partset.user_id = user_id
+    _upsert_favorite(
+        db,
+        partset_id=partset.id,
+        user_id=user_id,
+        admin=True,
+        ts=datetime.utcnow(),
+    )
 
 
 def list_library(db: Session, user_id: str) -> list[dict]:
@@ -138,22 +167,13 @@ def update_favorite(
         if admin:
             claim_partset_for_user(db, partset, user_id)
         else:
-            existing = (
-                db.query(Favorite)
-                .filter(Favorite.partset_id == partset.id, Favorite.user_id == user_id)
-                .first()
+            _upsert_favorite(
+                db,
+                partset_id=partset.id,
+                user_id=user_id,
+                admin=False,
+                ts=datetime.utcnow(),
             )
-            if existing:
-                existing.ts = datetime.utcnow()
-            else:
-                db.add(
-                    Favorite(
-                        partset_id=partset.id,
-                        user_id=user_id,
-                        admin=False,
-                        ts=datetime.utcnow(),
-                    )
-                )
         db.commit()
         return
 

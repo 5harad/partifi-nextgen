@@ -19,6 +19,7 @@ from app.services.partset_failure import clear_partset_failure
 from app.services.queue import enqueue_job
 from app.services.downloads import part_file_url, score_pdf_url_for_partset
 from app.services.score_pages import ensure_score_pages_warming
+from app.services.part_rows import upsert_part_row
 from app.services.segments import ensure_import_complete, get_partset_by_private_id, sync_part_rows_from_tags
 from app.utils.strings import tag_to_filename
 
@@ -333,25 +334,15 @@ def combine_parts(db: Session, partset: Partset, action: str, tag: str) -> None:
 
     if action == "add":
         filename = tag_to_filename(tag)
-        existing = (
-            db.query(Part)
-            .filter(Part.partset_id == partset.id, Part.tag == tag)
-            .first()
+        upsert_part_row(
+            db,
+            partset_id=partset.id,
+            tag=tag,
+            spacing=0.1,
+            combined=True,
+            file_name=filename,
+            update_on_duplicate=True,
         )
-        if existing:
-            existing.combined = True
-            existing.spacing = 0.1
-            existing.file_name = filename
-        else:
-            db.add(
-                Part(
-                    partset_id=partset.id,
-                    tag=tag,
-                    spacing=0.1,
-                    combined=True,
-                    file_name=filename,
-                )
-            )
     elif action == "remove":
         db.query(Part).filter(
             Part.partset_id == partset.id,

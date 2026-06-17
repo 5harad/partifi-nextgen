@@ -1,9 +1,9 @@
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Page, Part, Partset, Score, Segment
 from app.services.local_cache import get_local_cache
+from app.services.part_rows import upsert_part_row
 from app.services.partset_touch import touch_partset_access
 from app.services.score_pages import ensure_score_pages_warming
 from app.utils.strings import rm_space, tag_to_filename
@@ -37,27 +37,14 @@ def _sync_part_rows_from_tags(db: Session, partset_id: str) -> None:
         if tag in parts_by_tag:
             continue
         filename = tag_to_filename(tag)
-        try:
-            with db.begin_nested():
-                part = Part(
-                    partset_id=partset_id,
-                    tag=tag,
-                    spacing=0.1,
-                    combined=False,
-                    file_name=filename,
-                )
-                db.add(part)
-                db.flush()
-                parts_by_tag[tag] = part
-        except IntegrityError:
-            existing = (
-                db.query(Part)
-                .filter(Part.partset_id == partset_id, Part.tag == tag)
-                .first()
-            )
-            if existing is None:
-                raise
-            parts_by_tag[tag] = existing
+        parts_by_tag[tag] = upsert_part_row(
+            db,
+            partset_id=partset_id,
+            tag=tag,
+            spacing=0.1,
+            combined=False,
+            file_name=filename,
+        )
 
     for part in list(parts_by_tag.values()):
         part_tags = [t.strip() for t in part.tag.split(" + ")]

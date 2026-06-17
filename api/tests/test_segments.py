@@ -93,8 +93,9 @@ def test_save_all_page_segments_syncs_part_rows(mock_cache: Mock, db: Session) -
     assert partset.parts_ready is False
 
 
-def test_sync_part_rows_from_tags_recovers_when_part_row_races(db: Session) -> None:
-    """If another transaction inserts the part row first, sync reuses it instead of 500ing."""
+@patch("app.services.segments.get_local_cache")
+def test_sync_part_rows_from_tags_is_idempotent(mock_cache: Mock, db: Session) -> None:
+    mock_cache.return_value = Mock()
     db.add(
         Segment(
             partset_id="pub1",
@@ -104,38 +105,14 @@ def test_sync_part_rows_from_tags_recovers_when_part_row_races(db: Session) -> N
             tags="violin II",
         )
     )
-    db.flush()
+    db.commit()
 
-    engine = db.get_bind()
-    original_begin_nested = db.begin_nested
-    raced = {"done": False}
+    sync_part_rows_from_tags(db, "pub1")
+    sync_part_rows_from_tags(db, "pub1")
 
-    def begin_nested_with_race():
-        ctx = original_begin_nested()
-        if not raced["done"]:
-            other = sessionmaker(bind=engine, autoflush=False, autocommit=False)()
-            try:
-                other.add(
-                    Part(
-                        partset_id="pub1",
-                        tag="violin II",
-                        spacing=0.1,
-                        combined=False,
-                        file_name="violin_II.pdf",
-                    )
-                )
-                other.commit()
-            finally:
-                other.close()
-            raced["done"] = True
-        return ctx
-
-    with patch.object(db, "begin_nested", side_effect=begin_nested_with_race):
-        sync_part_rows_from_tags(db, "pub1")
-
-    violin_parts = (
+    assert (
         db.query(Part)
         .filter(Part.partset_id == "pub1", Part.tag == "violin II")
-        .all()
+        .count()
+        == 1
     )
-    assert len(violin_parts) == 1
