@@ -38,6 +38,8 @@ PMLASIA_PLACEHOLDER_RE = re.compile(
 )
 PMLASIA_DOWNLOAD_URL = "https://imslp.tw/index.php?download=PMLASIA{pml_id}-{suffix}"
 
+IMSLP_NO_DOWNLOAD_PDF_MSG = "No downloadable PDF is available for IMSLP {imslp_id}"
+
 
 def rewrite_pmlasia_placeholder_url(url: str) -> str | None:
     """Map PML-CA placeholder stub URLs to the real PML-Asia download page."""
@@ -46,6 +48,21 @@ def rewrite_pmlasia_placeholder_url(url: str) -> str | None:
         return None
     pml_id, suffix = match.group(1), match.group(2)
     return PMLASIA_DOWNLOAD_URL.format(pml_id=pml_id, suffix=suffix)
+
+
+def is_imslp_index_error_page(page_html: str, page_url: str = "") -> bool:
+    """True when IMSLP's ImagefromIndex special page reports no downloadable file."""
+    if "imagefromindex" not in page_url.lower():
+        return False
+    if re.search(r"<title>\s*Error\s*-\s*IMSLP\s*</title>", page_html, re.I):
+        return True
+    if re.search(
+        r'<h1[^>]*id="firstHeading"[^>]*>\s*Error\s*</h1>',
+        page_html,
+        re.I,
+    ):
+        return True
+    return False
 
 
 def format_imslp_http_context(
@@ -307,6 +324,9 @@ def resolve_imslp_pdf_url(imslp_id: str, client: httpx.Client) -> tuple[str, byt
         return direct
 
     page_url = str(response.url)
+    if is_imslp_index_error_page(response.text, page_url):
+        raise ValueError(IMSLP_NO_DOWNLOAD_PDF_MSG.format(imslp_id=imslp_id))
+
     content_type = response.headers.get("content-type", "")
     if is_pdf_body(response.content, content_type) and rewrite_pmlasia_placeholder_url(page_url):
         return _fetch_pmlasia_via_placeholder(client, page_url)
@@ -345,7 +365,12 @@ def resolve_imslp_pdf_url(imslp_id: str, client: httpx.Client) -> tuple[str, byt
 
 def _is_retryable_resolve_error(exc: BaseException) -> bool:
     if isinstance(exc, ValueError):
-        return "Resolved URL is not a PDF" not in str(exc)
+        msg = str(exc)
+        if "Resolved URL is not a PDF" in msg:
+            return False
+        if "No downloadable PDF is available" in msg:
+            return False
+        return True
     if isinstance(exc, (httpx.TimeoutException, httpx.ConnectError)):
         return True
     if isinstance(exc, httpx.HTTPStatusError):

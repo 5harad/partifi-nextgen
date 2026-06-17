@@ -51,3 +51,12 @@ def test_connect_error_is_retryable_for_pdf_resolve() -> None:
 
 def test_connect_error_is_not_retryable_for_non_pdf_value_error() -> None:
     assert _is_retryable_resolve_error(ValueError("Resolved URL is not a PDF for IMSLP 1")) is False
+
+
+def test_no_downloadable_pdf_is_not_retryable() -> None:
+    assert (
+        _is_retryable_resolve_error(
+            ValueError("No downloadable PDF is available for IMSLP 74685")
+        )
+        is False
+    )

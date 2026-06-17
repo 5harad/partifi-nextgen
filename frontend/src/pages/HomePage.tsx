@@ -34,6 +34,7 @@ export function HomePage() {
   const [imslpCopyright, setImslpCopyright] = useState<CopyrightValue | ''>('')
   const [imslpLookupPending, setImslpLookupPending] = useState(false)
   const lookupGenRef = useRef(0)
+  const suppressNextLookupRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
 
   const MIN_IMSLP_ID_LENGTH = 4
@@ -124,6 +125,10 @@ export function HomePage() {
 
   useEffect(() => {
     if (importMode !== 'imslp' || submitting) return
+    if (suppressNextLookupRef.current) {
+      suppressNextLookupRef.current = false
+      return
+    }
     const timer = window.setTimeout(() => {
       void lookupImslp(imslpId)
     }, 600)
@@ -208,6 +213,7 @@ export function HomePage() {
       )
       navigate(`/${result.id}/import`)
     } catch (err) {
+      suppressNextLookupRef.current = true
       setImslpError(err instanceof Error ? err.message : 'Import failed')
     } finally {
       setSubmitting(false)

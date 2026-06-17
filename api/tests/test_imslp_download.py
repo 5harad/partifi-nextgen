@@ -1,10 +1,12 @@
 from unittest.mock import MagicMock, patch
 
 import httpx
+import pytest
 
 from pipeline.imslp_download import (
     format_imslp_http_context,
     fetch_mirror_pdf,
+    is_imslp_index_error_page,
     is_pdf_body,
     is_pmlasia_disclaimer,
     is_pmlca_disclaimer,
@@ -31,6 +33,12 @@ PMLCA_DIRECT_HTML = """<!doctype html>
 PMLCA_DIRECT_URL = (
     "https://petruccimusiclibrary.ca/files/imglnks/caimg/1/12/IMSLP1234567-real-score.pdf"
 )
+
+IMSLP_INDEX_ERROR_HTML = """<!doctype html>
+<html><head><title>Error - IMSLP</title></head>
+<body><h1 id="firstHeading" class="firstHeading pagetitle page-header">
+Error</h1></body></html>
+"""
 
 PMLCA_HTML = """<!doctype html>
 <html><head><title>Petrucci Music Library Canada</title></head>
@@ -165,6 +173,36 @@ def test_mirror_request_cookies_for_imslp_tw() -> None:
         "disclaimer_bypass": "OK"
     }
     assert mirror_request_cookies("https://vmirror.imslp.org/files/foo.pdf") == {}
+
+
+def test_is_imslp_index_error_page() -> None:
+    page_url = "https://imslp.org/wiki/Special:ImagefromIndex/74685"
+    assert is_imslp_index_error_page(IMSLP_INDEX_ERROR_HTML, page_url)
+    assert not is_imslp_index_error_page(PMLASIA_HTML, "https://imslp.tw/index.php?download=foo.pdf")
+
+
+def test_resolve_imslp_index_error_fails_without_retry() -> None:
+    page_url = "https://imslp.org/wiki/Special:ImagefromIndex/74685"
+    client = MagicMock()
+    client.get.return_value = _mock_response(url=page_url, text=IMSLP_INDEX_ERROR_HTML)
+
+    with pytest.raises(ValueError, match="No downloadable PDF is available"):
+        resolve_imslp_pdf_url("74685", client)
+
+    assert client.get.call_count == 1
+
+
+def test_resolve_imslp_index_error_not_retried() -> None:
+    page_url = "https://imslp.org/wiki/Special:ImagefromIndex/74685"
+    client = MagicMock()
+    client.get.return_value = _mock_response(url=page_url, text=IMSLP_INDEX_ERROR_HTML)
+
+    with patch("pipeline.imslp_download.time.sleep") as sleep_mock:
+        with pytest.raises(ValueError, match="No downloadable PDF is available"):
+            resolve_imslp_pdf_url_with_retries("74685", client, max_attempts=3)
+
+    assert client.get.call_count == 1
+    sleep_mock.assert_not_called()
 
 
 def test_fetch_mirror_pdf_follows_asia_disclaimer() -> None:
