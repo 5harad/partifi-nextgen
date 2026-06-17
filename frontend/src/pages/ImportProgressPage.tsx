@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { getCsrfToken, getImportStatus, retryPartsetPipeline } from '../lib/api'
+import {
+  ensureImportByPrivateId,
+  getCsrfToken,
+  getImportStatus,
+  retryPartsetPipeline,
+} from '../lib/api'
 import { pipelineErrorMessage, LOCK_BUSY_MESSAGE, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
 
 export function ImportProgressPage() {
@@ -27,6 +32,10 @@ export function ImportProgressPage() {
     let cancelled = false
     let timeoutId: number
     let failedAttempts = 0
+
+    void ensureImportByPrivateId(privateId).catch(() => {
+      // Polling will surface errors; ensure is best-effort on entry.
+    })
 
     const poll = async () => {
       try {

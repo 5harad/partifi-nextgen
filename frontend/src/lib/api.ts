@@ -70,6 +70,15 @@ export async function getImportStatus(privateId: string): Promise<ImportProgress
   return res.json()
 }
 
+export async function ensureImportByPrivateId(privateId: string): Promise<void> {
+  const res = await apiFetch(`/api/v1/partsets/${privateId}/ensure-import`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    throw new Error('Failed to start import')
+  }
+}
+
 export async function retryPartsetPipeline(
   privateId: string,
   csrfToken: string,

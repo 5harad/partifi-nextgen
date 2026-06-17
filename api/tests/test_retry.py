@@ -4,7 +4,11 @@ from unittest.mock import Mock, patch
 import pytest
 
 from app.models import Partset
-from app.services.retry import import_pipeline_complete, retry_partset_pipeline
+from app.services.retry import (
+    ensure_import_if_needed,
+    import_pipeline_complete,
+    retry_partset_pipeline,
+)
 
 
 def _partset(**kwargs) -> Partset:
@@ -33,6 +37,62 @@ def test_import_pipeline_complete() -> None:
         analysis_complete=datetime.utcnow(),
     )
     assert import_pipeline_complete(complete)
+
+
+@patch("app.services.retry.try_acquire_import_lock", return_value=True)
+@patch("app.services.retry.enqueue_job", return_value="55")
+def test_ensure_import_imslp_orphan(_mock_enqueue: patch, _mock_lock: patch) -> None:
+    db = Mock()
+    partset = _partset(
+        score_id=None,
+        imslp_id="268573",
+        error=None,
+        import_start=None,
+        status=None,
+    )
+    job_id = ensure_import_if_needed(db, partset)
+    assert job_id == "55"
+    assert partset.import_start is not None
+    assert partset.status == "import"
+    assert partset.error is None
+    _mock_enqueue.assert_called_once_with(
+        "imslp_import",
+        {"partset_id": "pub01", "imslp_id": "268573"},
+    )
+    db.commit.assert_called_once()
+
+
+@patch("app.services.retry.enqueue_job")
+def test_ensure_import_skips_when_complete(_mock_enqueue: patch) -> None:
+    db = Mock()
+    now = datetime.utcnow()
+    partset = _partset(
+        import_complete=now,
+        convert_complete=now,
+        analysis_complete=now,
+        error=None,
+    )
+    assert ensure_import_if_needed(db, partset) is None
+    _mock_enqueue.assert_not_called()
+    db.commit.assert_not_called()
+
+
+@patch("app.services.retry.enqueue_job")
+def test_ensure_import_skips_when_error_set(_mock_enqueue: patch) -> None:
+    db = Mock()
+    partset = _partset(score_id=None, imslp_id="268573", error="import")
+    assert ensure_import_if_needed(db, partset) is None
+    _mock_enqueue.assert_not_called()
+
+
+@patch("app.services.retry.try_acquire_import_lock", return_value=False)
+@patch("app.services.retry.enqueue_job")
+def test_ensure_import_skips_when_lock_held(_mock_enqueue: patch, _mock_lock: patch) -> None:
+    db = Mock()
+    partset = _partset(score_id=None, imslp_id="268573", error=None)
+    assert ensure_import_if_needed(db, partset) is None
+    _mock_enqueue.assert_not_called()
+    db.commit.assert_not_called()
 
 
 @patch("app.services.retry.try_acquire_import_lock", return_value=True)

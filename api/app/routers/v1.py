@@ -27,7 +27,7 @@ from app.schemas.segment import (
     SavePageSegmentsResponse,
     SegmentDataResponse,
 )
-from app.services.retry import retry_partset_pipeline
+from app.services.retry import ensure_import_if_needed, retry_partset_pipeline
 from app.services.partsets import (
     create_imslp_partset,
     create_partset_from_score,
@@ -427,6 +427,21 @@ def import_status(private_id: str, db: Session = Depends(get_db)) -> ImportProgr
         raise HTTPException(status_code=404, detail="Partset not found")
     touch_partset_access(db, partset)
     return ImportProgressResponse(**import_progress_payload(partset))
+
+
+@router.post(
+    "/partsets/{private_id}/ensure-import",
+    response_model=GeneratePartsResponse,
+)
+def ensure_import(
+    private_id: str,
+    db: Session = Depends(get_db),
+) -> GeneratePartsResponse:
+    partset = db.query(Partset).filter(Partset.private_id == private_id).first()
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    job_id = ensure_import_if_needed(db, partset)
+    return GeneratePartsResponse(status="success", job_id=job_id)
 
 
 @router.post(
