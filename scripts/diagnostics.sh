@@ -150,7 +150,7 @@ if [[ "$STUCK_COUNT" == "0" ]]; then
   echo "none"
 else
   mysql_query "
-SELECT id, title, status, error, error_message, error_ts
+SELECT error_ts, id, title, error_message
 FROM partsets
 WHERE ${STUCK_WHERE}
 ORDER BY COALESCE(error_ts, paste_start, mod_ts, last_access, create_ts) DESC;
