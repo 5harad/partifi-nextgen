@@ -15,9 +15,11 @@ from pipeline.imslp_download import (
     IMSLP_HEADERS,
     IMSLP_RETRY_ATTEMPTS,
     IMSLP_RETRY_BASE_SECONDS,
+    fetch_mirror_pdf,
     log_imslp_http_failure,
     mirror_request_cookies,
     resolve_imslp_pdf_url_with_retries,
+    rewrite_pmlasia_placeholder_url,
 )
 from score_limits import MAX_SCORE_BYTES, ScoreTooLargeError
 
@@ -46,6 +48,54 @@ def download_imslp_pdf_url(
     max_attempts: int = IMSLP_RETRY_ATTEMPTS,
 ) -> int:
     """Stream-download a resolved mirror PDF URL with retries."""
+    if rewrite_pmlasia_placeholder_url(pdf_url):
+        last_exc: BaseException | None = None
+        for attempt in range(max_attempts):
+            try:
+                _, content = fetch_mirror_pdf(client, pdf_url)
+                if len(content) > MAX_SCORE_BYTES:
+                    raise ScoreTooLargeError(len(content))
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(content)
+                if on_progress:
+                    on_progress(100.0)
+                return len(content)
+            except Exception as exc:
+                last_exc = exc
+                dest.unlink(missing_ok=True)
+                if isinstance(exc, ScoreTooLargeError):
+                    raise
+                if not _is_retryable_download_error(exc):
+                    log_imslp_http_failure(
+                        exc,
+                        url=pdf_url,
+                        operation="pdf_download",
+                        level=logging.ERROR,
+                    )
+                    raise
+                if attempt + 1 >= max_attempts:
+                    break
+                delay = IMSLP_RETRY_BASE_SECONDS * (3**attempt) + random.uniform(0, 1)
+                log_imslp_http_failure(
+                    exc,
+                    url=pdf_url,
+                    operation=f"pdf_download attempt {attempt + 1}/{max_attempts}",
+                )
+                logger.warning(
+                    "IMSLP PDF download retry in %.1fs url=%s",
+                    delay,
+                    pdf_url,
+                )
+                time.sleep(delay)
+        assert last_exc is not None
+        log_imslp_http_failure(
+            last_exc,
+            url=pdf_url,
+            operation=f"pdf_download failed after {max_attempts} attempts",
+            level=logging.ERROR,
+        )
+        raise last_exc
+
     last_exc: BaseException | None = None
     for attempt in range(max_attempts):
         downloaded = 0

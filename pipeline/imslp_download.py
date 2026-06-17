@@ -32,6 +32,21 @@ PML_MIRROR_DISCLAIMER_VALUE = "OK"
 PMLASIA_DISCLAIMER_COOKIE = PML_MIRROR_DISCLAIMER_COOKIE
 PMLASIA_DISCLAIMER_VALUE = PML_MIRROR_DISCLAIMER_VALUE
 
+PMLASIA_PLACEHOLDER_RE = re.compile(
+    r"PMLASIA(\d+)-placeholder-([^/?#]+\.pdf)",
+    re.I,
+)
+PMLASIA_DOWNLOAD_URL = "https://imslp.tw/index.php?download=PMLASIA{pml_id}-{suffix}"
+
+
+def rewrite_pmlasia_placeholder_url(url: str) -> str | None:
+    """Map PML-CA placeholder stub URLs to the real PML-Asia download page."""
+    match = PMLASIA_PLACEHOLDER_RE.search(url)
+    if not match:
+        return None
+    pml_id, suffix = match.group(1), match.group(2)
+    return PMLASIA_DOWNLOAD_URL.format(pml_id=pml_id, suffix=suffix)
+
 
 def format_imslp_http_context(
     exc: BaseException,
@@ -117,7 +132,26 @@ def pdf_response_from_redirect(response: httpx.Response) -> tuple[str, bytes] | 
     content_type = response.headers.get("content-type", "")
     if not is_pdf_body(response.content, content_type):
         return None
+    if rewrite_pmlasia_placeholder_url(str(response.url)):
+        return None
     return str(response.url), response.content
+
+
+def is_pmlca_disclaimer(page_html: str, page_url: str = "") -> bool:
+    if "petruccimusiclibrary.ca" in page_url.lower():
+        return True
+    return "Petrucci Music Library Canada" in page_html
+
+
+def parse_pmlca_pdf_url(page_html: str, page_url: str) -> str | None:
+    match = re.search(r'href="(/files/[^"]+\.pdf|files/[^"]+\.pdf)"', page_html, re.I)
+    if not match:
+        return None
+    path = html.unescape(match.group(1))
+    base = httpx.URL(page_url)
+    if path.startswith("/"):
+        return str(base.copy_with(path=path, query=None, fragment=None))
+    return str(base.join(path))
 
 
 def is_pmlus_disclaimer(page_html: str, page_url: str = "") -> bool:
@@ -177,6 +211,49 @@ def _fetch_pmlus_pdf(
     )
 
 
+def _fetch_pmlasia_via_placeholder(
+    client: httpx.Client, placeholder_url: str
+) -> tuple[str, bytes]:
+    asia_url = rewrite_pmlasia_placeholder_url(placeholder_url)
+    if not asia_url:
+        raise ValueError(f"Not a PML-Asia placeholder URL: {placeholder_url}")
+
+    response = client.get(asia_url, cookies=mirror_request_cookies(asia_url))
+    response.raise_for_status()
+    page_url = str(response.url)
+    if is_pmlasia_disclaimer(response.text):
+        return _fetch_pmlasia_pdf(client, response.text, page_url)
+
+    direct = pdf_response_from_redirect(response)
+    if direct:
+        return direct
+
+    raise ValueError(f"PML-Asia placeholder did not resolve at {asia_url}")
+
+
+def fetch_mirror_pdf(client: httpx.Client, pdf_url: str) -> tuple[str, bytes]:
+    """Download PDF bytes from a mirror URL, following disclaimer/placeholder chains."""
+    if rewrite_pmlasia_placeholder_url(pdf_url):
+        return _fetch_pmlasia_via_placeholder(client, pdf_url)
+
+    response = client.get(pdf_url, cookies=mirror_request_cookies(pdf_url))
+    response.raise_for_status()
+    page_url = str(response.url)
+
+    if is_pmlasia_disclaimer(response.text):
+        return _fetch_pmlasia_pdf(client, response.text, page_url)
+    if is_pmlus_disclaimer(response.text, page_url):
+        return _fetch_pmlus_pdf(client, response.text, page_url)
+
+    content_type = response.headers.get("content-type", "")
+    if is_pdf_body(response.content, content_type):
+        if rewrite_pmlasia_placeholder_url(page_url):
+            return _fetch_pmlasia_via_placeholder(client, page_url)
+        return page_url, response.content
+
+    raise ValueError(f"Mirror did not return a PDF at {pdf_url}")
+
+
 def resolve_imslp_pdf_url(imslp_id: str, client: httpx.Client) -> tuple[str, bytes | None]:
     page_url = IMSLP_INDEX_URL.format(imslp_id=imslp_id)
     response = client.get(page_url)
@@ -187,11 +264,20 @@ def resolve_imslp_pdf_url(imslp_id: str, client: httpx.Client) -> tuple[str, byt
         return direct
 
     page_url = str(response.url)
+    content_type = response.headers.get("content-type", "")
+    if is_pdf_body(response.content, content_type) and rewrite_pmlasia_placeholder_url(page_url):
+        return _fetch_pmlasia_via_placeholder(client, page_url)
+
     if is_pmlasia_disclaimer(response.text):
         return _fetch_pmlasia_pdf(client, response.text, page_url)
 
     if is_pmlus_disclaimer(response.text, page_url):
         return _fetch_pmlus_pdf(client, response.text, page_url)
+
+    if is_pmlca_disclaimer(response.text, page_url):
+        ca_url = parse_pmlca_pdf_url(response.text, page_url)
+        if ca_url and rewrite_pmlasia_placeholder_url(ca_url):
+            return _fetch_pmlasia_via_placeholder(client, ca_url)
 
     match = re.search(r'id="sm_dl_wait"\s+data-id="([^"]+)"', response.text)
     if not match:
@@ -211,6 +297,8 @@ def resolve_imslp_pdf_url(imslp_id: str, client: httpx.Client) -> tuple[str, byt
     pdf_url = html.unescape(match.group(1))
     if not pdf_url.lower().endswith(".pdf"):
         raise ValueError(f"Resolved URL is not a PDF for IMSLP {imslp_id}")
+    if rewrite_pmlasia_placeholder_url(pdf_url):
+        return _fetch_pmlasia_via_placeholder(client, pdf_url)
     return pdf_url, None
 
 

@@ -6,14 +6,35 @@ from pipeline.imslp_download import (
     format_imslp_http_context,
     is_pdf_body,
     is_pmlasia_disclaimer,
+    is_pmlca_disclaimer,
     is_pmlus_disclaimer,
     mirror_request_cookies,
     parse_pmlasia_pdf_url,
+    parse_pmlca_pdf_url,
     parse_pmlus_pdf_url,
     pdf_response_from_redirect,
     resolve_imslp_pdf_url,
     resolve_imslp_pdf_url_with_retries,
+    rewrite_pmlasia_placeholder_url,
 )
+
+PMLCA_HTML = """<!doctype html>
+<html><head><title>Petrucci Music Library Canada</title></head>
+<body>
+<a onclick="setC('disclaimer_bypass','OK',365)"
+ href="/files/imglnks/caimg/9/91/IMSLP1009967-PMLP1573253-PMLASIA00851-placeholder-shostakovich_cwmg_v5-2.pdf"
+ class="bigbutton">I understand, continue</a>
+</body></html>
+"""
+
+PLACEHOLDER_URL = (
+    "https://petruccimusiclibrary.ca/files/imglnks/caimg/9/91/"
+    "IMSLP1009967-PMLP1573253-PMLASIA00851-placeholder-shostakovich_cwmg_v5-2.pdf"
+)
+PMLASIA_DOWNLOAD_URL = (
+    "https://imslp.tw/index.php?download=PMLASIA00851-shostakovich_cwmg_v5-2.pdf"
+)
+PMLASIA_UPLOAD_URL = "https://imslp.tw/uploads/PMLASIA00851-shostakovich_cwmg_v5-2.pdf"
 
 PMLASIA_HTML = """<!doctype html>
 <html><head><script>
@@ -87,6 +108,31 @@ def test_pdf_response_rejects_html_url_ending_in_pdf() -> None:
     assert pdf_response_from_redirect(response) is None
 
 
+def test_pdf_response_rejects_placeholder_ticket_pdf() -> None:
+    response = _mock_response(
+        url=PLACEHOLDER_URL,
+        content=b"%PDF-1.4 placeholder ticket",
+        content_type="application/pdf",
+    )
+    assert pdf_response_from_redirect(response) is None
+
+
+def test_rewrite_pmlasia_placeholder_url() -> None:
+    assert rewrite_pmlasia_placeholder_url(PLACEHOLDER_URL) == PMLASIA_DOWNLOAD_URL
+    linkhandler = (
+        "https://petruccimusiclibrary.ca/linkhandler.php?path=/imglnks/caimg/9/91/"
+        "IMSLP1009967-PMLP1573253-PMLASIA00851-placeholder-shostakovich_cwmg_v5-2.pdf"
+    )
+    assert rewrite_pmlasia_placeholder_url(linkhandler) == PMLASIA_DOWNLOAD_URL
+    assert rewrite_pmlasia_placeholder_url("https://vmirror.imslp.org/files/foo.pdf") is None
+
+
+def test_parse_pmlca_pdf_url() -> None:
+    page_url = "https://petruccimusiclibrary.ca/linkhandler.php?path=ignored"
+    assert parse_pmlca_pdf_url(PMLCA_HTML, page_url) == PLACEHOLDER_URL
+    assert is_pmlca_disclaimer(PMLCA_HTML, page_url)
+
+
 def test_parse_pmlasia_pdf_url() -> None:
     page_url = "https://imslp.tw/index.php?download=foo.pdf"
     assert parse_pmlasia_pdf_url(PMLASIA_HTML, page_url) == (
@@ -156,6 +202,52 @@ def test_resolve_with_retries_succeeds_on_second_attempt() -> None:
     assert url == "https://vmirror.imslp.org/files/foo.pdf"
     assert cached is None
     assert client.get.call_count == 2
+
+
+def test_resolve_pmlca_placeholder_fetches_real_pdf_via_asia() -> None:
+    pdf_bytes = b"%PDF-1.7 real score"
+
+    client = MagicMock()
+    client.get.side_effect = [
+        _mock_response(
+            url="https://petruccimusiclibrary.ca/linkhandler.php?path=ignored",
+            text=PMLCA_HTML,
+        ),
+        _mock_response(url=PMLASIA_DOWNLOAD_URL, text=PMLASIA_HTML),
+        _mock_response(url=PMLASIA_UPLOAD_URL, content=pdf_bytes, content_type="application/pdf"),
+    ]
+
+    url, cached = resolve_imslp_pdf_url("1009967", client)
+
+    assert url == PMLASIA_UPLOAD_URL
+    assert cached == pdf_bytes
+    assert client.get.call_count == 3
+    assert client.get.call_args_list[1].kwargs["cookies"] == {"disclaimer_bypass": "OK"}
+
+
+def test_resolve_sm_dl_wait_placeholder_fetches_real_pdf_via_asia() -> None:
+    html = (
+        '<div id="sm_dl_wait" data-id="'
+        f"{PLACEHOLDER_URL}"
+        '"></div>'
+    )
+    pdf_bytes = b"%PDF-1.7 real score"
+
+    client = MagicMock()
+    client.get.side_effect = [
+        _mock_response(
+            url="https://imslp.org/wiki/Special:ImagefromIndex/1009967",
+            text=html,
+        ),
+        _mock_response(url=PMLASIA_DOWNLOAD_URL, text=PMLASIA_HTML),
+        _mock_response(url=PMLASIA_UPLOAD_URL, content=pdf_bytes, content_type="application/pdf"),
+    ]
+
+    url, cached = resolve_imslp_pdf_url("1009967", client)
+
+    assert url == PMLASIA_UPLOAD_URL
+    assert cached == pdf_bytes
+    assert client.get.call_count == 3
 
 
 def test_resolve_pmlus_disclaimer_fetches_pdf_with_cookie() -> None:
