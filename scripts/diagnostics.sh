@@ -39,19 +39,31 @@ section() {
   echo "=== $1 ==="
 }
 
+filter_mysql_noise() {
+  grep -v 'Using a password on the command line interface can be insecure' || true
+}
+
 mysql_scalar() {
   compose exec -T mysql mysql -u partifi -p"$MYSQL_PASSWORD" \
     --default-character-set=utf8mb4 \
     -N \
-    partifi -e "$1" 2>/dev/null \
+    partifi -e "$1" 2>&1 \
+    | filter_mysql_noise \
+    | head -1 \
     || echo "?"
+}
+
+mysql_query_table() {
+  compose exec -T mysql mysql -u partifi -p"$MYSQL_PASSWORD" \
+    --default-character-set=utf8mb4 \
+    --table \
+    partifi -e "$1" 2>&1 | filter_mysql_noise
 }
 
 mysql_query() {
   compose exec -T mysql mysql -u partifi -p"$MYSQL_PASSWORD" \
     --default-character-set=utf8mb4 \
-    --table \
-    partifi -e "$1"
+    partifi -e "$1" 2>&1 | filter_mysql_noise
 }
 
 STUCK_WHERE="
@@ -74,15 +86,6 @@ filter_error_lines() {
     | grep -viE 'aborting with incomplete response|http2: stream closed|repaired or ignored|The following errors were encountered'
 }
 
-normalize_error_key() {
-  sed -E \
-    -e 's/^[A-Za-z]{3} [0-9]+ [0-9:]+ [^ ]+ partifi\/[^:]*: //' \
-    -e 's/^api-[0-9]+ +\| //' \
-    -e 's/^worker-[0-9]+ +\| //' \
-    -e 's/^web-[0-9]+ +\| //' \
-    | sed -E 's/^[[:space:]]+//'
-}
-
 fetch_error_lines() {
   if command -v journalctl >/dev/null 2>&1; then
     journalctl --since "${ERROR_HOURS} hours ago" --no-pager -r 2>/dev/null \
@@ -95,51 +98,6 @@ fetch_error_lines() {
     | filter_error_lines \
     | tac 2>/dev/null \
     || true
-}
-
-print_deduped_errors() {
-  local lines="$1"
-  if [[ -z "$lines" ]]; then
-    echo "none"
-    return
-  fi
-  local deduped
-  deduped="$(
-    echo "$lines" \
-      | normalize_error_key \
-      | awk '{
-          line = $0
-          if (line ~ /sqlalchemy\.exc\.|pymysql\.err\./) {
-            if (match(line, /(sqlalchemy|pymysql)\.[^:]+\: /)) {
-              line = substr(line, RSTART)
-            }
-          } else if (line ~ /Exception in ASGI/) {
-            line = "Exception in ASGI application"
-          } else if (line ~ / ERROR:/) {
-            sub(/^.* ERROR:[[:space:]]*/, "", line)
-          }
-          if (length(line) > 140) {
-            line = substr(line, 1, 137) "..."
-          }
-          if (line != "") {
-            counts[line]++
-          }
-        }
-        END {
-          for (k in counts) {
-            printf "%d\t%s\n", counts[k], k
-          }
-        }' \
-      | sort -rn -t $'\t' -k1,1 \
-      | head -15
-  )"
-  if [[ -z "$deduped" ]]; then
-    echo "none"
-    return
-  fi
-  while IFS=$'\t' read -r count text; do
-    printf '  %4dx  %s\n' "$count" "$text"
-  done <<< "$deduped"
 }
 
 GENERATED_AT="$(date -u '+%Y-%m-%d %H:%M UTC')"
@@ -180,31 +138,6 @@ else
 fi
 
 # --- output ---
-section "Health (/health/ready)"
-if [[ "$HEALTH_STATUS" == "ok" ]]; then
-  compose exec -T api python -c "
-import json, urllib.request
-with urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=10) as r:
-    data = json.load(r)
-for name in sorted(data.get('checks', {})):
-    value = data['checks'][name]
-    mark = 'ok' if value == 'ok' else 'FAIL'
-    print(f'  {name:6} {mark:4}  {value}')
-" 2>/dev/null || echo "Health check failed (is the api container up?)"
-else
-  echo "Status: ${HEALTH_STATUS}"
-  compose exec -T api python -c "
-import json, urllib.request
-try:
-    with urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=10) as r:
-        data = json.load(r)
-    for name in sorted(data.get('checks', {})):
-        print(f'  {name}: {data[\"checks\"][name]}')
-except Exception as exc:
-    print(f'  (unreachable: {exc})')
-" 2>/dev/null || echo "  (api unreachable)"
-fi
-
 section "Summary"
 echo "  health:      ${HEALTH_STATUS}"
 echo "  stuck:       ${STUCK_COUNT} (last ${DAYS}d)"
@@ -217,23 +150,28 @@ if [[ "$STUCK_COUNT" == "0" ]]; then
   echo "none"
 else
   mysql_query "
-SELECT
-  id,
-  IF(CHAR_LENGTH(title) > 40, CONCAT(LEFT(title, 37), '...'), title) AS title,
-  COALESCE(error_ts, paste_start, last_access, mod_ts, create_ts) AS activity_ts,
-  COALESCE(error_message, error) AS error
+SELECT id, title, status, error, error_message, error_ts, last_job_id,
+       ROUND(import_progress) AS imp,
+       ROUND(convert_progress) AS conv,
+       ROUND(analysis_progress) AS anal,
+       parts_ready, paste_start, paste_complete,
+       create_ts, mod_ts, last_access
 FROM partsets
 WHERE ${STUCK_WHERE}
-ORDER BY activity_ts DESC;
+ORDER BY COALESCE(error_ts, paste_start, mod_ts, last_access, create_ts) DESC;
 "
 fi
 
-section "Recent errors (last ${ERROR_HOURS} hours, deduplicated)"
-print_deduped_errors "$ERROR_LINES"
+section "Recent errors (last ${ERROR_HOURS} hours, newest first)"
+if [[ -n "$ERROR_LINES" ]]; then
+  echo "$ERROR_LINES" | head -80
+else
+  echo "(no matching lines)"
+fi
 
 section "Activity"
 echo "Last 24 hours:"
-mysql_query "
+mysql_query_table "
 SELECT
   (SELECT COUNT(*)
    FROM partsets
@@ -256,7 +194,7 @@ SELECT
 "
 echo ""
 echo "Last ${DAYS} days:"
-mysql_query "
+mysql_query_table "
 SELECT
   (SELECT COUNT(*)
    FROM partsets
@@ -279,7 +217,7 @@ SELECT
 "
 
 section "Users (+${NEW_USERS_24H} in last 24h, total ${USER_COUNT})"
-mysql_query "
+mysql_query_table "
 SELECT id, name, given_name, ts
 FROM users
 ORDER BY ts DESC
@@ -287,7 +225,7 @@ LIMIT 20;
 "
 
 section "Recent part generation (last ${DAYS} days, newest first)"
-mysql_query "
+mysql_query_table "
 SELECT
   p.id,
   IF(CHAR_LENGTH(p.title) > 40, CONCAT(LEFT(p.title, 37), '...'), p.title) AS title,
@@ -312,6 +250,3 @@ else
 fi
 compose exec -T api du -sh /data/partifi/scores /data/partifi/preview /data/partifi/parts 2>/dev/null \
   || echo "could not read cache breakdown (is api up?)"
-
-section "Containers"
-compose ps
