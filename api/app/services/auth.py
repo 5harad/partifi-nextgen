@@ -62,17 +62,40 @@ def get_user(db: Session, user_id: str) -> User | None:
     return db.get(User, user_id)
 
 
-def upsert_user(db: Session, user_id: str, name: str | None) -> User:
+def upsert_user(
+    db: Session,
+    user_id: str,
+    name: str | None,
+    given_name: str | None = None,
+) -> User:
     user = db.get(User, user_id)
     if user:
         if name and user.name != name:
             user.name = name
+        if given_name and user.given_name != given_name:
+            user.given_name = given_name
     else:
-        user = User(id=user_id, name=name, ts=datetime.utcnow())
+        user = User(
+            id=user_id,
+            name=name,
+            given_name=given_name,
+            ts=datetime.utcnow(),
+        )
         db.add(user)
     db.commit()
     db.refresh(user)
     return user
+
+
+def google_profile(data: dict) -> dict[str, str | None]:
+    sub = data.get("sub")
+    if not sub:
+        return {}
+    return {
+        "id": str(sub),
+        "name": data.get("name"),
+        "given_name": data.get("given_name"),
+    }
 
 
 def validate_google_access_token(token: str) -> dict[str, str]:
@@ -97,7 +120,7 @@ def validate_google_access_token(token: str) -> dict[str, str]:
     if not sub:
         raise HTTPException(status_code=401, detail="Invalid Google access token")
 
-    return {"id": str(sub), "name": data.get("name")}
+    return google_profile(data)
 
 
 def validate_google_id_token(token: str) -> dict[str, str]:
@@ -121,7 +144,7 @@ def validate_google_id_token(token: str) -> dict[str, str]:
     if not sub:
         raise HTTPException(status_code=401, detail="Invalid Google ID token")
 
-    return {"id": str(sub), "name": idinfo.get("name")}
+    return google_profile(idinfo)
 
 
 def exchange_google_auth_code(code: str, redirect_uri: str | None = None) -> dict[str, str]:

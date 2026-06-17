@@ -178,6 +178,7 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
     name: Mapped[str | None] = mapped_column(String(255))
+    given_name: Mapped[str | None] = mapped_column(String(255))
     ts: Mapped[datetime | None] = mapped_column(DateTime)
 
 

@@ -4,6 +4,7 @@ from pydantic import BaseModel
 class UserResponse(BaseModel):
     id: str
     name: str | None = None
+    given_name: str | None = None
 
 
 class AuthMeResponse(BaseModel):
@@ -20,3 +21,4 @@ class GoogleLoginRequest(BaseModel):
 class DevLoginRequest(BaseModel):
     user_id: str = "dev-user"
     name: str = "Dev User"
+    given_name: str | None = None

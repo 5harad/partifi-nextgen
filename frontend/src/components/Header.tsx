@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { GoogleSignInLink } from './GoogleSignInLink'
+import { displayGreetingName } from '../lib/greetingName'
 
 const PLACEHOLDER = 'search for music'
 
@@ -14,7 +15,7 @@ export function Header() {
     logout,
   } = useAuth()
 
-  const firstName = user?.name?.split(' ')[0] ?? 'there'
+  const firstName = displayGreetingName(user?.given_name, user?.name)
 
   return (
     <div id="header">

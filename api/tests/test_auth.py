@@ -24,10 +24,28 @@ def test_dev_login_sets_session() -> None:
     body = response.json()
     assert body["user"]["id"] == "test-user"
     assert body["user"]["name"] == "Test User"
+    assert body["user"]["given_name"] is None
 
     me = client.get("/api/v1/auth/me")
     assert me.status_code == 200
     assert me.json()["user"]["id"] == "test-user"
+
+
+def test_dev_login_stores_given_name() -> None:
+    response = client.post(
+        "/api/v1/auth/dev-login",
+        json={
+            "user_id": "given-name-user",
+            "name": "Taller de Música - Celeste Durando",
+            "given_name": "Celeste",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["user"]["given_name"] == "Celeste"
+
+    me = client.get("/api/v1/auth/me")
+    assert me.json()["user"]["given_name"] == "Celeste"
 
 
 def test_library_requires_login() -> None:
@@ -56,8 +74,12 @@ def test_google_login_id_token_success(monkeypatch) -> None:
 
     from app.routers import auth as auth_router
 
-    def fake_validate(_token: str) -> dict[str, str]:
-        return {"id": "google-sub-42", "name": "Ada Lovelace"}
+    def fake_validate(_token: str) -> dict[str, str | None]:
+        return {
+            "id": "google-sub-42",
+            "name": "Taller de Música - Celeste Durando",
+            "given_name": "Celeste",
+        }
 
     monkeypatch.setattr(auth_router, "validate_google_id_token", fake_validate)
 
@@ -65,7 +87,8 @@ def test_google_login_id_token_success(monkeypatch) -> None:
     response = auth_client.post("/api/v1/auth/google", json={"id_token": "fake-jwt"})
     assert response.status_code == 200
     assert response.json()["user"]["id"] == "google-sub-42"
-    assert response.json()["user"]["name"] == "Ada Lovelace"
+    assert response.json()["user"]["name"] == "Taller de Música - Celeste Durando"
+    assert response.json()["user"]["given_name"] == "Celeste"
 
     me = auth_client.get("/api/v1/auth/me")
     assert me.json()["user"]["id"] == "google-sub-42"

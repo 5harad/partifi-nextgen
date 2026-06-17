@@ -31,7 +31,7 @@ router = APIRouter(prefix="/api/v1", tags=["auth"])
 
 
 def _user_response(user: User) -> UserResponse:
-    return UserResponse(id=user.id, name=user.name)
+    return UserResponse(id=user.id, name=user.name, given_name=user.given_name)
 
 
 @router.get("/auth/me", response_model=AuthMeResponse)
@@ -55,7 +55,7 @@ def auth_google(
         profile = validate_google_access_token(body.access_token)
     else:
         raise HTTPException(status_code=400, detail="Missing Google credential")
-    user = upsert_user(db, profile["id"], profile.get("name"))
+    user = upsert_user(db, profile["id"], profile.get("name"), profile.get("given_name"))
     set_session_cookie(response, user.id)
     return AuthMeResponse(user=_user_response(user))
 
@@ -68,7 +68,7 @@ def auth_dev_login(
 ) -> AuthMeResponse:
     if get_settings().app_env != "development":
         raise HTTPException(status_code=404, detail="Not found")
-    user = upsert_user(db, body.user_id.strip(), body.name.strip())
+    user = upsert_user(db, body.user_id.strip(), body.name.strip(), body.given_name)
     set_session_cookie(response, user.id)
     return AuthMeResponse(user=_user_response(user))
 
