@@ -150,12 +150,7 @@ if [[ "$STUCK_COUNT" == "0" ]]; then
   echo "none"
 else
   mysql_query "
-SELECT id, title, status, error, error_message, error_ts, last_job_id,
-       ROUND(import_progress) AS imp,
-       ROUND(convert_progress) AS conv,
-       ROUND(analysis_progress) AS anal,
-       parts_ready, paste_start, paste_complete,
-       create_ts, mod_ts, last_access
+SELECT id, title, status, error, error_message, error_ts
 FROM partsets
 WHERE ${STUCK_WHERE}
 ORDER BY COALESCE(error_ts, paste_start, mod_ts, last_access, create_ts) DESC;
@@ -164,7 +159,7 @@ fi
 
 section "Recent errors (last ${ERROR_HOURS} hours, newest first)"
 if [[ -n "$ERROR_LINES" ]]; then
-  echo "$ERROR_LINES" | head -80
+  echo "$ERROR_LINES"
 else
   echo "(no matching lines)"
 fi
