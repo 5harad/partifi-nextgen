@@ -4,6 +4,7 @@ import httpx
 
 from pipeline.imslp_download import (
     format_imslp_http_context,
+    fetch_mirror_pdf,
     is_pdf_body,
     is_pmlasia_disclaimer,
     is_pmlca_disclaimer,
@@ -16,6 +17,19 @@ from pipeline.imslp_download import (
     resolve_imslp_pdf_url,
     resolve_imslp_pdf_url_with_retries,
     rewrite_pmlasia_placeholder_url,
+)
+
+PMLCA_DIRECT_HTML = """<!doctype html>
+<html><head><title>Petrucci Music Library Canada</title></head>
+<body>
+<a onclick="setC('disclaimer_bypass','OK',365)"
+ href="/files/imglnks/caimg/1/12/IMSLP1234567-real-score.pdf"
+ class="bigbutton">I understand, continue</a>
+</body></html>
+"""
+
+PMLCA_DIRECT_URL = (
+    "https://petruccimusiclibrary.ca/files/imglnks/caimg/1/12/IMSLP1234567-real-score.pdf"
 )
 
 PMLCA_HTML = """<!doctype html>
@@ -147,7 +161,46 @@ def test_mirror_request_cookies_for_imslp_tw() -> None:
     assert mirror_request_cookies("https://www.petruccilibrary.us/files/foo.pdf") == {
         "disclaimer_bypass": "OK"
     }
+    assert mirror_request_cookies("https://petruccimusiclibrary.ca/files/foo.pdf") == {
+        "disclaimer_bypass": "OK"
+    }
     assert mirror_request_cookies("https://vmirror.imslp.org/files/foo.pdf") == {}
+
+
+def test_fetch_mirror_pdf_follows_asia_disclaimer() -> None:
+    disclaimer_url = "https://imslp.tw/index.php?download=PMLASIA00854-shostakovich_cwmg_v8-2.pdf"
+    pdf_url = "https://imslp.tw/uploads/PMLASIA00854-shostakovich_cwmg_v8-2.pdf"
+    pdf_bytes = b"%PDF-1.7 real score"
+
+    client = MagicMock()
+    client.get.side_effect = [
+        _mock_response(url=disclaimer_url, text=PMLASIA_HTML),
+        _mock_response(url=pdf_url, content=pdf_bytes, content_type="application/pdf"),
+    ]
+
+    url, cached = fetch_mirror_pdf(client, disclaimer_url)
+
+    assert url == pdf_url
+    assert cached == pdf_bytes
+    assert client.get.call_count == 2
+
+
+def test_resolve_pmlca_direct_disclaimer_fetches_pdf_with_cookie() -> None:
+    page_url = "https://petruccimusiclibrary.ca/linkhandler.php?path=ignored"
+    pdf_bytes = b"%PDF-1.7 real score"
+
+    client = MagicMock()
+    client.get.side_effect = [
+        _mock_response(url=page_url, text=PMLCA_DIRECT_HTML),
+        _mock_response(url=PMLCA_DIRECT_URL, content=pdf_bytes, content_type="application/pdf"),
+    ]
+
+    url, cached = resolve_imslp_pdf_url("1234567", client)
+
+    assert url == PMLCA_DIRECT_URL
+    assert cached == pdf_bytes
+    assert client.get.call_count == 2
+    assert client.get.call_args_list[1].kwargs["cookies"] == {"disclaimer_bypass": "OK"}
 
 
 def test_parse_pmlus_pdf_url() -> None:

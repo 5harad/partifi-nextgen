@@ -73,18 +73,40 @@ def test_download_imslp_pdf_uses_presolved_url(tmp_path: Path) -> None:
     dest = tmp_path / "score.pdf"
 
     client = MagicMock()
-    stream_response = MagicMock()
-    stream_response.raise_for_status = MagicMock()
-    stream_response.headers = {"content-length": str(len(pdf_bytes))}
-    stream_response.iter_bytes = MagicMock(return_value=[pdf_bytes])
-    stream_context = MagicMock()
-    stream_context.__enter__ = MagicMock(return_value=stream_response)
-    stream_context.__exit__ = MagicMock(return_value=False)
-    client.stream.return_value = stream_context
+    client.get.return_value = _mock_response(
+        url=pdf_url,
+        content=pdf_bytes,
+        content_type="application/pdf",
+    )
 
     size = download_imslp_pdf_url(pdf_url, dest, client)
 
     assert size == len(pdf_bytes)
     assert dest.read_bytes() == pdf_bytes
-    client.stream.assert_called_once()
-    client.get.assert_not_called()
+    client.get.assert_called_once()
+    client.stream.assert_not_called()
+
+
+def test_download_imslp_pdf_url_follows_asia_disclaimer(tmp_path: Path) -> None:
+    pmlasia_html = """<!doctype html>
+<html><head><script>
+const PMLASIA_DOWNLOAD_TARGET = "uploads\\/PMLASIA00854-shostakovich_cwmg_v8-2.pdf";
+</script></head>
+<body><a href="uploads/PMLASIA00854-shostakovich_cwmg_v8-2.pdf">continue</a></body></html>
+"""
+    disclaimer_url = "https://imslp.tw/index.php?download=PMLASIA00854-shostakovich_cwmg_v8-2.pdf"
+    upload_url = "https://imslp.tw/uploads/PMLASIA00854-shostakovich_cwmg_v8-2.pdf"
+    pdf_bytes = b"%PDF-1.7 real score"
+    dest = tmp_path / "score.pdf"
+
+    client = MagicMock()
+    client.get.side_effect = [
+        _mock_response(url=disclaimer_url, text=pmlasia_html),
+        _mock_response(url=upload_url, content=pdf_bytes, content_type="application/pdf"),
+    ]
+
+    size = download_imslp_pdf_url(disclaimer_url, dest, client)
+
+    assert size == len(pdf_bytes)
+    assert dest.read_bytes() == pdf_bytes
+    assert client.get.call_count == 2
