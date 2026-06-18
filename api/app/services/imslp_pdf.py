@@ -9,7 +9,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.models import Score
-from app.score_limits import MAX_SCORE_BYTES, ScoreTooLargeError
+from app.score_limits import MAX_SCORE_BYTES, reject_score_too_large
 from app.services.imslp import IMSLP_ERROR_UNAVAILABLE, ImslpLookupUnavailableError
 from app.services.s3 import score_pdf_s3_key, upload_bytes
 from app.utils.ids import gen_score_id
@@ -82,7 +82,11 @@ def resolve_imslp_pdf_for_import(
 
         if cached is not None:
             if len(cached) > MAX_SCORE_BYTES:
-                raise ScoreTooLargeError(len(cached))
+                raise reject_score_too_large(
+                    len(cached),
+                    logger=logger,
+                    imslp_id=imslp_id,
+                )
             return pdf_url, cached
 
         try:
@@ -112,7 +116,11 @@ def resolve_imslp_pdf_for_import(
             raise ImslpLookupUnavailableError(IMSLP_ERROR_UNAVAILABLE) from exc
         content_length = head.headers.get("content-length")
         if content_length and int(content_length) > MAX_SCORE_BYTES:
-            raise ScoreTooLargeError(int(content_length))
+            raise reject_score_too_large(
+                int(content_length),
+                logger=logger,
+                imslp_id=imslp_id,
+            )
         return pdf_url, None
     finally:
         if owns_client:
@@ -129,7 +137,11 @@ def ingest_imslp_pdf_bytes(db: Session, imslp_id: str, pdf_bytes: bytes) -> tupl
     if not pdf_bytes.startswith(PDF_MAGIC):
         raise ValueError("File is not a valid PDF")
     if len(pdf_bytes) > MAX_SCORE_BYTES:
-        raise ScoreTooLargeError(len(pdf_bytes))
+        raise reject_score_too_large(
+            len(pdf_bytes),
+            logger=logger,
+            imslp_id=imslp_id,
+        )
 
     file_hash = hashlib.sha1(pdf_bytes).hexdigest()
     existing = db.query(Score).filter(Score.file_hash == file_hash).first()

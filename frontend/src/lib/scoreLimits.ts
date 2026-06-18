@@ -1,5 +1,5 @@
-export const MAX_SCORE_BYTES = 100_000_000
-export const MAX_SCORE_MB = 100
+export const MAX_SCORE_BYTES = 200_000_000
+export const MAX_SCORE_MB = 200
 
 export function scoreTooLargeMessage(sizeBytes?: number): string {
   if (sizeBytes !== undefined) {

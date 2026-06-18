@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -12,10 +13,12 @@ from app.services.score_cache import (
     mark_import_pipeline_complete,
     score_analysis_complete,
 )
-from app.score_limits import MAX_SCORE_BYTES, ScoreTooLargeError
+from app.score_limits import MAX_SCORE_BYTES, reject_score_too_large
 from app.utils.ids import gen_partset_ids, gen_score_id
 from pipeline.pdf_validate import PDF_MAGIC
 from pipeline.score_pdf import score_has_archived_pdf
+
+logger = logging.getLogger(__name__)
 
 
 def total_progress(status: str | None, progress: float) -> float:
@@ -62,7 +65,7 @@ def create_pdf_partset(
     if not pdf_bytes.startswith(PDF_MAGIC):
         raise ValueError("File is not a valid PDF")
     if len(pdf_bytes) > MAX_SCORE_BYTES:
-        raise ScoreTooLargeError(len(pdf_bytes))
+        raise reject_score_too_large(len(pdf_bytes), logger=logger)
 
     public_id, private_id = gen_partset_ids(db)
     now = datetime.utcnow()
@@ -160,7 +163,11 @@ def create_imslp_partset(
 
     existing_score = db.query(Score).filter(Score.imslp_id == normalized).first()
     if existing_score and existing_score.file_size and existing_score.file_size > MAX_SCORE_BYTES:
-        raise ScoreTooLargeError(existing_score.file_size)
+        raise reject_score_too_large(
+            existing_score.file_size,
+            logger=logger,
+            imslp_id=normalized,
+        )
 
     pdf_url: str | None = None
     pdf_bytes: bytes | None = None

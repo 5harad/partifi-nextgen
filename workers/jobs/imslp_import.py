@@ -14,7 +14,7 @@ from imslp_client import download_imslp_pdf
 from jobs.errors import mark_partset_error
 from jobs.import_pipeline import run_import_pipeline
 from s3_storage import score_pdf_s3_key, upload_file
-from score_limits import MAX_SCORE_BYTES, ScoreTooLargeError
+from score_limits import MAX_SCORE_BYTES, ScoreTooLargeError, reject_score_too_large
 
 import db_conn
 
@@ -115,10 +115,11 @@ def run_imslp_import(
             _mark_import_error(partset_id, message=msg, job_id=job_id)
             raise ValueError(msg)
         if len(pdf_bytes) > MAX_SCORE_BYTES:
-            msg = f"IMSLP {imslp_id} exceeds size limit ({len(pdf_bytes)} bytes)"
-            logger.error("%s for partset %s", msg, partset_id)
-            _mark_import_size_error(partset_id, message=msg, job_id=job_id)
-            raise ScoreTooLargeError(len(pdf_bytes))
+            raise reject_score_too_large(
+                len(pdf_bytes),
+                logger=logger,
+                imslp_id=imslp_id,
+            )
 
         file_hash = hashlib.sha1(pdf_bytes).hexdigest()
         file_size = len(pdf_bytes)
@@ -151,7 +152,6 @@ def run_imslp_import(
 
         _attach_score_and_run_pipeline(partset_id, score_id, job_id=job_id)
     except ScoreTooLargeError as exc:
-        logger.error("IMSLP %s exceeds size limit for partset %s", imslp_id, partset_id)
         _mark_import_size_error(partset_id, message=str(exc), job_id=job_id)
         raise
     except Exception as exc:

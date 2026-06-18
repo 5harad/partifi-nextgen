@@ -19,7 +19,7 @@ from pipeline.imslp_download import (
     log_imslp_http_failure,
     resolve_imslp_pdf_url_with_retries,
 )
-from score_limits import MAX_SCORE_BYTES, ScoreTooLargeError
+from score_limits import MAX_SCORE_BYTES, ScoreTooLargeError, reject_score_too_large
 
 TIMEOUT = 120.0
 
@@ -51,7 +51,10 @@ def download_imslp_pdf_url(
         try:
             _, content = fetch_mirror_pdf(client, pdf_url)
             if len(content) > MAX_SCORE_BYTES:
-                raise ScoreTooLargeError(len(content))
+                raise reject_score_too_large(
+                    len(content),
+                    logger=logger,
+                )
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(content)
             if on_progress:
@@ -120,7 +123,11 @@ def download_imslp_pdf(
         resolved_url, cached = resolve_imslp_pdf_url_with_retries(imslp_id, client)
         if cached is not None:
             if len(cached) > MAX_SCORE_BYTES:
-                raise ScoreTooLargeError(len(cached))
+                raise reject_score_too_large(
+                    len(cached),
+                    logger=logger,
+                    imslp_id=imslp_id,
+                )
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(cached)
             if on_progress:

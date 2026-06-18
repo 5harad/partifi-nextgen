@@ -35,10 +35,10 @@ def test_check_imslp_pdf_size_rejects_large_content_length() -> None:
     )
     client.head.return_value = _mock_response(
         url="https://vmirror.imslp.org/files/foo.pdf",
-        headers={"content-length": "188392869"},
+        headers={"content-length": "250000000"},
     )
 
-    with pytest.raises(ScoreTooLargeError, match="188 MB"):
+    with pytest.raises(ScoreTooLargeError, match="250 MB"):
         check_imslp_pdf_size("696200", client=client)
 
 
@@ -54,6 +54,27 @@ def test_check_imslp_pdf_size_allows_small_direct_pdf() -> None:
 
     check_imslp_pdf_size("818713", client=client)
     client.head.assert_not_called()
+
+
+def test_check_imslp_pdf_size_logs_size_rejection(caplog: pytest.LogCaptureFixture) -> None:
+    import logging
+
+    html = '<div id="sm_dl_wait" data-id="https://vmirror.imslp.org/files/foo.pdf"></div>'
+    client = MagicMock()
+    client.get.return_value = _mock_response(
+        url="https://imslp.org/wiki/Special:ImagefromIndex/696200",
+        text=html,
+    )
+    client.head.return_value = _mock_response(
+        url="https://vmirror.imslp.org/files/foo.pdf",
+        headers={"content-length": "250000000"},
+    )
+
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(ScoreTooLargeError, match="250 MB"):
+            check_imslp_pdf_size("696200", client=client)
+
+    assert "IMSLP 696200 import rejected: score too large (250 MB, limit 200 MB)" in caplog.text
 
 
 def test_check_imslp_pdf_size_logs_resolution_failure(caplog: pytest.LogCaptureFixture) -> None:
