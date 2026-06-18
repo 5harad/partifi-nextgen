@@ -15,8 +15,8 @@ from app.services.score_cache import (
 )
 from app.score_limits import MAX_SCORE_BYTES, reject_score_too_large
 from app.utils.ids import gen_partset_ids, gen_score_id
-from pipeline.pdf_validate import PDF_MAGIC
-from pipeline.score_pdf import score_has_archived_pdf
+from pipeline.pdf_validate import PDF_MAGIC, validate_pdf_bytes
+from pipeline.score_pdf import score_has_archived_pdf, score_ready_for_reuse
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,7 @@ def create_pdf_partset(
 ) -> tuple[Partset, str]:
     if not pdf_bytes.startswith(PDF_MAGIC):
         raise ValueError("File is not a valid PDF")
+    validate_pdf_bytes(pdf_bytes)
     if len(pdf_bytes) > MAX_SCORE_BYTES:
         raise reject_score_too_large(len(pdf_bytes), logger=logger)
 
@@ -89,7 +90,10 @@ def create_pdf_partset(
     db.flush()
 
     existing = db.query(Score).filter(Score.file_hash == file_hash).first()
-    if existing:
+    if existing and score_ready_for_reuse(
+        convert_complete=existing.convert_complete,
+        num_pages=existing.num_pages,
+    ):
         partset.score_id = existing.id
         partset.status = "import"
         partset.import_start = now
@@ -97,6 +101,18 @@ def create_pdf_partset(
         partset.import_progress = 100.0
         action = "continue"
         score_id = existing.id
+    elif existing:
+        score_id = existing.id
+        partset.score_id = score_id
+        partset.status = "import"
+        partset.import_start = now
+        partset.import_complete = now
+        partset.import_progress = 100.0
+        action = "continue"
+        if not existing.s3:
+            upload_bytes(score_pdf_s3_key(score_id), pdf_bytes, "application/pdf")
+            existing.s3 = True
+            existing.file_size = len(pdf_bytes)
     else:
         score_id = gen_score_id(db)
         score = Score(
@@ -169,9 +185,18 @@ def create_imslp_partset(
             imslp_id=normalized,
         )
 
+    reuse_score = bool(
+        existing_score
+        and existing_score.file_size
+        and score_ready_for_reuse(
+            convert_complete=existing_score.convert_complete,
+            num_pages=existing_score.num_pages,
+        )
+    )
+
     pdf_url: str | None = None
     pdf_bytes: bytes | None = None
-    if not existing_score or not existing_score.file_size:
+    if not reuse_score:
         try:
             pdf_url, pdf_bytes = resolve_imslp_pdf_for_import(normalized)
         except ImslpLookupUnavailableError as exc:
@@ -199,7 +224,8 @@ def create_imslp_partset(
     db.add(partset)
     db.flush()
 
-    if existing_score:
+    if reuse_score:
+        assert existing_score is not None
         partset.score_id = existing_score.id
         partset.status = "import"
         partset.import_start = now

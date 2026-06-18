@@ -13,6 +13,8 @@ from import_lock import release_import_lock
 from imslp_client import download_imslp_pdf
 from jobs.errors import mark_partset_error
 from jobs.import_pipeline import run_import_pipeline
+from pdf_validate_repair import ensure_valid_score_pdf
+from pipeline.pdf_validate import PDF_CORRUPT_MESSAGE
 from s3_storage import score_pdf_s3_key, upload_file
 from score_limits import MAX_SCORE_BYTES, ScoreTooLargeError, reject_score_too_large
 
@@ -20,7 +22,6 @@ import db_conn
 
 logger = logging.getLogger("partifi.imslp_import")
 
-PDF_MAGIC = b"%PDF"
 _CHARS = string.ascii_letters + string.digits
 
 
@@ -54,8 +55,17 @@ def _mark_import_size_error(
 
 def _existing_score_for_imslp(imslp_id: str):
     return db_conn.fetchone(
-        "SELECT id FROM scores WHERE imslp_id = :imslp_id AND file_size IS NOT NULL AND file_size > 0",
+        "SELECT id FROM scores WHERE imslp_id = :imslp_id "
+        "AND file_size IS NOT NULL AND file_size > 0 "
+        "AND convert_complete IS NOT NULL AND num_pages >= 1",
         {"imslp_id": imslp_id},
+    )
+
+
+def _score_row_by_hash(file_hash: str):
+    return db_conn.fetchone(
+        "SELECT id, imslp_id, s3, convert_complete, num_pages FROM scores WHERE file_hash = :hash",
+        {"hash": file_hash},
     )
 
 
@@ -108,12 +118,15 @@ def run_imslp_import(
             on_progress=lambda progress: _set_import_progress(partset_id, progress),
         )
 
-        pdf_bytes = pdf_path.read_bytes()
-        if not pdf_bytes.startswith(PDF_MAGIC):
-            msg = f"IMSLP {imslp_id} did not return a PDF"
-            logger.error("%s for partset %s", msg, partset_id)
+        try:
+            ensure_valid_score_pdf(pdf_path, workdir)
+        except ValueError as exc:
+            msg = str(exc)
+            logger.error("%s for IMSLP %s partset %s", msg, imslp_id, partset_id)
             _mark_import_error(partset_id, message=msg, job_id=job_id)
-            raise ValueError(msg)
+            raise
+
+        pdf_bytes = pdf_path.read_bytes()
         if len(pdf_bytes) > MAX_SCORE_BYTES:
             raise reject_score_too_large(
                 len(pdf_bytes),
@@ -124,10 +137,7 @@ def run_imslp_import(
         file_hash = hashlib.sha1(pdf_bytes).hexdigest()
         file_size = len(pdf_bytes)
 
-        existing = db_conn.fetchone(
-            "SELECT id, imslp_id FROM scores WHERE file_hash = :hash",
-            {"hash": file_hash},
-        )
+        existing = _score_row_by_hash(file_hash)
         if existing:
             score_id = existing.id
             if imslp_id and not existing.imslp_id:
@@ -135,6 +145,8 @@ def run_imslp_import(
                     "UPDATE scores SET imslp_id = :imslp_id WHERE id = :id",
                     {"imslp_id": imslp_id, "id": score_id},
                 )
+            if not existing.s3:
+                upload_file(pdf_path, score_pdf_s3_key(score_id), "application/pdf")
         else:
             score_id = _gen_score_id()
             db_conn.execute(

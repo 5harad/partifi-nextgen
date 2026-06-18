@@ -1,6 +1,8 @@
 import subprocess
 from unittest.mock import patch
 
+import pytest
+
 from pdf_repair import normalize_pdf_for_convert, run_subprocess_with_repair
 
 
@@ -54,7 +56,7 @@ def test_burst_score_pages_normalizes_when_pdftk_fails() -> None:
 
     with (
         patch("pdf_repair._pdftk_burst", side_effect=subprocess.CalledProcessError(1, "pdftk")),
-        patch("pdf_repair.glob.glob", return_value=[]),
+        patch("pdf_repair.glob.glob", side_effect=[[], [], ["/tmp/partifi/x/page-1.pdf"]]),
         patch("pdf_repair.normalize_pdf_for_convert") as normalize,
         patch("pdf_repair.run_subprocess_with_repair") as burst_repair,
     ):
@@ -66,3 +68,16 @@ def test_burst_score_pages_normalizes_when_pdftk_fails() -> None:
         repair_path="/tmp/partifi/x/score_repair_input.pdf",
     )
     burst_repair.assert_called_once()
+
+
+def test_burst_score_pages_raises_when_no_pages_produced() -> None:
+    from pdf_repair import burst_score_pages
+
+    with (
+        patch("pdf_repair._pdftk_burst", side_effect=subprocess.CalledProcessError(1, "pdftk")),
+        patch("pdf_repair.glob.glob", return_value=[]),
+        patch("pdf_repair.normalize_pdf_for_convert"),
+        patch("pdf_repair.run_subprocess_with_repair"),
+    ):
+        with pytest.raises(ValueError, match="corrupt or incomplete"):
+            burst_score_pages("/tmp/in.pdf", "/tmp/partifi/x")

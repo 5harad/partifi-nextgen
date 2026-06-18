@@ -7,6 +7,8 @@ import glob
 import os
 import subprocess
 
+from pipeline.pdf_validate import PDF_CORRUPT_MESSAGE
+
 logger = logging.getLogger(__name__)
 
 _GS_QUIET = ["gs", "-q", "-dNOPAUSE", "-dBATCH"]
@@ -85,3 +87,5 @@ def burst_score_pages(pdffile: str, tempdir: str) -> None:
         repair_path=burst_repair,
         label="pdftk burst",
     )
+    if not glob.glob(os.path.join(tempdir, "page*.pdf")):
+        raise ValueError(PDF_CORRUPT_MESSAGE)

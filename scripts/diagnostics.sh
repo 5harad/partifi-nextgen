@@ -115,7 +115,7 @@ fetch_service_journal() {
 filter_imslp_issue_lines() {
   # Final failures and API rejections only (no retry / disclaimer noise).
   grep -iE \
-'partsets/imslp HTTP/1.1" (400|500)|import rejected: score too large|PDF URL resolution failed during pre-import check|index HTML missing PDF link|IMSLP import failed for partset|did not return a PDF|IMSLP HTTP failure .*failed after|IMSLP HTTP failure operation=(pdf_resolve|pre_import_pdf_resolve|pre_import_pdf_head|pdf_download) imslp_id=' \
+'partsets/imslp HTTP/1.1" (400|500)|import rejected: score too large|PDF URL resolution failed during pre-import check|index HTML missing PDF link|IMSLP import failed for partset|did not return a PDF|corrupt or incomplete|IMSLP HTTP failure .*failed after|IMSLP HTTP failure operation=(pdf_resolve|pre_import_pdf_resolve|pre_import_pdf_head|pdf_download) imslp_id=' \
     | grep -viE 'attempt [0-9]+/[0-9]+|pdf_resolve retry in|PDF download retry in|mirror PML-(Asia|US|CA) (disclaimer|placeholder)' \
     || true
 }

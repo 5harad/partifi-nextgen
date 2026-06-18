@@ -20,9 +20,10 @@ from pipeline.imslp_download import (
     mirror_request_cookies,
     resolve_imslp_pdf_url_with_retries,
 )
+from pipeline.pdf_validate import PDF_MAGIC, validate_pdf_bytes
+from pipeline.score_pdf import score_ready_for_reuse
 
 REQUEST_TIMEOUT = 30.0
-PDF_MAGIC = b"%PDF"
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +137,7 @@ def ingest_imslp_pdf_bytes(db: Session, imslp_id: str, pdf_bytes: bytes) -> tupl
     """Store IMSLP PDF bytes (dedupe by hash). Returns (score_id, action)."""
     if not pdf_bytes.startswith(PDF_MAGIC):
         raise ValueError("File is not a valid PDF")
+    validate_pdf_bytes(pdf_bytes)
     if len(pdf_bytes) > MAX_SCORE_BYTES:
         raise reject_score_too_large(
             len(pdf_bytes),
@@ -145,9 +147,20 @@ def ingest_imslp_pdf_bytes(db: Session, imslp_id: str, pdf_bytes: bytes) -> tupl
 
     file_hash = hashlib.sha1(pdf_bytes).hexdigest()
     existing = db.query(Score).filter(Score.file_hash == file_hash).first()
+    if existing and score_ready_for_reuse(
+        convert_complete=existing.convert_complete,
+        num_pages=existing.num_pages,
+    ):
+        if imslp_id and not existing.imslp_id:
+            existing.imslp_id = imslp_id
+        return existing.id, "continue"
     if existing:
         if imslp_id and not existing.imslp_id:
             existing.imslp_id = imslp_id
+        if not existing.s3:
+            upload_bytes(score_pdf_s3_key(existing.id), pdf_bytes, "application/pdf")
+            existing.s3 = True
+            existing.file_size = len(pdf_bytes)
         return existing.id, "continue"
 
     from datetime import datetime
