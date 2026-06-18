@@ -113,9 +113,10 @@ fetch_service_journal() {
 }
 
 filter_imslp_issue_lines() {
+  # Final failures and API rejections only (no retry / disclaimer noise).
   grep -iE \
-'IMSLP (HTTP failure|import rejected|PDF URL resolution failed|index HTML missing PDF|import failed|pdf_resolve retry)|partsets/imslp HTTP/1.1" (400|500)|imslp_import' \
-    | grep -viE 'mirror PML-(Asia|US|CA) disclaimer' \
+'partsets/imslp HTTP/1.1" (400|500)|import rejected: score too large|PDF URL resolution failed during pre-import check|index HTML missing PDF link|IMSLP import failed for partset|did not return a PDF|IMSLP HTTP failure .*failed after|IMSLP HTTP failure operation=(pdf_resolve|pre_import_pdf_resolve|pre_import_pdf_head|pdf_download) imslp_id=' \
+    | grep -viE 'attempt [0-9]+/[0-9]+|pdf_resolve retry in|PDF download retry in|mirror PML-(Asia|US|CA) (disclaimer|placeholder)' \
     || true
 }
 
@@ -182,6 +183,7 @@ IMSLP_ISSUE_LINES="$(echo "$SERVICE_JOURNAL" | filter_imslp_issue_lines)"
 IMSLP_API_OK="$(count_journal_lines "$(echo "$SERVICE_JOURNAL" | grep 'POST /api/v1/partsets/imslp HTTP/1.1" 200' || true)")"
 IMSLP_API_FAIL="$(count_journal_lines "$(echo "$SERVICE_JOURNAL" | grep -E 'POST /api/v1/partsets/imslp HTTP/1.1" (400|500)' || true)")"
 IMSLP_ATTEMPTED="$(mysql_scalar "SELECT COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND create_ts >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;")"
+IMSLP_CREATED_ANALYZED="$(mysql_scalar "SELECT COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND create_ts >= NOW() - INTERVAL ${ERROR_HOURS} HOUR AND analysis_complete IS NOT NULL AND error IS NULL;")"
 IMSLP_SUCCEEDED="$(mysql_scalar "SELECT COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND analysis_complete IS NOT NULL AND error IS NULL AND analysis_complete >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;")"
 IMSLP_WORKER_FAIL="$(mysql_scalar "SELECT COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND error IN ('import', 'import_size') AND COALESCE(error_ts, create_ts) >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;")"
 IMSLP_FAILED_COUNT="$(mysql_scalar "SELECT COUNT(*) FROM partsets WHERE ${IMSLP_FAILED_WHERE};")"
@@ -189,11 +191,37 @@ IMSLP_FAILED_COUNT="$(mysql_scalar "SELECT COUNT(*) FROM partsets WHERE ${IMSLP_
 # --- output ---
 section "Summary"
 echo "  health:      ${HEALTH_STATUS}"
+echo "  imslp API:   ${IMSLP_API_OK} ok / ${IMSLP_API_FAIL} fail (POST /partsets/imslp, last ${ERROR_HOURS}h)"
+echo "  imslp DB:    ${IMSLP_ATTEMPTED} created / ${IMSLP_CREATED_ANALYZED} analyzed (of those) / ${IMSLP_WORKER_FAIL} worker fail"
 echo "  stuck:       ${STUCK_COUNT} (last ${DAYS}d)"
 echo "  errors:      ${ERROR_COUNT} lines (${ERROR_HOURS}h)"
 echo "  queue:       ${QUEUE_PENDING} pending / ${QUEUE_PROCESSING} processing"
 echo "  users:       ${USER_COUNT} total (+${NEW_USERS_24H} in 24h)"
-echo "  imslp:       ${IMSLP_SUCCEEDED} ok / ${IMSLP_ATTEMPTED} attempted / ${IMSLP_API_OK} API 200 / ${IMSLP_API_FAIL} API 4xx-5xx / ${IMSLP_WORKER_FAIL} worker fail (${ERROR_HOURS}h)"
+
+section "IMSLP imports (last ${ERROR_HOURS}h)"
+echo "  API:         ${IMSLP_API_OK} POST 200 / ${IMSLP_API_FAIL} POST 4xx-5xx"
+echo "  created:     ${IMSLP_ATTEMPTED} partsets (should match POST 200)"
+echo "  analyzed:    ${IMSLP_CREATED_ANALYZED} of those created / ${IMSLP_SUCCEEDED} total finished in window"
+echo "  worker fail: ${IMSLP_WORKER_FAIL} (import / import_size errors)"
+echo ""
+echo "IMSLP failures (newest first):"
+if [[ -n "$IMSLP_ISSUE_LINES" ]]; then
+  echo "$IMSLP_ISSUE_LINES"
+else
+  echo "(no matching lines)"
+fi
+echo ""
+echo "Failed IMSLP partsets (last ${DAYS}d, newest first):"
+if [[ "$IMSLP_FAILED_COUNT" == "0" ]]; then
+  echo "none"
+else
+  mysql_query "
+SELECT error_ts, id, imslp_id, title, error, error_message
+FROM partsets
+WHERE ${IMSLP_FAILED_WHERE}
+ORDER BY COALESCE(error_ts, create_ts) DESC;
+"
+fi
 
 section "Failed / stuck partsets (last ${DAYS} days, newest first)"
 if [[ "$STUCK_COUNT" == "0" ]]; then
@@ -212,31 +240,6 @@ if [[ -n "$ERROR_LINES" ]]; then
   echo "$ERROR_LINES"
 else
   echo "(no matching lines)"
-fi
-
-section "IMSLP imports (last ${ERROR_HOURS}h)"
-echo "  attempted:   ${IMSLP_ATTEMPTED} partsets created"
-echo "  succeeded:   ${IMSLP_SUCCEEDED} analysis complete"
-echo "  API:         ${IMSLP_API_OK} POST 200 / ${IMSLP_API_FAIL} POST 4xx-5xx"
-echo "  worker fail: ${IMSLP_WORKER_FAIL} (import / import_size errors)"
-echo ""
-echo "API / mirror log lines (newest first):"
-if [[ -n "$IMSLP_ISSUE_LINES" ]]; then
-  echo "$IMSLP_ISSUE_LINES"
-else
-  echo "(no matching lines)"
-fi
-echo ""
-echo "Failed IMSLP partsets (last ${DAYS}d, newest first):"
-if [[ "$IMSLP_FAILED_COUNT" == "0" ]]; then
-  echo "none"
-else
-  mysql_query "
-SELECT error_ts, id, imslp_id, title, error, error_message
-FROM partsets
-WHERE ${IMSLP_FAILED_WHERE}
-ORDER BY COALESCE(error_ts, create_ts) DESC;
-"
 fi
 
 section "Activity"
