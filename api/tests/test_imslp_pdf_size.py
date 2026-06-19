@@ -35,10 +35,10 @@ def test_check_imslp_pdf_size_rejects_large_content_length() -> None:
     )
     client.head.return_value = _mock_response(
         url="https://vmirror.imslp.org/files/foo.pdf",
-        headers={"content-length": "250000000"},
+        headers={"content-length": "251000000"},
     )
 
-    with pytest.raises(ScoreTooLargeError, match="250 MB"):
+    with pytest.raises(ScoreTooLargeError, match="251 MB"):
         check_imslp_pdf_size("696200", client=client)
 
 
@@ -67,14 +67,14 @@ def test_check_imslp_pdf_size_logs_size_rejection(caplog: pytest.LogCaptureFixtu
     )
     client.head.return_value = _mock_response(
         url="https://vmirror.imslp.org/files/foo.pdf",
-        headers={"content-length": "250000000"},
+        headers={"content-length": "251000000"},
     )
 
     with caplog.at_level(logging.WARNING):
-        with pytest.raises(ScoreTooLargeError, match="250 MB"):
+        with pytest.raises(ScoreTooLargeError, match="251 MB"):
             check_imslp_pdf_size("696200", client=client)
 
-    assert "IMSLP 696200 import rejected: score too large (250 MB, limit 200 MB)" in caplog.text
+    assert "IMSLP 696200 import rejected: score too large (251 MB, limit 250 MB)" in caplog.text
 
 
 def test_check_imslp_pdf_size_logs_resolution_failure(caplog: pytest.LogCaptureFixture) -> None:

@@ -44,6 +44,7 @@ services:
       dockerfile: frontend/Dockerfile
       args:
         VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID}
+        VITE_MAX_SCORE_MB: ${PARTIFI_MAX_SCORE_MB:-250}
     restart: unless-stopped
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-partifi.org}

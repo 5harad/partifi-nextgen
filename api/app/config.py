@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     partifi_cache_preview_ttl_days: int = 7
     partifi_cache_parts_ttl_days: int = 7
     partifi_cache_score_ttl_days: int = 7
+    partifi_max_score_mb: int = 250
 
     @property
     def database_url(self) -> str:
