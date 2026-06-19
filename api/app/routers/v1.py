@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 import threading
 
@@ -27,19 +28,20 @@ from app.schemas.segment import (
     SavePageSegmentsResponse,
     SegmentDataResponse,
 )
-from app.services.retry import ensure_import_if_needed, retry_partset_pipeline
+from app.services.imslp import (
+    ImslpLookupCancelled,
+    ImslpLookupError,
+    ImslpLookupUnavailableError,
+    lookup_imslp_info_remote,
+    normalize_imslp_id,
+)
 from app.services.partsets import (
     create_imslp_partset,
     create_partset_from_score,
     create_pdf_partset,
     import_progress_payload,
 )
-from app.services.imslp import (
-    ImslpLookupCancelled,
-    ImslpLookupError,
-    ImslpLookupUnavailableError,
-    lookup_imslp_info_remote,
-)
+from app.services.retry import ensure_import_if_needed, retry_partset_pipeline
 from app.services.search import search_partsets
 from app.services.partset_admin import (
     delete_partset,
@@ -78,6 +80,7 @@ from app.services.segments import (
 )
 
 router = APIRouter(prefix="/api/v1", tags=["v1"])
+logger = logging.getLogger(__name__)
 
 COPYRIGHT_VALUES = {"before 1923", "after 1923", "unknown"}
 PART_FILE_PATTERN = re.compile(r"^[A-Za-z0-9._+\-]+\.pdf$")
@@ -367,6 +370,7 @@ def create_partset_from_imslp(
     user_id: str | None = Depends(get_current_user_id),
 ) -> PartsetCreateResponse:
     verify_csrf(x_csrf_token)
+    imslp_id = body.imslp_id.strip()
     if body.copyright not in COPYRIGHT_VALUES:
         raise HTTPException(status_code=400, detail="Invalid copyright value")
     title = body.title.strip()
@@ -376,7 +380,7 @@ def create_partset_from_imslp(
     try:
         partset, action = create_imslp_partset(
             db,
-            imslp_id=body.imslp_id.strip(),
+            imslp_id=imslp_id,
             title=title,
             composer=composer,
             publisher=body.publisher.strip(),
@@ -384,6 +388,8 @@ def create_partset_from_imslp(
             user_id=user_id,
         )
     except ValueError as exc:
+        normalized = normalize_imslp_id(imslp_id) or imslp_id
+        logger.warning("IMSLP import rejected imslp_id=%s: %s", normalized, exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return PartsetCreateResponse(status="ok", id=partset.private_id or "", action=action)
 
