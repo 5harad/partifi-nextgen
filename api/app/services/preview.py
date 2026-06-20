@@ -21,7 +21,6 @@ from app.services.downloads import part_file_url, score_pdf_url_for_partset
 from app.services.score_pages import ensure_score_pages_warming
 from app.services.part_rows import upsert_part_row
 from app.services.segments import ensure_import_complete, get_partset_by_private_id, sync_part_rows_from_tags
-from app.utils.strings import tag_to_filename
 
 APP_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = APP_ROOT.parent
@@ -38,6 +37,7 @@ from pipeline.cutpaste import (  # noqa: E402
     prct2pixel,
 )
 from pipeline.local_cache import LocalCache  # noqa: E402
+from pipeline.part_filenames import combined_tag_to_filename, validate_combined_tag  # noqa: E402
 
 
 def _partgen_total_progress(status: str | None, progress: float) -> float:
@@ -330,7 +330,8 @@ def combine_parts(db: Session, partset: Partset, action: str, tag: str) -> None:
     partset.status = "analysis"
 
     if action == "add":
-        filename = tag_to_filename(tag)
+        validate_combined_tag(tag)
+        filename = combined_tag_to_filename(tag)
         upsert_part_row(
             db,
             partset_id=partset.id,

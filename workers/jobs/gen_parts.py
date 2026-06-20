@@ -18,6 +18,7 @@ from db_conn import execute, fetchall, fetchone
 from config import get_settings
 from jobs.errors import mark_partset_error
 from pipeline.cut_segments import cut_segment_tasks, default_pool_size
+from pipeline.part_filenames import resolve_part_filename
 from pipeline.cutpaste import (
     apply_combined_parts,
     build_part_segment_map,
@@ -97,10 +98,19 @@ def _fetch_spacings(partset_id: str) -> dict[str, float]:
 
 def _fetch_part_files(partset_id: str) -> list[dict]:
     rows = fetchall(
-        "SELECT tag, file_name, spacing FROM parts WHERE partset_id = :partset_id ORDER BY combined, tag",
+        "SELECT tag, file_name, spacing, combined FROM parts "
+        "WHERE partset_id = :partset_id ORDER BY combined, tag",
         {"partset_id": partset_id},
     )
-    return [{"tag": row.tag, "file_name": row.file_name, "spacing": float(row.spacing or 0.1)} for row in rows]
+    return [
+        {
+            "tag": row.tag,
+            "file_name": row.file_name,
+            "spacing": float(row.spacing or 0.1),
+            "combined": bool(row.combined),
+        }
+        for row in rows
+    ]
 
 
 def _update_cut_progress(partset_id: str, increment: float) -> None:
@@ -250,8 +260,19 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
             pages.append(page_segs)
 
         part_name = tag
+        file_name = resolve_part_filename(
+            part_row["file_name"] or "",
+            tag,
+            combined=part_row["combined"],
+        )
+        if file_name != (part_row["file_name"] or ""):
+            execute(
+                "UPDATE parts SET file_name = :file_name "
+                "WHERE partset_id = :partset_id AND tag = :tag",
+                {"file_name": file_name, "partset_id": partset_id, "tag": tag},
+            )
         for pagesize, prefix in (("letter", ""), ("a4", "a4_")):
-            outfile = outdir / f"{partset_id}_{prefix}{part_row['file_name']}"
+            outfile = outdir / f"{partset_id}_{prefix}{file_name}"
             paste_jobs.append(
                 {
                     "title": partset.title or "",
