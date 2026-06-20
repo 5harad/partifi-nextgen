@@ -80,7 +80,9 @@ export function pageChunks(
     const segId = segments[i]
     const segH = heights[segId]
     if (h + segH >= PAGE_CHUNK_MAX || breaks.includes(i - 1)) {
-      chunks.push(segments.slice(start, i))
+      if (start < i) {
+        chunks.push(segments.slice(start, i))
+      }
       start = i
       h = 0
     }

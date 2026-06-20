@@ -26,7 +26,8 @@ def page_chunks(
     for i, seg_id in enumerate(segments):
         seg_h = heights[seg_id]
         if h + seg_h >= PAGE_CHUNK_MAX or (i - 1) in breaks:
-            chunks.append(segments[start:i])
+            if start < i:
+                chunks.append(segments[start:i])
             start = i
             h = 0.0
         h += seg_h + spacing
