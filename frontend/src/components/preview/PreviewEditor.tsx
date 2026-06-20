@@ -47,6 +47,19 @@ export function PreviewEditor({ privateId }: Props) {
   const [hoverSeg, setHoverSeg] = useState<number | null>(null)
   const [sliderUpTop, setSliderUpTop] = useState(42)
   const draggingSlider = useRef<'up' | 'down' | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
+
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return
+      setData(null)
+      setError(null)
+      setWarmProgress(0)
+      setReloadToken((token) => token + 1)
+    }
+    window.addEventListener('pageshow', onPageShow)
+    return () => window.removeEventListener('pageshow', onPageShow)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -95,7 +108,7 @@ export function PreviewEditor({ privateId }: Props) {
       cancelled = true
       window.clearTimeout(timeoutId)
     }
-  }, [privateId, navigate])
+  }, [privateId, navigate, reloadToken])
 
   const allPartNames = useMemo(
     () => (data ? [...data.part_names, ...combinedPartNames] : []),

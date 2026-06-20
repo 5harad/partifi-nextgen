@@ -112,19 +112,9 @@ class LocalCache:
         return self.preview_dir(partset_id) / f"s{ndx}.png"
 
     @staticmethod
-    def preview_fingerprint(
-        segment_rows: list[dict[str, Any]],
-        breaks: dict[str, list[int]],
-        spacings: dict[str, float],
-        combined_part_names: list[str],
-    ) -> str:
-        payload = {
-            "segments": segment_rows,
-            "breaks": {tag: sorted(values) for tag, values in sorted(breaks.items())},
-            "spacings": {tag: spacings[tag] for tag in sorted(spacings)},
-            "combined": sorted(combined_part_names),
-        }
-        raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    def preview_fingerprint(segment_rows: list[dict[str, Any]]) -> str:
+        """Hash segment geometry only; layout (breaks/spacings) does not change PNG crops."""
+        raw = json.dumps(segment_rows, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(raw.encode()).hexdigest()
 
     def preview_is_valid(self, partset_id: str, fingerprint: str, num_segments: int) -> bool:
