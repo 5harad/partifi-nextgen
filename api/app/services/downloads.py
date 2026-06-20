@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.models import Part, Partset
 from app.models.tables import Download
+from app.utils.strings import tag_to_filename
+from pipeline.part_filenames import MAX_PART_FILENAME_LEN, resolve_part_filename
 
 
 def score_pdf_url_for_score(score_id: str) -> str:
@@ -53,6 +55,61 @@ def part_file_name_from_download_filename(partset_id: str, filename: str) -> tup
     if remainder.startswith("a4_"):
         return remainder[3:], True
     return remainder, False
+
+
+def _find_part_for_download(db: Session, partset: Partset, stored_name: str) -> Part | None:
+    part = (
+        db.query(Part)
+        .filter(Part.partset_id == partset.id, Part.file_name == stored_name)
+        .first()
+    )
+    if part is not None:
+        return part
+    if len(stored_name) <= MAX_PART_FILENAME_LEN:
+        return None
+    for candidate in (
+        db.query(Part)
+        .filter(Part.partset_id == partset.id, Part.combined.is_(True))
+        .all()
+    ):
+        if stored_name == tag_to_filename(candidate.tag):
+            return candidate
+    return None
+
+
+def resolve_part_cache_filename(
+    db: Session,
+    partset: Partset,
+    filename: str,
+) -> str | None:
+    """Map a served download filename to a filesystem-safe cache key."""
+    parsed = part_file_name_from_download_filename(partset.id, filename)
+    if not parsed:
+        return None
+    stored_name, is_a4 = parsed
+    part = _find_part_for_download(db, partset, stored_name)
+    if part is None:
+        if len(stored_name) > MAX_PART_FILENAME_LEN:
+            return None
+        return filename
+
+    resolved = resolve_part_filename(
+        part.file_name or "",
+        part.tag,
+        combined=bool(part.combined),
+    )
+    prefix = f"{partset.id}_a4_" if is_a4 else f"{partset.id}_"
+    return f"{prefix}{resolved}"
+
+
+def safe_cached_part_path(cache, partset_id: str, filename: str):
+    """Return cached part path, or None if missing or the filename is too long for the filesystem."""
+    try:
+        return cache.ensure_part_file(partset_id, filename)
+    except OSError as exc:
+        if exc.errno == 36:
+            return None
+        raise
 
 
 def record_part_download(

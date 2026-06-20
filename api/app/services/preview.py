@@ -37,7 +37,11 @@ from pipeline.cutpaste import (  # noqa: E402
     prct2pixel,
 )
 from pipeline.local_cache import LocalCache  # noqa: E402
-from pipeline.part_filenames import combined_tag_to_filename, validate_combined_tag  # noqa: E402
+from pipeline.part_filenames import (  # noqa: E402
+    combined_tag_to_filename,
+    resolve_part_filename,
+    validate_combined_tag,
+)
 
 
 def _partgen_total_progress(status: str | None, progress: float) -> float:
@@ -423,8 +427,13 @@ def get_parts_data(db: Session, partset: Partset, *, mode: str = "owner") -> dic
 
     download_items = []
     for part in parts:
-        letter_name = f"{partset.id}_{part.file_name}"
-        a4_name = f"{partset.id}_a4_{part.file_name}"
+        file_name = resolve_part_filename(
+            part.file_name or "",
+            part.tag,
+            combined=bool(part.combined),
+        )
+        letter_name = f"{partset.id}_{file_name}"
+        a4_name = f"{partset.id}_a4_{file_name}"
 
         letter_url = part_file_url(partset, letter_name, mode=mode)
         a4_url = part_file_url(partset, a4_name, mode=mode)
@@ -432,7 +441,7 @@ def get_parts_data(db: Session, partset: Partset, *, mode: str = "owner") -> dic
         download_items.append(
             {
                 "tag": part.tag,
-                "file_name": part.file_name or "",
+                "file_name": file_name,
                 "letter_url": letter_url,
                 "a4_url": a4_url,
             }

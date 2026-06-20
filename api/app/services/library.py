@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.models import Favorite, Part, Partset
 from app.services.partset_admin import resolve_partset_access
 from app.services.downloads import part_file_url, score_pdf_url_for_partset
+from pipeline.part_filenames import resolve_part_filename
 
 
 def resolve_public_partset_id(db: Session, access_id: str) -> str | None:
@@ -100,12 +101,17 @@ def list_library(db: Session, user_id: str) -> list[dict]:
         link_mode = "owner" if favorite.admin and partset.private_id else "public"
         parts_payload: list[dict] = []
         for part in parts_by_partset.get(partset.id, []):
-            letter_name = f"{partset.id}_{part.file_name}"
-            a4_name = f"{partset.id}_a4_{part.file_name}"
+            file_name = resolve_part_filename(
+                part.file_name or "",
+                part.tag,
+                combined=bool(part.combined),
+            )
+            letter_name = f"{partset.id}_{file_name}"
+            a4_name = f"{partset.id}_a4_{file_name}"
             parts_payload.append(
                 {
                     "tag": part.tag,
-                    "file_name": part.file_name or "",
+                    "file_name": file_name,
                     "letter_url": part_file_url(partset, letter_name, mode=link_mode),
                     "a4_url": part_file_url(partset, a4_name, mode=link_mode),
                 }

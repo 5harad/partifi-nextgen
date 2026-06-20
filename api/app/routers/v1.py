@@ -68,7 +68,12 @@ from app.services.preview import (
     save_layout,
     start_part_generation,
 )
-from app.services.downloads import partgen_redirect_url, record_part_download
+from app.services.downloads import (
+    partgen_redirect_url,
+    record_part_download,
+    resolve_part_cache_filename,
+    safe_cached_part_path,
+)
 from app.services.local_cache import get_local_cache
 from app.services.partset_touch import touch_partset_access
 
@@ -118,10 +123,13 @@ def _serve_cached_part(
 ) -> FileResponse | RedirectResponse:
     if not PART_FILE_PATTERN.match(filename):
         raise HTTPException(status_code=400, detail="Invalid filename")
+    cache_filename = resolve_part_cache_filename(db, partset, filename)
+    if not cache_filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
     cache = get_local_cache()
-    path = cache.ensure_part_file(partset.id, filename)
+    path = safe_cached_part_path(cache, partset.id, cache_filename)
     if not path:
-        ensure_part_file_on_cache_miss(db, partset, filename)
+        ensure_part_file_on_cache_miss(db, partset, cache_filename)
         return RedirectResponse(
             partgen_redirect_url(access_id, download_path),
             status_code=302,
