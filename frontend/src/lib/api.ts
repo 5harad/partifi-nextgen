@@ -20,6 +20,7 @@ export type PartsetCreateResponse = {
 
 export type ImportProgressResponse = {
   error: string | null
+  error_message: string | null
   status: string | null
   progress: number
   total_progress: number

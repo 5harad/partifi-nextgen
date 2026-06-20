@@ -21,7 +21,7 @@ from pipeline.imslp_download import (
     resolve_imslp_pdf_url_with_retries,
 )
 from pipeline.pdf_validate import PDF_MAGIC, validate_pdf_bytes
-from pipeline.score_pdf import score_ready_for_reuse
+from pipeline.score_pdf import archived_pdf_path_is_valid, score_ready_for_reuse
 
 REQUEST_TIMEOUT = 30.0
 
@@ -133,6 +133,18 @@ def check_imslp_pdf_size(imslp_id: str, *, client: httpx.Client | None = None) -
     resolve_imslp_pdf_for_import(imslp_id, client=client)
 
 
+def _archived_score_pdf_valid(score_id: str) -> bool:
+    """True when the score's archived PDF on S3 passes structural validation."""
+    from app.services.local_cache import get_local_cache
+
+    try:
+        path = get_local_cache().ensure_score_pdf(score_id)
+    except Exception:
+        logger.warning("Could not load archived PDF for score %s", score_id, exc_info=True)
+        return False
+    return archived_pdf_path_is_valid(path)
+
+
 def ingest_imslp_pdf_bytes(db: Session, imslp_id: str, pdf_bytes: bytes) -> tuple[str, str]:
     """Store IMSLP PDF bytes (dedupe by hash). Returns (score_id, action)."""
     if not pdf_bytes.startswith(PDF_MAGIC):
@@ -157,10 +169,11 @@ def ingest_imslp_pdf_bytes(db: Session, imslp_id: str, pdf_bytes: bytes) -> tupl
     if existing:
         if imslp_id and not existing.imslp_id:
             existing.imslp_id = imslp_id
-        if not existing.s3:
+        if not existing.s3 or not _archived_score_pdf_valid(existing.id):
             upload_bytes(score_pdf_s3_key(existing.id), pdf_bytes, "application/pdf")
             existing.s3 = True
             existing.file_size = len(pdf_bytes)
+            existing.file_hash = file_hash
         return existing.id, "continue"
 
     from datetime import datetime

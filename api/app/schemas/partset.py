@@ -9,6 +9,7 @@ class PartsetCreateResponse(BaseModel):
 
 class ImportProgressResponse(BaseModel):
     error: str | None = None
+    error_message: str | None = None
     status: str | None = None
     progress: float = 0.0
     total_progress: float = 0.0

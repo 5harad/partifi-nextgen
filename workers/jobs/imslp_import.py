@@ -15,7 +15,7 @@ from jobs.errors import mark_partset_error
 from jobs.import_pipeline import run_import_pipeline
 from pdf_validate_repair import ensure_valid_score_pdf
 from pipeline.pdf_validate import PDF_CORRUPT_MESSAGE
-from s3_storage import score_pdf_s3_key, upload_file
+from s3_storage import download_file, score_pdf_s3_key, upload_file
 from score_limits import MAX_SCORE_BYTES, ScoreTooLargeError, reject_score_too_large
 
 import db_conn
@@ -67,6 +67,22 @@ def _score_row_by_hash(file_hash: str):
         "SELECT id, imslp_id, s3, convert_complete, num_pages FROM scores WHERE file_hash = :hash",
         {"hash": file_hash},
     )
+
+
+def _ensure_archived_pdf(score_id: str, pdf_path: Path, workdir: Path) -> None:
+    """Upload pdf_path when the score has no archived PDF or S3 copy is invalid."""
+    row = db_conn.fetchone("SELECT s3 FROM scores WHERE id = :id", {"id": score_id})
+    if row and row.s3:
+        check_path = workdir / f"{score_id}_archived_check.pdf"
+        try:
+            download_file(score_pdf_s3_key(score_id), check_path)
+            ensure_valid_score_pdf(check_path, workdir)
+            return
+        except Exception:
+            logger.warning("Replacing invalid archived PDF for score %s", score_id)
+
+    upload_file(pdf_path, score_pdf_s3_key(score_id), "application/pdf")
+    db_conn.execute("UPDATE scores SET s3 = 1 WHERE id = :id", {"id": score_id})
 
 
 def _attach_score_and_run_pipeline(partset_id: str, score_id: str, *, job_id: str | None) -> None:
@@ -145,8 +161,7 @@ def run_imslp_import(
                     "UPDATE scores SET imslp_id = :imslp_id WHERE id = :id",
                     {"imslp_id": imslp_id, "id": score_id},
                 )
-            if not existing.s3:
-                upload_file(pdf_path, score_pdf_s3_key(score_id), "application/pdf")
+            _ensure_archived_pdf(score_id, pdf_path, workdir)
         else:
             score_id = _gen_score_id()
             db_conn.execute(

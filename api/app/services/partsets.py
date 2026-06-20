@@ -44,6 +44,7 @@ def import_progress_payload(partset: Partset) -> dict:
     stage_progress = getattr(partset, progress_key, 0.0) or 0.0
     return {
         "error": partset.error,
+        "error_message": partset.error_message,
         "status": partset.status,
         "progress": stage_progress,
         "total_progress": 100.0 if is_complete else total_progress(partset.status, stage_progress),

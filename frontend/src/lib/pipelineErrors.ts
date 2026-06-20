@@ -9,7 +9,13 @@ const STAGE_MESSAGES: Record<string, string> = {
   paste: 'Sorry, there was a problem assembling the part PDFs.',
 }
 
-export function pipelineErrorMessage(stage: string | null | undefined): string {
+export function pipelineErrorMessage(
+  stage: string | null | undefined,
+  detail?: string | null,
+): string {
+  if (detail?.trim()) {
+    return detail.trim()
+  }
   if (!stage) {
     return 'Sorry, something went wrong processing this score.'
   }

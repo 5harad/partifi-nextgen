@@ -39,6 +39,24 @@ PMLASIA_PLACEHOLDER_RE = re.compile(
 PMLASIA_DOWNLOAD_URL = "https://imslp.tw/index.php?download=PMLASIA{pml_id}-{suffix}"
 
 IMSLP_NO_DOWNLOAD_PDF_MSG = "No downloadable PDF is available for IMSLP {imslp_id}"
+DOWNLOAD_INCOMPLETE_MSG = "Download incomplete: expected {expected} bytes, received {actual} bytes"
+
+
+def assert_download_content_length(actual_size: int, content_length_header: str | None) -> None:
+    """Raise when the body size does not match Content-Length."""
+    if not content_length_header:
+        return
+    expected = int(content_length_header)
+    if actual_size != expected:
+        raise ValueError(
+            DOWNLOAD_INCOMPLETE_MSG.format(expected=expected, actual=actual_size)
+        )
+
+
+def _pdf_bytes_from_response(response: httpx.Response) -> bytes:
+    content = response.content
+    assert_download_content_length(len(content), response.headers.get("content-length"))
+    return content
 
 
 def rewrite_pmlasia_placeholder_url(url: str) -> str | None:
@@ -155,7 +173,7 @@ def pdf_response_from_redirect(response: httpx.Response) -> tuple[str, bytes] | 
         return None
     if rewrite_pmlasia_placeholder_url(str(response.url)):
         return None
-    return str(response.url), response.content
+    return str(response.url), _pdf_bytes_from_response(response)
 
 
 def is_pmlca_disclaimer(page_html: str, page_url: str = "") -> bool:
@@ -205,7 +223,7 @@ def _fetch_mirror_disclaimer_pdf(
     content_type = response.headers.get("content-type", "")
     if not is_pdf_body(response.content, content_type):
         raise ValueError(f"{mirror_name} mirror did not return a PDF at {pdf_url}")
-    return str(response.url), response.content
+    return str(response.url), _pdf_bytes_from_response(response)
 
 
 def _fetch_pmlasia_pdf(
@@ -309,7 +327,7 @@ def fetch_mirror_pdf(client: httpx.Client, pdf_url: str) -> tuple[str, bytes]:
     if is_pdf_body(response.content, content_type):
         if rewrite_pmlasia_placeholder_url(page_url):
             return _fetch_pmlasia_via_placeholder(client, page_url)
-        return page_url, response.content
+        return page_url, _pdf_bytes_from_response(response)
 
     raise ValueError(f"Mirror did not return a PDF at {pdf_url}")
 

@@ -44,7 +44,7 @@ export function ImportProgressPage() {
 
         if (data.error) {
           setErrorStage(data.error)
-          setErrorMessage(pipelineErrorMessage(data.error))
+          setErrorMessage(pipelineErrorMessage(data.error, data.error_message))
           return
         }
 

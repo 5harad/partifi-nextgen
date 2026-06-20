@@ -81,12 +81,13 @@ def _mock_response(
     text: str = "",
     content: bytes = b"",
     content_type: str = "text/html",
+    headers: dict[str, str] | None = None,
 ) -> httpx.Response:
     request = httpx.Request("GET", url)
     return httpx.Response(
         200,
         request=request,
-        headers={"content-type": content_type},
+        headers={"content-type": content_type, **(headers or {})},
         content=content or text.encode(),
         text=text if text else None,
     )
@@ -203,6 +204,21 @@ def test_resolve_imslp_index_error_not_retried() -> None:
 
     assert client.get.call_count == 1
     sleep_mock.assert_not_called()
+
+
+def test_fetch_mirror_pdf_content_length_mismatch() -> None:
+    pdf_url = "https://imslp.tw/uploads/foo.pdf"
+    pdf_bytes = b"%PDF-1.7 real score"
+    client = MagicMock()
+    client.get.return_value = _mock_response(
+        url=pdf_url,
+        content=pdf_bytes,
+        content_type="application/pdf",
+        headers={"content-length": str(len(pdf_bytes) + 100)},
+    )
+
+    with pytest.raises(ValueError, match="Download incomplete"):
+        fetch_mirror_pdf(client, pdf_url)
 
 
 def test_fetch_mirror_pdf_follows_asia_disclaimer() -> None:
