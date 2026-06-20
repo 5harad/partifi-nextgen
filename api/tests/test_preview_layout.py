@@ -53,13 +53,9 @@ def db() -> Session:
 
 
 @patch("app.services.preview.get_local_cache")
-@patch("app.services.preview.invalidate_preview_cache")
-def test_save_layout_updates_spacings_in_one_pass(
-    _mock_invalidate: Mock,
-    mock_cache: Mock,
-    db: Session,
-) -> None:
-    mock_cache.return_value = Mock()
+def test_save_layout_updates_spacings_in_one_pass(mock_cache: Mock, db: Session) -> None:
+    cache = Mock()
+    mock_cache.return_value = cache
     partset = db.get(Partset, "pub1")
     assert partset is not None
 
@@ -77,3 +73,5 @@ def test_save_layout_updates_spacings_in_one_pass(
     }
     assert spacings == {"bass": 0.7, "cello": 0.6, "violin": 0.5}
     assert partset.parts_ready is False
+    cache.invalidate_parts.assert_called_once_with("pub1")
+    cache.invalidate_preview.assert_not_called()

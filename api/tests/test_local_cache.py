@@ -10,7 +10,7 @@ def _cache(tmp_path: Path) -> LocalCache:
     return LocalCache(tmp_path, download=download)
 
 
-def test_preview_fingerprint_changes_with_layout() -> None:
+def test_preview_fingerprint_follows_segment_geometry() -> None:
     rows = [
         {
             "page": 1,
@@ -23,16 +23,13 @@ def test_preview_fingerprint_changes_with_layout() -> None:
             "label": "",
         }
     ]
-    breaks = {"Flute": []}
-    spacings = {"Flute": 0.1}
-    combined: list[str] = []
 
-    first = LocalCache.preview_fingerprint(rows, breaks, spacings, combined)
-    second = LocalCache.preview_fingerprint(rows, breaks, spacings, combined)
+    first = LocalCache.preview_fingerprint(rows)
+    second = LocalCache.preview_fingerprint(rows)
     assert first == second
 
-    spacings_changed = {"Flute": 0.2}
-    third = LocalCache.preview_fingerprint(rows, breaks, spacings_changed, combined)
+    rows_changed = [{**rows[0], "top": 15.0}]
+    third = LocalCache.preview_fingerprint(rows_changed)
     assert third != first
 
 

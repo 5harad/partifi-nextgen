@@ -197,7 +197,7 @@ def _ensure_preview_segments(
                     out_path,
                 )
             )
-        cut_segment_tasks(cut_tasks, pool_size=1)
+        cut_segment_tasks(cut_tasks)
         cache.write_preview(partset.id, fingerprint, segments_dir)
     finally:
         shutil.rmtree(work_root, ignore_errors=True)
@@ -257,9 +257,7 @@ def get_preview_data(db: Session, partset: Partset) -> dict:
         breaks.setdefault(name, [])
         spacings.setdefault(name, 0.1)
 
-    fingerprint = LocalCache.preview_fingerprint(
-        segment_rows, breaks, spacings, combined_part_names
-    )
+    fingerprint = LocalCache.preview_fingerprint(segment_rows)
     _ensure_preview_segments(partset, segment_rows, fingerprint)
     touch_partset_access(db, partset)
 
@@ -317,7 +315,6 @@ def save_layout(db: Session, partset: Partset, breaks: dict[str, list[int]], spa
         if part:
             part.spacing = float(spacing)
 
-    invalidate_preview_cache(partset.id)
     get_local_cache().invalidate_parts(partset.id)
     db.commit()
 
