@@ -24,6 +24,7 @@ import { TransitionWait } from '../TransitionWait'
 import type { PreviewDataResponse } from '../../types/preview'
 
 const SLIDER_RANGE = 46
+const MAX_COMBINE_PARTS = 10
 
 type Mode = 'spacing' | 'combine'
 
@@ -208,6 +209,10 @@ export function PreviewEditor({ privateId }: Props) {
     const partsToCombine = [...selectedParts]
     if (partsToCombine.length < 2) {
       window.alert('Please select at least two parts to combine.')
+      return
+    }
+    if (partsToCombine.length > MAX_COMBINE_PARTS) {
+      window.alert(`Please select at most ${MAX_COMBINE_PARTS} parts to combine.`)
       return
     }
     const combinedName = partsToCombine.join(' + ')
@@ -485,7 +490,7 @@ export function PreviewEditor({ privateId }: Props) {
         {mode === 'combine' && (
           <>
             <div id="combine-instructions">
-              Select two or more parts to create a new, combined part.
+              Select two or more parts (up to {MAX_COMBINE_PARTS}) to create a new, combined part.
             </div>
             <div id="part-combine-selector-pane">
               <div
