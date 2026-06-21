@@ -7,6 +7,7 @@ import {
   retryPartsetPipeline,
 } from '../lib/api'
 import { pipelineErrorMessage, LOCK_BUSY_MESSAGE, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
+import { TransitionError, TransitionErrorButton } from '../components/TransitionError'
 
 export function ImportProgressPage() {
   const { privateId } = useParams<{ privateId: string }>()
@@ -116,6 +117,20 @@ export function ImportProgressPage() {
 
   const ribbonWidth = progress * 4 + 20
 
+  if (errorMessage) {
+    return (
+      <TransitionError message={errorMessage}>
+        {canRetry ? (
+          <TransitionErrorButton
+            label={retrying ? 'Retrying…' : 'Try again'}
+            onClick={handleRetry}
+            disabled={retrying}
+          />
+        ) : null}
+      </TransitionError>
+    )
+  }
+
   return (
     <div id="main" style={{ height: '750px' }}>
       <img
@@ -125,41 +140,11 @@ export function ImportProgressPage() {
         style={{ position: 'absolute', left: 0, top: 200, zIndex: -1, opacity: 0.3 }}
         alt=""
       />
-      <div id="transition" className={errorMessage ? 'transition-error' : undefined}>
-        {errorMessage ? (
-          <>
-            <div id="transition-text">{errorMessage}</div>
-            <div id="transition-actions">
-              {canRetry ? (
-                <div
-                  className={`copy-button${retrying ? ' is-disabled' : ''}`}
-                  onClick={retrying ? undefined : handleRetry}
-                  onKeyDown={() => {}}
-                  role="button"
-                  tabIndex={retrying ? -1 : 0}
-                >
-                  {retrying ? 'Retrying…' : 'Try again'}
-                </div>
-              ) : null}
-              <div
-                className="copy-button"
-                onClick={() => navigate('/')}
-                onKeyDown={() => {}}
-                role="button"
-                tabIndex={0}
-              >
-                Return to home
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            <div id="transition-text">Please wait while we import the score</div>
-            <div id="progress-bar">
-              <div id="progress-ribbon" style={{ width: ribbonWidth }} />
-            </div>
-          </>
-        )}
+      <div id="transition">
+        <div id="transition-text">Please wait while we import the score</div>
+        <div id="progress-bar">
+          <div id="progress-ribbon" style={{ width: ribbonWidth }} />
+        </div>
       </div>
     </div>
   )

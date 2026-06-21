@@ -8,6 +8,7 @@ import {
 } from '../lib/api'
 import { triggerPartFileDownload, partgenReturnPath } from '../lib/partDownloads'
 import { pipelineErrorMessage, LOCK_BUSY_MESSAGE, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
+import { TransitionError, TransitionErrorButton } from '../components/TransitionError'
 
 export function PartgenProgressPage() {
   const { privateId: accessId } = useParams<{ privateId: string }>()
@@ -119,6 +120,22 @@ export function PartgenProgressPage() {
 
   const ribbonWidth = progress * 4 + 20
 
+  if (errorMessage) {
+    return (
+      <TransitionError message={errorMessage} showReturnHome={false}>
+        <TransitionErrorButton
+          label={retrying ? 'Retrying…' : 'Try again'}
+          onClick={handleRetry}
+          disabled={retrying}
+        />
+        <TransitionErrorButton
+          label={backLabel}
+          onClick={() => accessId && navigate(returnPath)}
+        />
+      </TransitionError>
+    )
+  }
+
   return (
     <div id="main" style={{ height: '750px' }}>
       <img
@@ -128,39 +145,11 @@ export function PartgenProgressPage() {
         style={{ position: 'absolute', left: 0, top: 200, zIndex: -1, opacity: 0.3 }}
         alt=""
       />
-      <div id="transition" className={errorMessage ? 'transition-error' : undefined}>
-        {errorMessage ? (
-          <>
-            <div id="transition-text">{errorMessage}</div>
-            <div id="transition-actions">
-              <div
-                className={`copy-button${retrying ? ' is-disabled' : ''}`}
-                onClick={retrying ? undefined : handleRetry}
-                onKeyDown={() => {}}
-                role="button"
-                tabIndex={retrying ? -1 : 0}
-              >
-                {retrying ? 'Retrying…' : 'Try again'}
-              </div>
-              <div
-                className="copy-button"
-                onClick={() => accessId && navigate(returnPath)}
-                onKeyDown={() => {}}
-                role="button"
-                tabIndex={0}
-              >
-                {backLabel}
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            <div id="transition-text">Please wait while we partifi the score</div>
-            <div id="progress-bar">
-              <div id="progress-ribbon" style={{ width: ribbonWidth }} />
-            </div>
-          </>
-        )}
+      <div id="transition">
+        <div id="transition-text">Please wait while we partifi the score</div>
+        <div id="progress-bar">
+          <div id="progress-ribbon" style={{ width: ribbonWidth }} />
+        </div>
       </div>
     </div>
   )

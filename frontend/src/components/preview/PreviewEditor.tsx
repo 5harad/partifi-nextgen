@@ -20,6 +20,7 @@ import {
   spacingToSliderUpTop,
   uniqueSorted,
 } from '../../lib/previewUtils'
+import { TransitionError } from '../TransitionError'
 import { TransitionWait } from '../TransitionWait'
 import type { PreviewDataResponse } from '../../types/preview'
 
@@ -258,11 +259,7 @@ export function PreviewEditor({ privateId }: Props) {
   }
 
   if (error) {
-    return (
-      <div id="main" className="canvas-page" style={{ height: '750px', padding: '40px' }}>
-        <p className="red">{error}</p>
-      </div>
-    )
+    return <TransitionError message={error} />
   }
 
   if (!data) {

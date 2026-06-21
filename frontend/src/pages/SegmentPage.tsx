@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { SegmentEditor } from '../components/segment/SegmentEditor'
+import { TransitionError } from '../components/TransitionError'
 import { TransitionWait } from '../components/TransitionWait'
 import { getSegmentData } from '../lib/api'
 import type { SegmentDataResponse } from '../types/segment'
@@ -37,6 +38,7 @@ export function SegmentPage() {
         if (!payload.images_ready) {
           pollCount += 1
           if (pollCount >= IMAGE_POLL_MAX) {
+            setWarming(false)
             setError(
               'Score images are taking longer than expected. Please refresh the page in a few minutes.',
             )
@@ -76,9 +78,7 @@ export function SegmentPage() {
           progress={warmProgress}
         />
       ) : error ? (
-        <div id="main" style={{ padding: '40px', textAlign: 'center' }}>
-          <p className="red">{error}</p>
-        </div>
+        <TransitionError message={error} />
       ) : data ? (
         <SegmentEditor data={data} />
       ) : null}

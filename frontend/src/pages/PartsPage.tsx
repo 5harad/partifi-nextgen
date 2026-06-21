@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
+import { TransitionError } from '../components/TransitionError'
 import { PartsDownloadPane } from '../components/parts/PartsDownloadPane'
 import { getPartsByAccessId } from '../lib/api'
 import { isPartsetAccessId } from '../lib/partsetRoutes'
 import type { PartsDataResponse } from '../types/preview'
+
+const PARTSET_NOT_FOUND_MESSAGE = 'Partset not found'
 
 export function PartsPage() {
   const { accessId } = useParams<{ accessId: string }>()
@@ -20,7 +23,7 @@ export function PartsPage() {
 
   useEffect(() => {
     if (!isPartsetAccessId(accessId)) {
-      setError('Partset not found')
+      setError(PARTSET_NOT_FOUND_MESSAGE)
       setData(null)
       return
     }
@@ -45,9 +48,7 @@ export function PartsPage() {
   if (error) {
     return (
       <Layout>
-        <div id="main" style={{ minHeight: '750px', padding: '40px' }}>
-          <p className="red">{error}</p>
-        </div>
+        <TransitionError message={error} />
       </Layout>
     )
   }
