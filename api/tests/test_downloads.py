@@ -73,3 +73,15 @@ def test_part_file_name_from_download_filename() -> None:
     )
     assert part_file_name_from_download_filename("pub01", "other_flute.pdf") is None
     assert part_file_name_from_download_filename("pub01", "pub01_flute.txt") is None
+
+
+def test_part_file_name_from_download_filename_hyphenated_partset_id() -> None:
+    partset_id = "abcde-fghij"
+    assert part_file_name_from_download_filename(partset_id, "abcde-fghij_flute.pdf") == (
+        "flute.pdf",
+        False,
+    )
+    assert part_file_name_from_download_filename(partset_id, "abcde-fghij_a4_flute.pdf") == (
+        "flute.pdf",
+        True,
+    )

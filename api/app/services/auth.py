@@ -36,20 +36,28 @@ def parse_session_token(token: str) -> str | None:
     return user_id if isinstance(user_id, str) and user_id else None
 
 
+def _session_cookie_secure() -> bool:
+    return get_settings().app_env != "development"
+
+
 def set_session_cookie(response: Response, user_id: str) -> None:
-    secure = get_settings().app_env != "development"
     response.set_cookie(
         key=SESSION_COOKIE,
         value=create_session_token(user_id),
         httponly=True,
         samesite="lax",
         max_age=SESSION_MAX_AGE,
-        secure=secure,
+        secure=_session_cookie_secure(),
     )
 
 
 def clear_session_cookie(response: Response) -> None:
-    response.delete_cookie(key=SESSION_COOKIE, httponly=True, samesite="lax")
+    response.delete_cookie(
+        key=SESSION_COOKIE,
+        httponly=True,
+        samesite="lax",
+        secure=_session_cookie_secure(),
+    )
 
 
 def get_user_id_from_cookie(cookie_value: str | None) -> str | None:

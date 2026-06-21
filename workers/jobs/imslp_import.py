@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import random
 import shutil
-import string
 from pathlib import Path
 
 from import_lock import release_import_lock
@@ -14,6 +12,7 @@ from imslp_client import download_imslp_pdf
 from jobs.errors import mark_partset_error
 from jobs.import_pipeline import run_import_pipeline
 from pdf_validate_repair import ensure_valid_score_pdf
+from pipeline.ids import rand_partifi_id
 from pipeline.pdf_validate import PDF_CORRUPT_MESSAGE
 from s3_storage import download_file, score_pdf_s3_key, upload_file
 from score_limits import MAX_SCORE_BYTES, ScoreTooLargeError, reject_score_too_large
@@ -22,12 +21,9 @@ import db_conn
 
 logger = logging.getLogger("partifi.imslp_import")
 
-_CHARS = string.ascii_letters + string.digits
-
-
 def _gen_score_id() -> str:
     while True:
-        candidate = "".join(random.choice(_CHARS) for _ in range(5))
+        candidate = rand_partifi_id()
         row = db_conn.fetchone("SELECT id FROM scores WHERE id = :id", {"id": candidate})
         if not row:
             return candidate

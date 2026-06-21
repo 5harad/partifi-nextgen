@@ -9,9 +9,13 @@ export const STATIC_APP_PATHS = new Set([
   'library',
 ])
 
-/** Public/private partset ids (legacy + new). */
-export const PARTSET_ACCESS_ID_PATTERN = /^[A-Za-z0-9]{5}$/
+/** Legacy 5-char ids and new xxxxx-xxxxx lowercase ids. */
+export const LEGACY_PARTSET_ACCESS_ID_PATTERN = /^[A-Za-z0-9]{5}$/
+export const PARTSET_ACCESS_ID_PATTERN = /^[a-z]{5}-[a-z]{5}$/
 
 export function isPartsetAccessId(value: string | undefined): value is string {
-  return Boolean(value && PARTSET_ACCESS_ID_PATTERN.test(value) && !STATIC_APP_PATHS.has(value))
+  if (!value || STATIC_APP_PATHS.has(value)) {
+    return false
+  }
+  return LEGACY_PARTSET_ACCESS_ID_PATTERN.test(value) || PARTSET_ACCESS_ID_PATTERN.test(value)
 }
