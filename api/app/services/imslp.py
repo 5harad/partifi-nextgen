@@ -145,6 +145,26 @@ def parse_reverse_lookup_location(location: str) -> tuple[str, str] | None:
     return page_url, id_match.group(1)
 
 
+def parse_reverse_lookup_result_pages(page_html: str, imslp_id: str) -> list[str]:
+    """Wiki page URLs when reverse lookup returns a multi-result disambiguation page."""
+    pattern = re.compile(
+        rf'href="(/wiki/[^"#]+)#IMSLP{re.escape(imslp_id)}"',
+        re.I,
+    )
+    seen: set[str] = set()
+    pages: list[str] = []
+    for match in pattern.finditer(page_html):
+        path = match.group(1)
+        if path.startswith("/wiki/Special:"):
+            continue
+        page_url = _abs_imslp_url(path)
+        if page_url in seen:
+            continue
+        seen.add(page_url)
+        pages.append(page_url)
+    return pages
+
+
 def _check_cancelled(cancel: threading.Event | None) -> None:
     if cancel is not None and cancel.is_set():
         raise ImslpLookupCancelled()
@@ -170,7 +190,21 @@ def _fetch_imslp_page(
         page_resp.raise_for_status()
         return page_resp.text, location
     if resp.status_code == 200 and resp.text:
-        return resp.text, reverse_url
+        result_pages = parse_reverse_lookup_result_pages(resp.text, imslp_id)
+        if not result_pages:
+            return None
+        page_url = result_pages[0]
+        if len(result_pages) > 1:
+            logger.info(
+                "IMSLP reverse lookup imslp_id=%s matched %d pages; using %s",
+                imslp_id,
+                len(result_pages),
+                page_url,
+            )
+        _check_cancelled(cancel)
+        page_resp = client.get(page_url, follow_redirects=True)
+        page_resp.raise_for_status()
+        return page_resp.text, f"{page_url}#IMSLP{imslp_id}"
     return None
 
 

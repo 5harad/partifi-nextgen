@@ -2,6 +2,7 @@ from app.services.imslp import (
     normalize_imslp_id,
     parse_imslp_page_html,
     parse_reverse_lookup_location,
+    parse_reverse_lookup_result_pages,
 )
 
 
@@ -19,6 +20,22 @@ def test_parse_reverse_lookup_location() -> None:
     assert parsed is not None
     assert parsed[0] == "https://imslp.org/wiki/File:Example.pdf"
     assert parsed[1] == "456"
+
+
+def test_parse_reverse_lookup_result_pages() -> None:
+    html = """
+    <ul>
+      <li><a href="/wiki/6_Flute_Sonatas,_Op.19_(Boismortier,_Joseph_Bodin_de)#IMSLP396942"
+        title="6 Flute Sonatas">6 Flute Sonatas</a></li>
+      <li><a href="/wiki/Flute_Sonata_in_G_major,_PB_325_(Boismortier,_Joseph_Bodin_de)#IMSLP396942"
+        title="Flute Sonata">Flute Sonata</a></li>
+    </ul>
+    """
+    pages = parse_reverse_lookup_result_pages(html, "396942")
+    assert pages == [
+        "https://imslp.org/wiki/6_Flute_Sonatas,_Op.19_(Boismortier,_Joseph_Bodin_de)",
+        "https://imslp.org/wiki/Flute_Sonata_in_G_major,_PB_325_(Boismortier,_Joseph_Bodin_de)",
+    ]
 
 
 def test_parse_imslp_page_html_extracts_metadata() -> None:

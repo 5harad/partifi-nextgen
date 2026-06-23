@@ -43,6 +43,39 @@ def test_fetch_imslp_page_honours_cancel_before_second_request() -> None:
     assert client.get.call_count == 1
 
 
+def test_fetch_imslp_page_uses_first_disambiguation_result() -> None:
+    reverse_html = """
+    <a href="/wiki/6_Flute_Sonatas,_Op.19_(Boismortier,_Joseph_Bodin_de)#IMSLP396942">A</a>
+    <a href="/wiki/Flute_Sonata_in_G_major,_PB_325_(Boismortier,_Joseph_Bodin_de)#IMSLP396942">B</a>
+    """
+    work_html = "<html><head><title>Sonata (Composer, Name)</title></head><body>#IMSLP396942</body></html>"
+    reverse_response = httpx.Response(
+        200,
+        text=reverse_html,
+        request=httpx.Request(
+            "GET",
+            "https://imslp.org/index.php?title=Special:ReverseLookup&action=submit&indexsearch=396942",
+        ),
+    )
+    work_response = httpx.Response(
+        200,
+        text=work_html,
+        request=httpx.Request(
+            "GET",
+            "https://imslp.org/wiki/6_Flute_Sonatas,_Op.19_(Boismortier,_Joseph_Bodin_de)",
+        ),
+    )
+    client = MagicMock()
+    client.get.side_effect = [reverse_response, work_response]
+
+    page_html, imslp_url = _fetch_imslp_page(client, "396942")
+
+    assert "Sonata (Composer, Name)" in page_html
+    assert imslp_url.endswith("#IMSLP396942")
+    assert client.get.call_count == 2
+    assert "6_Flute_Sonatas" in str(client.get.call_args_list[1][0][0])
+
+
 def test_connect_error_is_retryable_for_pdf_resolve() -> None:
     request = httpx.Request("GET", "https://petruccilibrary.us/files/foo.pdf")
     exc = httpx.ConnectError("[Errno 111] Connection refused", request=request)
