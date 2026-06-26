@@ -10,10 +10,12 @@ from pipeline.imslp_download import (
     is_pdf_body,
     is_pmlasia_disclaimer,
     is_pmlca_disclaimer,
+    is_pmleu_disclaimer,
     is_pmlus_disclaimer,
     mirror_request_cookies,
     parse_pmlasia_pdf_url,
     parse_pmlca_pdf_url,
+    parse_pmleu_pdf_url,
     parse_pmlus_pdf_url,
     pdf_response_from_redirect,
     resolve_imslp_pdf_url,
@@ -70,6 +72,15 @@ PMLUS_HTML = """<!doctype html>
 <body>
 <a onclick="setC('disclaimer_bypass','OK',365)"
  href="files/imglnks/music_files/PMLUS00101-debussypetitesuitescore_II.Cortege.pdf"
+ class="bigbutton">I understand, continue</a>
+</body></html>
+"""
+
+PMLEU_HTML = """<!doctype html>
+<html><head><title>IMSLP-EU</title></head>
+<body>
+<a onclick="setC('disclaimer_bypass','OK',365)"
+ href="/files/imglnks/euimg/c/ce/IMSLP903211-PMLP8846-HenleBeethovenWerke_Abteilung5Band1_Op_12_1.pdf"
  class="bigbutton">I understand, continue</a>
 </body></html>
 """
@@ -171,6 +182,9 @@ def test_mirror_request_cookies_for_imslp_tw() -> None:
         "disclaimer_bypass": "OK"
     }
     assert mirror_request_cookies("https://petruccimusiclibrary.ca/files/foo.pdf") == {
+        "disclaimer_bypass": "OK"
+    }
+    assert mirror_request_cookies("https://imslp.eu/files/foo.pdf") == {
         "disclaimer_bypass": "OK"
     }
     assert mirror_request_cookies("https://vmirror.imslp.org/files/foo.pdf") == {}
@@ -375,6 +389,44 @@ def test_resolve_pmlus_disclaimer_fetches_pdf_with_cookie() -> None:
     ]
 
     url, cached = resolve_imslp_pdf_url("398248", client)
+
+    assert url == pdf_url
+    assert cached == pdf_bytes
+    assert client.get.call_count == 2
+    assert client.get.call_args_list[1].kwargs["cookies"] == {"disclaimer_bypass": "OK"}
+
+
+def test_parse_pmleu_pdf_url() -> None:
+    page_url = (
+        "https://imslp.eu/linkhandler.php?"
+        "path=/imglnks/euimg/c/ce/IMSLP903211-PMLP8846-HenleBeethovenWerke_Abteilung5Band1_Op_12_1.pdf"
+    )
+    pdf_url = (
+        "https://imslp.eu/files/imglnks/euimg/c/ce/"
+        "IMSLP903211-PMLP8846-HenleBeethovenWerke_Abteilung5Band1_Op_12_1.pdf"
+    )
+    assert parse_pmleu_pdf_url(PMLEU_HTML, page_url) == pdf_url
+    assert is_pmleu_disclaimer(PMLEU_HTML, page_url)
+
+
+def test_resolve_pmleu_disclaimer_fetches_pdf_with_cookie() -> None:
+    disclaimer_url = (
+        "https://imslp.eu/linkhandler.php?"
+        "path=/imglnks/euimg/c/ce/IMSLP903211-PMLP8846-HenleBeethovenWerke_Abteilung5Band1_Op_12_1.pdf"
+    )
+    pdf_url = (
+        "https://imslp.eu/files/imglnks/euimg/c/ce/"
+        "IMSLP903211-PMLP8846-HenleBeethovenWerke_Abteilung5Band1_Op_12_1.pdf"
+    )
+    pdf_bytes = b"%PDF-1.6 test"
+
+    client = MagicMock()
+    client.get.side_effect = [
+        _mock_response(url=disclaimer_url, text=PMLEU_HTML),
+        _mock_response(url=pdf_url, content=pdf_bytes, content_type="application/pdf"),
+    ]
+
+    url, cached = resolve_imslp_pdf_url("903211", client)
 
     assert url == pdf_url
     assert cached == pdf_bytes

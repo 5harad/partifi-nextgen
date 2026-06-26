@@ -145,6 +145,7 @@ def mirror_request_cookies(url: str) -> dict[str, str]:
     lowered = url.lower()
     if (
         "imslp.tw" in lowered
+        or "imslp.eu" in lowered
         or "petruccilibrary.us" in lowered
         or "petruccimusiclibrary.ca" in lowered
     ):
@@ -207,6 +208,23 @@ def parse_pmlus_pdf_url(page_html: str, page_url: str) -> str | None:
     return str(httpx.URL(page_url).join(path))
 
 
+def is_pmleu_disclaimer(page_html: str, page_url: str = "") -> bool:
+    if "imslp.eu" in page_url.lower():
+        return True
+    return "IMSLP-EU" in page_html
+
+
+def parse_pmleu_pdf_url(page_html: str, page_url: str) -> str | None:
+    match = re.search(r'href="(/files/[^"]+\.pdf|files/[^"]+\.pdf)"', page_html, re.I)
+    if not match:
+        return None
+    path = html.unescape(match.group(1))
+    base = httpx.URL(page_url)
+    if path.startswith("/"):
+        return str(base.copy_with(path=path, query=None, fragment=None))
+    return str(base.join(path))
+
+
 def _fetch_mirror_disclaimer_pdf(
     client: httpx.Client,
     disclaimer_html: str,
@@ -262,6 +280,19 @@ def _fetch_pmlca_pdf(
         page_url,
         pdf_url=parse_pmlca_pdf_url(disclaimer_html, page_url),
         mirror_name="PML-CA",
+    )
+
+
+def _fetch_pmleu_pdf(
+    client: httpx.Client, disclaimer_html: str, page_url: str
+) -> tuple[str, bytes]:
+    logger.info("IMSLP mirror IMSLP-EU disclaimer from=%s", page_url)
+    return _fetch_mirror_disclaimer_pdf(
+        client,
+        disclaimer_html,
+        page_url,
+        pdf_url=parse_pmleu_pdf_url(disclaimer_html, page_url),
+        mirror_name="IMSLP-EU",
     )
 
 
@@ -322,6 +353,8 @@ def fetch_mirror_pdf(client: httpx.Client, pdf_url: str) -> tuple[str, bytes]:
         return _fetch_pmlus_pdf(client, response.text, page_url)
     if is_pmlca_disclaimer(response.text, page_url):
         return _follow_pmlca_disclaimer(client, response.text, page_url)
+    if is_pmleu_disclaimer(response.text, page_url):
+        return _fetch_pmleu_pdf(client, response.text, page_url)
 
     content_type = response.headers.get("content-type", "")
     if is_pdf_body(response.content, content_type):
@@ -357,6 +390,9 @@ def resolve_imslp_pdf_url(imslp_id: str, client: httpx.Client) -> tuple[str, byt
 
     if is_pmlca_disclaimer(response.text, page_url):
         return _follow_pmlca_disclaimer(client, response.text, page_url)
+
+    if is_pmleu_disclaimer(response.text, page_url):
+        return _fetch_pmleu_pdf(client, response.text, page_url)
 
     match = re.search(r'id="sm_dl_wait"\s+data-id="([^"]+)"', response.text)
     if not match:
