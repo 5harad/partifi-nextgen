@@ -325,6 +325,53 @@ def search(q: str = "", db: Session = Depends(get_db)) -> SearchResponse:
     return SearchResponse(results=results)
 
 
+_IMSLP_LOOKUP_DRAIN_SECONDS = 5.0
+
+
+def _discard_imslp_lookup_task(task: asyncio.Task) -> None:
+    """Retrieve an orphaned lookup task exception so asyncio does not warn."""
+    if task.cancelled():
+        return
+    try:
+        exc = task.exception()
+    except asyncio.CancelledError:
+        return
+    if isinstance(exc, ImslpLookupCancelled):
+        return
+    if isinstance(exc, TimeoutError):
+        logger.info("IMSLP metadata lookup timed out (background task): %s", exc)
+        return
+    if exc is not None:
+        logger.warning("IMSLP lookup task ended with unexpected error: %s", exc)
+
+
+async def _drain_imslp_lookup_task(
+    task: asyncio.Task,
+    *,
+    cancel: threading.Event | None = None,
+    timeout: float = _IMSLP_LOOKUP_DRAIN_SECONDS,
+) -> None:
+    """Wait for a lookup thread to finish; swallow only expected terminal errors."""
+    if task.done():
+        try:
+            await task
+        except (ImslpLookupCancelled, TimeoutError):
+            pass
+        return
+
+    if cancel is not None:
+        cancel.set()
+    try:
+        await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
+    except ImslpLookupCancelled:
+        pass
+    except TimeoutError:
+        pass
+    except asyncio.TimeoutError:
+        if not task.done():
+            task.add_done_callback(_discard_imslp_lookup_task)
+
+
 @router.get("/imslp/{imslp_id}/info", response_model=ImslpInfoResponse)
 async def imslp_info(request: Request, imslp_id: str) -> ImslpInfoResponse:
     cancel = threading.Event()
@@ -339,21 +386,20 @@ async def imslp_info(request: Request, imslp_id: str) -> ImslpInfoResponse:
             await asyncio.sleep(0.05)
 
         if await request.is_disconnected():
-            try:
-                await asyncio.wait_for(asyncio.shield(task), timeout=1.0)
-            except asyncio.TimeoutError:
-                pass
+            await _drain_imslp_lookup_task(task, cancel=cancel)
             raise HTTPException(status_code=499, detail="Client disconnected")
 
         info = await asyncio.wait_for(task, timeout=20.0)
     except asyncio.TimeoutError as exc:
-        cancel.set()
+        logger.info("IMSLP metadata lookup timed out imslp_id=%s", imslp_id)
+        await _drain_imslp_lookup_task(task, timeout=_IMSLP_LOOKUP_DRAIN_SECONDS)
         raise HTTPException(
             status_code=504,
             detail="IMSLP lookup timed out. Try again in a moment.",
         ) from exc
     except TimeoutError as exc:
-        cancel.set()
+        logger.info("IMSLP metadata lookup timed out imslp_id=%s", imslp_id)
+        await _drain_imslp_lookup_task(task, timeout=_IMSLP_LOOKUP_DRAIN_SECONDS)
         raise HTTPException(
             status_code=504,
             detail="IMSLP lookup timed out. Try again in a moment.",
