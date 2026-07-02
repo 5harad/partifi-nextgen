@@ -4,6 +4,7 @@
 # Usage:
 #   ./scripts/diagnostics.sh
 #   DAYS=7 ./scripts/diagnostics.sh
+#   VERIFY=1 ./scripts/diagnostics.sh   # re-run scalar SQL individually; warn on mismatch
 #
 # Requires .env with MYSQL_PASSWORD (same as docker compose prod).
 set -euo pipefail
@@ -86,30 +87,25 @@ filter_error_lines() {
     | grep -viE 'aborting with incomplete response|http2: stream closed|repaired or ignored|The following errors were encountered'
 }
 
-fetch_error_lines() {
+fetch_full_journal() {
   if command -v journalctl >/dev/null 2>&1; then
     journalctl --since "${ERROR_HOURS} hours ago" --no-pager -r 2>/dev/null \
       | grep -E 'partifi-nextgen-(api|worker|web)' \
-      | filter_error_lines \
       || true
     return
   fi
   compose logs --since "${ERROR_HOURS}h" api worker-1 worker-2 worker-3 web 2>&1 \
-    | filter_error_lines \
     | tac 2>/dev/null \
     || true
 }
 
-fetch_service_journal() {
+service_journal_from_full() {
+  local full="$1"
   if command -v journalctl >/dev/null 2>&1; then
-    journalctl --since "${ERROR_HOURS} hours ago" --no-pager -r 2>/dev/null \
-      | grep -E 'partifi-nextgen-(api|worker)' \
-      || true
+    echo "$full" | grep -E 'partifi-nextgen-(api|worker)' || true
     return
   fi
-  compose logs --since "${ERROR_HOURS}h" api worker-1 worker-2 worker-3 2>&1 \
-    | tac 2>/dev/null \
-    || true
+  echo "$full" | grep -Ev '^partifi-nextgen-web-[0-9]+[[:space:]]*\|' || true
 }
 
 filter_imslp_issue_lines() {
@@ -141,52 +137,157 @@ IMSLP_FAILED_WHERE="
   AND create_ts >= NOW() - INTERVAL ${DAYS} DAY
 "
 
+fetch_mysql_summary_metrics() {
+  compose exec -T mysql mysql -u partifi -p"$MYSQL_PASSWORD" \
+    --default-character-set=utf8mb4 \
+    -N \
+    partifi 2>&1 <<EOF | filter_mysql_noise
+SELECT 'stuck_count', COUNT(*) FROM partsets WHERE ${STUCK_WHERE};
+SELECT 'new_users_24h', COUNT(*) FROM users WHERE ts >= NOW() - INTERVAL 24 HOUR;
+SELECT 'user_count', COUNT(*) FROM users;
+SELECT 'imslp_attempted', COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND create_ts >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;
+SELECT 'imslp_created_analyzed', COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND create_ts >= NOW() - INTERVAL ${ERROR_HOURS} HOUR AND analysis_complete IS NOT NULL AND error IS NULL;
+SELECT 'imslp_succeeded', COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND analysis_complete IS NOT NULL AND error IS NULL AND analysis_complete >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;
+SELECT 'imslp_worker_fail', COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND error IN ('import', 'import_size') AND COALESCE(error_ts, create_ts) >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;
+SELECT 'imslp_failed_count', COUNT(*) FROM partsets WHERE ${IMSLP_FAILED_WHERE};
+EOF
+}
+
+load_mysql_summary_metrics() {
+  local metrics_file="$1"
+  STUCK_COUNT="?"
+  NEW_USERS_24H="?"
+  USER_COUNT="?"
+  IMSLP_ATTEMPTED="?"
+  IMSLP_CREATED_ANALYZED="?"
+  IMSLP_SUCCEEDED="?"
+  IMSLP_WORKER_FAIL="?"
+  IMSLP_FAILED_COUNT="?"
+
+  while IFS=$'\t' read -r key value; do
+    [[ -z "${key:-}" ]] && continue
+    case "$key" in
+      stuck_count) STUCK_COUNT="$value" ;;
+      new_users_24h) NEW_USERS_24H="$value" ;;
+      user_count) USER_COUNT="$value" ;;
+      imslp_attempted) IMSLP_ATTEMPTED="$value" ;;
+      imslp_created_analyzed) IMSLP_CREATED_ANALYZED="$value" ;;
+      imslp_succeeded) IMSLP_SUCCEEDED="$value" ;;
+      imslp_worker_fail) IMSLP_WORKER_FAIL="$value" ;;
+      imslp_failed_count) IMSLP_FAILED_COUNT="$value" ;;
+    esac
+  done < "$metrics_file"
+}
+
+verify_mysql_summary_metrics() {
+  local expected_key="$1"
+  local expected_value="$2"
+  local query="$3"
+  local actual
+  actual="$(mysql_scalar "$query")"
+  if [[ "$actual" != "$expected_value" ]]; then
+    echo "VERIFY mismatch for ${expected_key}: batched=${expected_value} scalar=${actual}" >&2
+  fi
+}
+
+collect_health() {
+  local out="$1"
+  if compose exec -T api python -c "
+import json, urllib.request, sys
+with urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=10) as r:
+    data = json.load(r)
+sys.exit(0 if data.get('status') == 'ok' else 1)
+" >/dev/null 2>&1; then
+    echo ok >"$out"
+  elif compose exec -T api python -c "
+import json, urllib.request
+with urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=10) as r:
+    print(json.load(r).get('status', 'unknown'))
+" 2>/dev/null | grep -q .; then
+    echo degraded >"$out"
+  else
+    echo fail >"$out"
+  fi
+}
+
+collect_redis() {
+  local out="$1"
+  {
+    compose exec -T redis redis-cli LLEN partifi:jobs 2>/dev/null || echo '?'
+    compose exec -T redis redis-cli LLEN partifi:jobs:processing 2>/dev/null || echo '?'
+  } >"$out"
+}
+
+collect_cache() {
+  local du_out="$1"
+  local kb_out="$2"
+  local raw="${du_out}.raw"
+  compose exec -T api sh -c '
+    du -sh /data/partifi /data/partifi/scores /data/partifi/preview /data/partifi/parts 2>/dev/null
+    du -sk /data/partifi 2>/dev/null | awk "{print \$1}"
+  ' >"$raw" 2>/dev/null || true
+  if [[ -s "$raw" ]]; then
+    tail -n 1 "$raw" >"$kb_out"
+    head -n -1 "$raw" >"$du_out"
+  else
+    : >"$du_out"
+    : >"$kb_out"
+  fi
+}
+
 GENERATED_AT="$(date -u '+%Y-%m-%d %H:%M UTC')"
 DEPLOY_REV="$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
 
 echo "Partifi diagnostics"
 echo "Generated: ${GENERATED_AT}  |  deploy: ${DEPLOY_REV}"
 
-# --- collect summary metrics ---
-HEALTH_STATUS="fail"
-if compose exec -T api python -c "
-import json, urllib.request, sys
-with urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=10) as r:
-    data = json.load(r)
-sys.exit(0 if data.get('status') == 'ok' else 1)
-" >/dev/null 2>&1; then
-  HEALTH_STATUS="ok"
-elif compose exec -T api python -c "
-import json, urllib.request
-with urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=10) as r:
-    print(json.load(r).get('status', 'unknown'))
-" 2>/dev/null | grep -q .; then
-  HEALTH_STATUS="degraded"
-fi
+# --- collect summary metrics (parallel where safe) ---
+TMPDIR="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR"' EXIT
 
-STUCK_COUNT="$(mysql_scalar "SELECT COUNT(*) FROM partsets WHERE ${STUCK_WHERE};")"
-NEW_USERS_24H="$(mysql_scalar "SELECT COUNT(*) FROM users WHERE ts >= NOW() - INTERVAL 24 HOUR;")"
-USER_COUNT="$(mysql_scalar "SELECT COUNT(*) FROM users;")"
+collect_health "$TMPDIR/health" &
+health_pid=$!
+fetch_full_journal >"$TMPDIR/journal_full" &
+journal_pid=$!
+fetch_mysql_summary_metrics >"$TMPDIR/mysql_metrics" &
+mysql_pid=$!
+collect_redis "$TMPDIR/redis" &
+redis_pid=$!
+collect_cache "$TMPDIR/cache_du" "$TMPDIR/cache_kb" &
+cache_pid=$!
 
-QUEUE_PENDING="$(compose exec -T redis redis-cli LLEN partifi:jobs 2>/dev/null || echo '?')"
-QUEUE_PROCESSING="$(compose exec -T redis redis-cli LLEN partifi:jobs:processing 2>/dev/null || echo '?')"
+set +e
+wait "$health_pid" "$journal_pid" "$mysql_pid" "$redis_pid" "$cache_pid"
+set -e
 
-ERROR_LINES="$(fetch_error_lines)"
+HEALTH_STATUS="$(cat "$TMPDIR/health" 2>/dev/null || echo fail)"
+FULL_JOURNAL="$(cat "$TMPDIR/journal_full" 2>/dev/null || true)"
+load_mysql_summary_metrics "$TMPDIR/mysql_metrics"
+QUEUE_PENDING="$(sed -n '1p' "$TMPDIR/redis" 2>/dev/null || echo '?')"
+QUEUE_PROCESSING="$(sed -n '2p' "$TMPDIR/redis" 2>/dev/null || echo '?')"
+
+ERROR_LINES="$(echo "$FULL_JOURNAL" | filter_error_lines || true)"
 if [[ -n "$ERROR_LINES" ]]; then
   ERROR_COUNT="$(echo "$ERROR_LINES" | wc -l | tr -d ' ')"
 else
   ERROR_COUNT=0
 fi
 
-SERVICE_JOURNAL="$(fetch_service_journal)"
+SERVICE_JOURNAL="$(service_journal_from_full "$FULL_JOURNAL")"
 IMSLP_ISSUE_LINES="$(echo "$SERVICE_JOURNAL" | filter_imslp_issue_lines)"
 IMSLP_API_OK="$(count_journal_lines "$(echo "$SERVICE_JOURNAL" | grep 'POST /api/v1/partsets/imslp HTTP/1.1" 200' || true)")"
 IMSLP_API_FAIL="$(count_journal_lines "$(echo "$SERVICE_JOURNAL" | grep -E 'POST /api/v1/partsets/imslp HTTP/1.1" (400|500)' || true)")"
-IMSLP_ATTEMPTED="$(mysql_scalar "SELECT COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND create_ts >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;")"
-IMSLP_CREATED_ANALYZED="$(mysql_scalar "SELECT COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND create_ts >= NOW() - INTERVAL ${ERROR_HOURS} HOUR AND analysis_complete IS NOT NULL AND error IS NULL;")"
-IMSLP_SUCCEEDED="$(mysql_scalar "SELECT COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND analysis_complete IS NOT NULL AND error IS NULL AND analysis_complete >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;")"
-IMSLP_WORKER_FAIL="$(mysql_scalar "SELECT COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND error IN ('import', 'import_size') AND COALESCE(error_ts, create_ts) >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;")"
-IMSLP_FAILED_COUNT="$(mysql_scalar "SELECT COUNT(*) FROM partsets WHERE ${IMSLP_FAILED_WHERE};")"
+
+if [[ "${VERIFY:-}" == 1 ]]; then
+  verify_mysql_summary_metrics stuck_count "$STUCK_COUNT" "SELECT COUNT(*) FROM partsets WHERE ${STUCK_WHERE};"
+  verify_mysql_summary_metrics new_users_24h "$NEW_USERS_24H" "SELECT COUNT(*) FROM users WHERE ts >= NOW() - INTERVAL 24 HOUR;"
+  verify_mysql_summary_metrics user_count "$USER_COUNT" "SELECT COUNT(*) FROM users;"
+  verify_mysql_summary_metrics imslp_attempted "$IMSLP_ATTEMPTED" "SELECT COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND create_ts >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;"
+  verify_mysql_summary_metrics imslp_created_analyzed "$IMSLP_CREATED_ANALYZED" "SELECT COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND create_ts >= NOW() - INTERVAL ${ERROR_HOURS} HOUR AND analysis_complete IS NOT NULL AND error IS NULL;"
+  verify_mysql_summary_metrics imslp_succeeded "$IMSLP_SUCCEEDED" "SELECT COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND analysis_complete IS NOT NULL AND error IS NULL AND analysis_complete >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;"
+  verify_mysql_summary_metrics imslp_worker_fail "$IMSLP_WORKER_FAIL" "SELECT COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND error IN ('import', 'import_size') AND COALESCE(error_ts, create_ts) >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;"
+  verify_mysql_summary_metrics imslp_failed_count "$IMSLP_FAILED_COUNT" "SELECT COUNT(*) FROM partsets WHERE ${IMSLP_FAILED_WHERE};"
+fi
 
 # --- output ---
 section "Summary"
@@ -312,8 +413,8 @@ LIMIT 10;
 "
 
 section "Cache (/data/partifi)"
-CACHE_DU="$(compose exec -T api du -sh /data/partifi 2>/dev/null | awk '{print $1}' || echo "?")"
-CACHE_KB="$(compose exec -T api du -sk /data/partifi 2>/dev/null | awk '{print $1}' || echo "")"
+CACHE_DU="$(awk 'NR == 1 {print $1}' "$TMPDIR/cache_du" 2>/dev/null || echo "?")"
+CACHE_KB="$(cat "$TMPDIR/cache_kb" 2>/dev/null || echo "")"
 CACHE_MAX_GB="${PARTIFI_CACHE_MAX_GB:-}"
 if [[ -n "$CACHE_KB" && -n "$CACHE_MAX_GB" && "$CACHE_MAX_GB" =~ ^[0-9]+$ ]]; then
   CACHE_PCT="$(awk "BEGIN {printf \"%.0f\", ($CACHE_KB / 1024 / 1024) / $CACHE_MAX_GB * 100}")"
@@ -321,5 +422,8 @@ if [[ -n "$CACHE_KB" && -n "$CACHE_MAX_GB" && "$CACHE_MAX_GB" =~ ^[0-9]+$ ]]; th
 else
   echo "Total: ${CACHE_DU}"
 fi
-compose exec -T api du -sh /data/partifi/scores /data/partifi/preview /data/partifi/parts 2>/dev/null \
-  || echo "could not read cache breakdown (is api up?)"
+if [[ -s "$TMPDIR/cache_du" ]]; then
+  tail -n +2 "$TMPDIR/cache_du"
+else
+  echo "could not read cache breakdown (is api up?)"
+fi
