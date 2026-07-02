@@ -425,11 +425,20 @@ def create_partset_from_imslp(
 ) -> PartsetCreateResponse:
     verify_csrf(x_csrf_token)
     imslp_id = body.imslp_id.strip()
+    normalized = normalize_imslp_id(imslp_id) or imslp_id
     if body.copyright not in COPYRIGHT_VALUES:
+        logger.warning(
+            "IMSLP import rejected (validation) imslp_id=%s: Invalid copyright value",
+            normalized,
+        )
         raise HTTPException(status_code=400, detail="Invalid copyright value")
     title = body.title.strip()
     composer = body.composer.strip()
     if not title or not composer:
+        logger.warning(
+            "IMSLP import rejected (validation) imslp_id=%s: Title and composer are required",
+            normalized,
+        )
         raise HTTPException(status_code=400, detail="Title and composer are required")
     try:
         partset, action = create_imslp_partset(

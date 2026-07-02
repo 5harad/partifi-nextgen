@@ -188,8 +188,13 @@ export function HomePage() {
   const handleImslpSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    const normalized = normalizeImslpIdInput(imslpId)
-    if (!normalized || !imslpTitle || !imslpComposer || !imslpCopyright) {
+    const normalized = normalizeImslpIdInput(imslpId.trim())
+    const title = imslpTitle.trim()
+    const composer = imslpComposer.trim()
+    const publisher = imslpPublisher.trim()
+    const copyright = imslpCopyright
+
+    if (!normalized || !title || !composer || !copyright) {
       setImslpError('Please complete the form before continuing.')
       return
     }
@@ -204,10 +209,10 @@ export function HomePage() {
       const result = await createPartsetFromImslp(
         {
           imslp_id: normalized,
-          title: imslpTitle,
-          composer: imslpComposer,
-          publisher: imslpPublisher,
-          copyright: imslpCopyright,
+          title,
+          composer,
+          publisher,
+          copyright,
         },
         csrfToken,
       )
