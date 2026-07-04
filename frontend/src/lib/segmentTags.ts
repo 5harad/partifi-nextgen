@@ -31,7 +31,8 @@ export const BASE_TAGS = [
 export function splitTags(value: string): string[] {
   const terms: string[] = []
   for (const part of value.split(/,\s*/)) {
-    const term = part.trim().split(/\s+/).join(' ')
+    // "+" is reserved for combined-part rows, so collapse it to a space here.
+    const term = part.replace(/\+/g, ' ').trim().split(/\s+/).join(' ')
     if (term) terms.push(term)
   }
   return terms

@@ -94,6 +94,52 @@ def test_save_all_page_segments_syncs_part_rows(mock_cache: Mock, db: Session) -
 
 
 @patch("app.services.segments.get_local_cache")
+def test_save_page_segments_collapses_plus_in_tag(mock_cache: Mock, db: Session) -> None:
+    # "+" is the reserved combined-part delimiter. A user-typed tag like
+    # "git + rhyth" must collapse to a single tag so it yields one real part
+    # rather than being split and deleted during sync (regression: 0 parts).
+    mock_cache.return_value = Mock()
+    partset = db.get(Partset, "pub1")
+    assert partset is not None
+
+    save_all_page_segments(
+        db,
+        partset,
+        {
+            "p1": {
+                "left_margin": 0,
+                "right_margin": 100,
+                "rotation": 0,
+                "segments": [
+                    {
+                        "pos": [10.0, 50.0],
+                        "tags": "git + rhyth",
+                        "tag_is_suggestion": False,
+                        "label": "",
+                        "label_is_suggestion": False,
+                    }
+                ],
+            },
+            "p2": {
+                "left_margin": 0,
+                "right_margin": 100,
+                "rotation": 0,
+                "segments": [],
+            },
+        },
+    )
+
+    db.expire_all()
+    stored = {row.tags for row in db.query(Segment).filter(Segment.partset_id == "pub1").all()}
+    assert stored == {"git rhyth"}
+    tags = {
+        row.tag
+        for row in db.query(Part).filter(Part.partset_id == "pub1", Part.combined.is_(False)).all()
+    }
+    assert tags == {"git rhyth"}
+
+
+@patch("app.services.segments.get_local_cache")
 def test_sync_part_rows_from_tags_is_idempotent(mock_cache: Mock, db: Session) -> None:
     mock_cache.return_value = Mock()
     db.add(

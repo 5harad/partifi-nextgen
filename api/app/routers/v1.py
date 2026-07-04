@@ -667,7 +667,10 @@ def generate_parts(
     partset = get_partset_by_private_id(db, private_id)
     if not partset:
         raise HTTPException(status_code=404, detail="Partset not found")
-    job_id = start_part_generation(db, partset)
+    try:
+        job_id = start_part_generation(db, partset)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return GeneratePartsResponse(status="success", job_id=job_id)
 
 

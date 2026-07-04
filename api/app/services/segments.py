@@ -175,7 +175,8 @@ def _apply_page_segment_payload(
     ).delete()
 
     for segment in payload["segments"]:
-        tags = rm_space(segment.get("tags", ""))
+        # "+" is reserved as the combined-part delimiter; keep it out of segment tags.
+        tags = rm_space(segment.get("tags", "").replace("+", " "))
         tags = ", ".join(t for t in (x.strip() for x in tags.split(",")) if t)
         label = rm_space(segment.get("label", ""))
         db.add(
