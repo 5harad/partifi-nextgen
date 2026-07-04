@@ -170,7 +170,8 @@ export function TagsInput({
         value={value}
         style={style}
         onChange={(e) => {
-          let next = e.target.value
+          // "+" is reserved for combined-part rows; disallow it in tag input entirely.
+          let next = e.target.value.replace(/\+/g, '')
           if (tagIsSuggestion) {
             if (value && next.startsWith(value)) {
               next = next.slice(value.length)
