@@ -352,8 +352,10 @@ export function HomePage() {
               <input
                 type="text"
                 id="imslp_id"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={imslpId}
-                onChange={(e) => setImslpId(e.target.value)}
+                onChange={(e) => setImslpId(e.target.value.replace(/\D/g, ''))}
               />
             </div>
             <div className="score-input-label title-field">
