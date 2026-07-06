@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from app.models import Partset
+from pipeline.imslp_ids import UNIMPORTABLE_IMSLP_MESSAGE
 from app.services.retry import (
     ensure_import_if_needed,
     import_pipeline_complete,
@@ -183,3 +184,40 @@ def test_retry_nothing_left() -> None:
     )
     with pytest.raises(ValueError, match="Nothing to retry"):
         retry_partset_pipeline(db, partset)
+
+
+@patch("app.services.retry.try_acquire_import_lock")
+@patch("app.services.retry.enqueue_job")
+def test_ensure_import_marks_unimportable_imslp(_mock_enqueue: patch, _mock_lock: patch) -> None:
+    db = Mock()
+    wiki_url = "http://imslp.org/wiki/Sinfonietta,_Op.75_(Lorenzo,_Leonardo_de)"
+    partset = _partset(score_id=None, imslp_id=wiki_url, error=None)
+
+    job_id = ensure_import_if_needed(db, partset)
+
+    assert job_id is None
+    assert partset.error == "import"
+    assert partset.error_message == UNIMPORTABLE_IMSLP_MESSAGE
+    _mock_lock.assert_not_called()
+    _mock_enqueue.assert_not_called()
+    db.commit.assert_called_once()
+
+
+@patch("app.services.retry.try_acquire_import_lock")
+@patch("app.services.retry.enqueue_job")
+def test_retry_unimportable_imslp_raises_without_clearing_error(
+    _mock_enqueue: patch,
+    _mock_lock: patch,
+) -> None:
+    db = Mock()
+    wiki_url = "http://imslp.org/wiki/Sinfonietta,_Op.75_(Lorenzo,_Leonardo_de)"
+    partset = _partset(score_id=None, imslp_id=wiki_url, error="import", error_message="old")
+
+    with pytest.raises(ValueError, match="edition number"):
+        retry_partset_pipeline(db, partset)
+
+    assert partset.error == "import"
+    assert partset.error_message == UNIMPORTABLE_IMSLP_MESSAGE
+    _mock_lock.assert_not_called()
+    _mock_enqueue.assert_not_called()
+    db.commit.assert_called_once()

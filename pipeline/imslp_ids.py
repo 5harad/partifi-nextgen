@@ -4,6 +4,11 @@ from __future__ import annotations
 
 import re
 
+UNIMPORTABLE_IMSLP_MESSAGE = (
+    "This IMSLP link doesn't include an edition number. "
+    "Use a numeric IMSLP id or a Special:ImagefromIndex URL."
+)
+
 _IMSLP_FRAGMENT_RX = re.compile(r"IMSLP(\d+)", re.I)
 _PATH_PATTERNS = (
     re.compile(r"ImagefromIndex/(\d+)", re.I),

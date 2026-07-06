@@ -6,7 +6,7 @@ import {
   getImportStatus,
   retryPartsetPipeline,
 } from '../lib/api'
-import { pipelineErrorMessage, LOCK_BUSY_MESSAGE, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
+import { pipelineErrorMessage, LOCK_BUSY_MESSAGE, POLLING_FAILED_MESSAGE, UNIMPORTABLE_IMSLP_MESSAGE } from '../lib/pipelineErrors'
 import { TransitionError, TransitionErrorButton } from '../components/TransitionError'
 
 export function ImportProgressPage() {
@@ -19,7 +19,8 @@ export function ImportProgressPage() {
   const [retrying, setRetrying] = useState(false)
   const pollRef = useRef<(() => void) | null>(null)
   const previewError = import.meta.env.DEV ? searchParams.get('previewError') : null
-  const canRetry = errorStage !== 'import_size'
+  const canRetry =
+    errorStage !== 'import_size' && errorMessage !== UNIMPORTABLE_IMSLP_MESSAGE
 
   useEffect(() => {
     if (previewError) {
@@ -34,8 +35,11 @@ export function ImportProgressPage() {
     let timeoutId: number
     let failedAttempts = 0
 
-    void ensureImportByPrivateId(privateId).catch(() => {
-      // Polling will surface errors; ensure is best-effort on entry.
+    void ensureImportByPrivateId(privateId).catch((err: unknown) => {
+      if (cancelled) return
+      const message = err instanceof Error ? err.message : 'Failed to start import'
+      setErrorStage('import')
+      setErrorMessage(message)
     })
 
     const poll = async () => {
@@ -108,8 +112,11 @@ export function ImportProgressPage() {
       setErrorStage(null)
       setProgress(0)
       pollRef.current?.()
-    } catch {
-      setErrorMessage('Could not restart import. Please try again.')
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Could not restart import. Please try again.'
+      setErrorStage('import')
+      setErrorMessage(message)
     } finally {
       setRetrying(false)
     }

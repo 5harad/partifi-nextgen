@@ -76,7 +76,8 @@ export async function ensureImportByPrivateId(privateId: string): Promise<void> 
     method: 'POST',
   })
   if (!res.ok) {
-    throw new Error('Failed to start import')
+    const err = await res.json().catch(() => ({}))
+    throw new Error(apiErrorDetail(err, 'Failed to start import'))
   }
 }
 
@@ -90,7 +91,7 @@ export async function retryPartsetPipeline(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || 'Failed to retry')
+    throw new Error(apiErrorDetail(err, 'Failed to retry'))
   }
   return res.json()
 }
@@ -105,7 +106,7 @@ export async function retryPartsetPipelineByAccessId(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || 'Failed to retry')
+    throw new Error(apiErrorDetail(err, 'Failed to retry'))
   }
   return res.json()
 }

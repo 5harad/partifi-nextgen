@@ -15,6 +15,7 @@ from app.services.score_cache import (
 )
 from app.score_limits import MAX_SCORE_BYTES, reject_score_too_large
 from app.utils.ids import gen_partset_ids, gen_score_id
+from pipeline.imslp_ids import UNIMPORTABLE_IMSLP_MESSAGE, normalize_imslp_id
 from pipeline.pdf_validate import PDF_MAGIC, validate_pdf_bytes
 from pipeline.score_pdf import score_has_archived_pdf, score_ready_for_reuse
 
@@ -34,17 +35,28 @@ def total_progress(status: str | None, progress: float) -> float:
 
 
 def import_progress_payload(partset: Partset) -> dict:
+    error = partset.error
+    error_message = partset.error_message
+    if (
+        not error
+        and not partset.score_id
+        and partset.imslp_id
+        and not normalize_imslp_id(partset.imslp_id)
+    ):
+        error = "import"
+        error_message = UNIMPORTABLE_IMSLP_MESSAGE
+
     is_complete = bool(
         partset.import_complete
         and partset.convert_complete
         and partset.analysis_complete
-        and not partset.error
+        and not error
     )
     progress_key = f"{partset.status}_progress" if partset.status else "import_progress"
     stage_progress = getattr(partset, progress_key, 0.0) or 0.0
     return {
-        "error": partset.error,
-        "error_message": partset.error_message,
+        "error": error,
+        "error_message": error_message,
         "status": partset.status,
         "progress": stage_progress,
         "total_progress": 100.0 if is_complete else total_progress(partset.status, stage_progress),

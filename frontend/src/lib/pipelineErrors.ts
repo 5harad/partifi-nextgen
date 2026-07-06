@@ -1,5 +1,9 @@
 import { scoreTooLargeMessage } from './scoreLimits'
 
+export const UNIMPORTABLE_IMSLP_MESSAGE =
+  "This IMSLP link doesn't include an edition number. " +
+  'Use a numeric IMSLP id or a Special:ImagefromIndex URL.'
+
 const STAGE_MESSAGES: Record<string, string> = {
   import: 'Sorry, there was a problem downloading the score.',
   import_size: scoreTooLargeMessage(),
