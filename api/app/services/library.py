@@ -130,6 +130,7 @@ def list_library(db: Session, user_id: str) -> list[dict]:
                 "parts_ready": bool(partset.parts_ready),
                 "parts": parts_payload,
                 "score_pdf_url": score_pdf_url,
+                "imslp_id": partset.imslp_id,
             }
         )
     return items

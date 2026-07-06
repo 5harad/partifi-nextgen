@@ -4,6 +4,7 @@ import { Layout } from '../components/Layout'
 import { PartsetMetadata, usePartsetMetadata } from '../components/PartsetMetadata'
 import { PartDownloadLinks } from '../components/parts/PartDownloadLinks'
 import { PartsetShareLinks } from '../components/parts/PartsetShareLinks'
+import { ScoreSourceLinks } from '../components/parts/ScoreSourceLinks'
 import { useAuth } from '../context/AuthContext'
 import { deletePartset, getCsrfToken, updatePartsetMetadata } from '../lib/api'
 import { fetchLibrary, updateFavorite } from '../lib/authApi'
@@ -126,14 +127,7 @@ function LibraryItemPane({
 
       <div className="partset-download">
         <div className="download-title">Download</div>
-        {item.score_pdf_url && (
-          <>
-            <a href={item.score_pdf_url} className="red">
-              complete score
-            </a>
-            <br />
-          </>
-        )}
+        <ScoreSourceLinks scorePdfUrl={item.score_pdf_url} imslpId={item.imslp_id} />
         <PartDownloadLinks
           partsetId={item.partset_id}
           parts={item.parts}

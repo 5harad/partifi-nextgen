@@ -70,3 +70,4 @@ class PartsDataResponse(BaseModel):
     score_pdf_url: str | None = None
     parts: list[PartDownloadItem]
     parts_ready: bool
+    imslp_id: str | None = None

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { createPartsetFromScore, getCsrfToken, searchPartsets } from '../lib/api'
+import { imslpReverseLookupUrl } from '../lib/imslpUtils'
 import type { SearchResultItem } from '../types/search'
 
 const RESULTS_PER_PAGE = 10
@@ -267,7 +268,7 @@ export function SearchPage() {
                             {' | '}
                             <a
                               className="red"
-                              href={`http://imslp.org/index.php?title=Special:ReverseLookup&action=submit&indexsearch=${result.imslp_id}`}
+                              href={imslpReverseLookupUrl(result.imslp_id)}
                               target="_blank"
                               rel="noreferrer"
                             >

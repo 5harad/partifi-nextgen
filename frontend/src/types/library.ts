@@ -16,6 +16,7 @@ export type LibraryItem = {
   parts_ready: boolean
   parts: LibraryPartItem[]
   score_pdf_url: string | null
+  imslp_id: string | null
 }
 
 export type LibraryResponse = {

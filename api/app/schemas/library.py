@@ -19,6 +19,7 @@ class LibraryItem(BaseModel):
     parts_ready: bool
     parts: list[LibraryPartItem]
     score_pdf_url: str | None = None
+    imslp_id: str | None = None
 
 
 class LibraryResponse(BaseModel):

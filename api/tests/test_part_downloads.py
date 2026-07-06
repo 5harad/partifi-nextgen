@@ -63,6 +63,17 @@ def test_get_parts_data_emits_short_download_urls(db: Session) -> None:
     assert payload["parts"][0]["file_name"] == short_name
     assert short_name in payload["parts"][0]["letter_url"]
     assert len(payload["parts"][0]["letter_url"]) < 120
+    assert payload["imslp_id"] is None
+
+
+def test_get_parts_data_includes_imslp_id(db: Session) -> None:
+    partset = db.get(Partset, "ofBqc")
+    partset.imslp_id = "282358"
+    db.commit()
+
+    payload = get_parts_data(db, partset, mode="owner")
+
+    assert payload["imslp_id"] == "282358"
 
 
 def test_safe_cached_part_path_returns_none_for_overlong_filename() -> None:

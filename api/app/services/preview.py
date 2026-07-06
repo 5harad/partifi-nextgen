@@ -460,5 +460,6 @@ def get_parts_data(db: Session, partset: Partset, *, mode: str = "owner") -> dic
         "score_pdf_url": score_pdf_url,
         "parts": download_items,
         "parts_ready": bool(partset.parts_ready),
+        "imslp_id": partset.imslp_id,
     }
     return payload

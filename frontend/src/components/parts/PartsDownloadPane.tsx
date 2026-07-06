@@ -13,6 +13,7 @@ import { PartsetMetadata, usePartsetMetadata } from '../PartsetMetadata'
 import { GoogleSignInLink } from '../GoogleSignInLink'
 import { PartDownloadLinks } from './PartDownloadLinks'
 import { PartsetShareLinks } from './PartsetShareLinks'
+import { ScoreSourceLinks } from './ScoreSourceLinks'
 import type { PartsDataResponse } from '../../types/preview'
 
 type Props = {
@@ -223,18 +224,11 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
       </div>
       <div className="partset-download">
         <div className="download-title">Download</div>
-        {data.score_pdf_url && (
-          <>
-            <a
-              href={data.score_pdf_url}
-              className="red"
-              download={`${data.partset_id}_score.pdf`}
-            >
-              complete score
-            </a>
-            <br />
-          </>
-        )}
+        <ScoreSourceLinks
+          scorePdfUrl={data.score_pdf_url}
+          imslpId={data.imslp_id}
+          scoreDownloadName={`${data.partset_id}_score.pdf`}
+        />
         <PartDownloadLinks
           partsetId={data.partset_id}
           parts={data.parts}

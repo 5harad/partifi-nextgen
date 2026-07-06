@@ -86,6 +86,18 @@ def test_list_library_returns_parts_for_all_partsets(db: Session) -> None:
     tags_by_partset = {item["partset_id"]: {part["tag"] for part in item["parts"]} for item in items}
     assert tags_by_partset["pub1"] == {"violin", "cello"}
     assert tags_by_partset["pub2"] == {"violin", "cello"}
+    assert all(item["imslp_id"] is None for item in items)
+
+
+def test_list_library_includes_imslp_id(db: Session) -> None:
+    partset = db.query(Partset).filter(Partset.id == "pub1").first()
+    assert partset is not None
+    partset.imslp_id = "33421"
+    db.commit()
+
+    items = list_library(db, "user1")
+    pub1 = next(item for item in items if item["partset_id"] == "pub1")
+    assert pub1["imslp_id"] == "33421"
 
 
 def test_list_library_empty_when_no_favorites(db: Session) -> None:

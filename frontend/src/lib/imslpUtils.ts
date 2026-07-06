@@ -17,3 +17,7 @@ export function normalizeImslpIdInput(raw: string): string {
   const match = /IMSLP(\d+)/i.exec(raw)
   return match?.[1] ?? trimmed
 }
+
+export function imslpReverseLookupUrl(imslpId: string): string {
+  return `http://imslp.org/index.php?title=Special:ReverseLookup&action=submit&indexsearch=${encodeURIComponent(imslpId)}`
+}
