@@ -119,9 +119,27 @@ def test_retry_imslp_import(_mock_enqueue: patch, _mock_lock: patch) -> None:
     stage, job_id = retry_partset_pipeline(db, partset)
     assert stage == "import"
     assert job_id == "99"
+    assert partset.imslp_id == "123"
     _mock_enqueue.assert_called_once_with(
         "imslp_import",
-        {"partset_id": "pub01", "imslp_id": "IMSLP123"},
+        {"partset_id": "pub01", "imslp_id": "123"},
+    )
+    db.flush.assert_called_once()
+
+
+@patch("app.services.retry.try_acquire_import_lock", return_value=True)
+@patch("app.services.retry.enqueue_job", return_value="100")
+def test_retry_imslp_import_normalizes_legacy_url(_mock_enqueue: patch, _mock_lock: patch) -> None:
+    db = Mock()
+    legacy = "https://imslp.org/wiki/Special:ImagefromIndex/282358/neo"
+    partset = _partset(score_id=None, imslp_id=legacy, error="import")
+    stage, job_id = retry_partset_pipeline(db, partset)
+    assert stage == "import"
+    assert job_id == "100"
+    assert partset.imslp_id == "282358"
+    _mock_enqueue.assert_called_once_with(
+        "imslp_import",
+        {"partset_id": "pub01", "imslp_id": "282358"},
     )
 
 

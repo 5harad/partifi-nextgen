@@ -15,6 +15,13 @@ def test_normalize_imslp_id_from_link() -> None:
     assert normalize_imslp_id("https://imslp.org/wiki/File:Example.pdf#IMSLP123") == "123"
 
 
+def test_normalize_imslp_id_from_imagefromindex_url() -> None:
+    assert (
+        normalize_imslp_id("https://imslp.org/wiki/Special:ImagefromIndex/282358/neo")
+        == "282358"
+    )
+
+
 def test_parse_reverse_lookup_location() -> None:
     parsed = parse_reverse_lookup_location("//imslp.org/wiki/File:Example.pdf#IMSLP456")
     assert parsed is not None

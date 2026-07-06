@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.tables import ImslpInfo
 from pipeline.imslp_download import log_imslp_http_failure
+from pipeline.imslp_ids import normalize_imslp_id
 
 logger = logging.getLogger(__name__)
 
@@ -21,15 +22,13 @@ REVERSE_LOOKUP_URL = (
     IMSLP_BASE
     + "/index.php?title=Special:ReverseLookup&action=submit&indexsearch={imslp_id}"
 )
-IMSLP_ID_RX = re.compile(r"IMSLP(\d+)", re.I)
+IMSLP_ERROR_NOT_FOUND = "Edition not found."
+IMSLP_ERROR_NOT_PDF = "Not a PDF score."
+IMSLP_ERROR_UNAVAILABLE = "IMSLP temporarily unavailable. Try again in a moment."
 IMSLP_HEADERS = {
     "User-Agent": "Partifi/1.0 (+https://partifi.org)",
 }
 REQUEST_TIMEOUT = 15.0
-
-IMSLP_ERROR_NOT_FOUND = "Edition not found."
-IMSLP_ERROR_NOT_PDF = "Not a PDF score."
-IMSLP_ERROR_UNAVAILABLE = "IMSLP temporarily unavailable. Try again in a moment."
 
 _fetch_locks_guard = threading.Lock()
 _fetch_locks: dict[str, threading.Lock] = {}
@@ -53,14 +52,6 @@ def _fail_lookup(row: ImslpInfo | None) -> None:
     if row and row.file_type and row.file_type.upper() != "PDF":
         raise ImslpLookupError(IMSLP_ERROR_NOT_PDF, not_pdf=True)
     raise ImslpLookupError(IMSLP_ERROR_NOT_FOUND)
-
-
-def normalize_imslp_id(raw: str) -> str | None:
-    text = raw.strip().lstrip("#")
-    if text.isdigit():
-        return text
-    match = IMSLP_ID_RX.search(raw)
-    return match.group(1) if match else None
 
 
 def _normalize_text(text: str) -> str:

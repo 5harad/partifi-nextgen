@@ -13,6 +13,7 @@ from jobs.errors import mark_partset_error
 from jobs.import_pipeline import run_import_pipeline
 from pdf_validate_repair import ensure_valid_score_pdf
 from pipeline.ids import rand_partifi_id
+from pipeline.imslp_ids import normalize_imslp_id
 from pipeline.pdf_validate import PDF_CORRUPT_MESSAGE
 from s3_storage import download_file, score_pdf_s3_key, upload_file
 from score_limits import MAX_SCORE_BYTES, ScoreTooLargeError, reject_score_too_large
@@ -81,6 +82,24 @@ def _ensure_archived_pdf(score_id: str, pdf_path: Path, workdir: Path) -> None:
     db_conn.execute("UPDATE scores SET s3 = 1 WHERE id = :id", {"id": score_id})
 
 
+def _resolve_imslp_id(partset_id: str, raw_imslp_id: str) -> str:
+    normalized = normalize_imslp_id(raw_imslp_id)
+    if not normalized:
+        raise ValueError(f"Invalid IMSLP id: {raw_imslp_id}")
+    if normalized != raw_imslp_id:
+        db_conn.execute(
+            "UPDATE partsets SET imslp_id = :imslp_id WHERE id = :id",
+            {"imslp_id": normalized, "id": partset_id},
+        )
+        logger.info(
+            "Normalized partset %s imslp_id from %r to %s",
+            partset_id,
+            raw_imslp_id,
+            normalized,
+        )
+    return normalized
+
+
 def _attach_score_and_run_pipeline(partset_id: str, score_id: str, *, job_id: str | None) -> None:
     db_conn.execute(
         "UPDATE partsets SET score_id = :score_id, import_complete = NOW(), import_progress = 100 "
@@ -103,6 +122,8 @@ def run_imslp_import(
         shutil.rmtree(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     pdf_path = workdir / "score.pdf"
+
+    imslp_id = _resolve_imslp_id(partset_id, imslp_id)
 
     try:
         existing = _existing_score_for_imslp(imslp_id)

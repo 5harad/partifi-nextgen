@@ -47,7 +47,7 @@ def mark_partset_error(
     db_conn.execute(
         "UPDATE partsets SET error = :stage, error_message = :message, "
         "error_ts = NOW(), last_job_id = :job_id "
-        "WHERE id = :id AND parts_ready = 0",
+        "WHERE id = :id AND (parts_ready IS NULL OR parts_ready = 0)",
         {
             "stage": stage,
             "message": truncate_error_message(message),

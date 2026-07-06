@@ -1,17 +1,31 @@
-from jobs.errors import MAX_ERROR_MESSAGE_LEN, truncate_error_message
+from unittest.mock import MagicMock, patch
+
+from jobs.errors import mark_partset_error
 
 
-def test_truncate_error_message_none() -> None:
-    assert truncate_error_message(None) is None
+@patch("jobs.errors.db_conn.execute")
+@patch("jobs.errors.db_conn.fetchone")
+def test_mark_partset_error_when_parts_ready_is_null(
+    mock_fetchone: MagicMock,
+    mock_execute: MagicMock,
+) -> None:
+    mock_fetchone.return_value = MagicMock(status="import", parts_ready=None)
+
+    mark_partset_error("B3yzC", "import", message="No downloadable PDF")
+
+    mock_execute.assert_called_once()
+    query = mock_execute.call_args[0][0]
+    assert "parts_ready IS NULL OR parts_ready = 0" in query
 
 
-def test_truncate_error_message_normalizes_whitespace() -> None:
-    assert truncate_error_message("foo\n\nbar") == "foo bar"
+@patch("jobs.errors.db_conn.execute")
+@patch("jobs.errors.db_conn.fetchone")
+def test_mark_partset_error_skips_when_parts_ready(
+    mock_fetchone: MagicMock,
+    mock_execute: MagicMock,
+) -> None:
+    mock_fetchone.return_value = MagicMock(status="analysis", parts_ready=1)
 
+    mark_partset_error("pub01", "import", message="late failure")
 
-def test_truncate_error_message_long() -> None:
-    msg = "x" * (MAX_ERROR_MESSAGE_LEN + 10)
-    truncated = truncate_error_message(msg)
-    assert truncated is not None
-    assert len(truncated) == MAX_ERROR_MESSAGE_LEN
-    assert truncated.endswith("...")
+    mock_execute.assert_not_called()

@@ -11,6 +11,7 @@ from app.services.gen_parts_lock import try_acquire_gen_parts_lock
 from app.services.import_lock import try_acquire_import_lock
 from app.services.partset_failure import clear_partset_failure
 from app.services.queue import enqueue_job
+from pipeline.imslp_ids import normalize_imslp_id
 
 
 def import_pipeline_complete(partset: Partset) -> bool:
@@ -19,6 +20,20 @@ def import_pipeline_complete(partset: Partset) -> bool:
         and partset.convert_complete
         and partset.analysis_complete
     )
+
+
+def _imslp_id_for_import_job(db: Session, partset: Partset) -> str:
+    """Normalize legacy URL-shaped imslp_id values before enqueueing imslp_import."""
+    raw = partset.imslp_id
+    if not raw:
+        raise ValueError("Partset has no IMSLP id")
+    normalized = normalize_imslp_id(raw)
+    if not normalized:
+        raise ValueError(f"Invalid IMSLP id: {raw}")
+    if normalized != raw:
+        partset.imslp_id = normalized
+        db.flush()
+    return normalized
 
 
 def ensure_import_if_needed(db: Session, partset: Partset) -> str | None:
@@ -45,9 +60,10 @@ def ensure_import_if_needed(db: Session, partset: Partset) -> str | None:
             {"partset_id": partset.id, "score_id": partset.score_id},
         )
     else:
+        normalized = _imslp_id_for_import_job(db, partset)
         job_id = enqueue_job(
             "imslp_import",
-            {"partset_id": partset.id, "imslp_id": partset.imslp_id},
+            {"partset_id": partset.id, "imslp_id": normalized},
         )
     db.commit()
     return job_id
@@ -72,9 +88,10 @@ def retry_partset_pipeline(db: Session, partset: Partset) -> tuple[str, str | No
             if not try_acquire_import_lock(partset.id):
                 db.commit()
                 return "import", None
+            normalized = _imslp_id_for_import_job(db, partset)
             job_id = enqueue_job(
                 "imslp_import",
-                {"partset_id": partset.id, "imslp_id": partset.imslp_id},
+                {"partset_id": partset.id, "imslp_id": normalized},
             )
             db.commit()
             return "import", job_id
