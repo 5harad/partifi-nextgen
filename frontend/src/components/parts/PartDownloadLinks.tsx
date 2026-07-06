@@ -64,8 +64,8 @@ export function PartDownloadLinks({
             onClick={(e) => void handlePartClick(e, part.letter_url)}
           >
             letter size
-          </a>{' '}
-          /{' '}
+          </a>
+          {' | '}
           <a
             className="red"
             href={part.a4_url}
