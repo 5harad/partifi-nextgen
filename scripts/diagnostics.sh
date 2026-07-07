@@ -84,7 +84,7 @@ STUCK_WHERE="
 
 filter_error_lines() {
   grep -iE ' ERROR |exception|failed|timed out|exit 137(\s|$)|\bOOM\b|Out of memory|Traceback|ValueError|Could not' \
-    | grep -viE 'aborting with incomplete response|http2: stream closed|repaired or ignored|The following errors were encountered'
+    | grep -viE 'aborting with incomplete response|http2: stream closed|repaired or ignored|The following errors were encountered|Page drawing error occurred|Output may be incorrect'
 }
 
 fetch_full_journal() {
@@ -137,6 +137,17 @@ IMSLP_FAILED_WHERE="
   AND create_ts >= NOW() - INTERVAL ${DAYS} DAY
 "
 
+IMSLP_IMPORT_ERROR_WINDOW="
+  imslp_id IS NOT NULL
+  AND error IN ('import', 'import_size')
+  AND COALESCE(error_ts, create_ts) >= NOW() - INTERVAL ${ERROR_HOURS} HOUR
+"
+
+IMSLP_LEGACY_LINK_ERROR_SQL="
+  error = 'import'
+  AND error_message LIKE 'This IMSLP link doesn%'
+"
+
 fetch_mysql_summary_metrics() {
   compose exec -T mysql mysql -u partifi -p"$MYSQL_PASSWORD" \
     --default-character-set=utf8mb4 \
@@ -148,7 +159,10 @@ SELECT 'user_count', COUNT(*) FROM users;
 SELECT 'imslp_attempted', COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND create_ts >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;
 SELECT 'imslp_created_analyzed', COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND create_ts >= NOW() - INTERVAL ${ERROR_HOURS} HOUR AND analysis_complete IS NOT NULL AND error IS NULL;
 SELECT 'imslp_succeeded', COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND analysis_complete IS NOT NULL AND error IS NULL AND analysis_complete >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;
-SELECT 'imslp_worker_fail', COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND error IN ('import', 'import_size') AND COALESCE(error_ts, create_ts) >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;
+SELECT 'imslp_import_errors_total', COUNT(*) FROM partsets WHERE ${IMSLP_IMPORT_ERROR_WINDOW};
+SELECT 'imslp_import_legacy_link', COUNT(*) FROM partsets WHERE ${IMSLP_IMPORT_ERROR_WINDOW} AND ${IMSLP_LEGACY_LINK_ERROR_SQL};
+SELECT 'imslp_import_fail', COUNT(*) FROM partsets WHERE ${IMSLP_IMPORT_ERROR_WINDOW} AND error = 'import' AND (error_message IS NULL OR error_message NOT LIKE 'This IMSLP link doesn%');
+SELECT 'imslp_import_too_large', COUNT(*) FROM partsets WHERE ${IMSLP_IMPORT_ERROR_WINDOW} AND error = 'import_size';
 SELECT 'imslp_failed_count', COUNT(*) FROM partsets WHERE ${IMSLP_FAILED_WHERE};
 EOF
 }
@@ -161,7 +175,10 @@ load_mysql_summary_metrics() {
   IMSLP_ATTEMPTED="?"
   IMSLP_CREATED_ANALYZED="?"
   IMSLP_SUCCEEDED="?"
-  IMSLP_WORKER_FAIL="?"
+  IMSLP_IMPORT_ERRORS_TOTAL="?"
+  IMSLP_IMPORT_LEGACY_LINK="?"
+  IMSLP_IMPORT_FAIL="?"
+  IMSLP_IMPORT_TOO_LARGE="?"
   IMSLP_FAILED_COUNT="?"
 
   while IFS=$'\t' read -r key value; do
@@ -173,7 +190,10 @@ load_mysql_summary_metrics() {
       imslp_attempted) IMSLP_ATTEMPTED="$value" ;;
       imslp_created_analyzed) IMSLP_CREATED_ANALYZED="$value" ;;
       imslp_succeeded) IMSLP_SUCCEEDED="$value" ;;
-      imslp_worker_fail) IMSLP_WORKER_FAIL="$value" ;;
+      imslp_import_errors_total) IMSLP_IMPORT_ERRORS_TOTAL="$value" ;;
+      imslp_import_legacy_link) IMSLP_IMPORT_LEGACY_LINK="$value" ;;
+      imslp_import_fail) IMSLP_IMPORT_FAIL="$value" ;;
+      imslp_import_too_large) IMSLP_IMPORT_TOO_LARGE="$value" ;;
       imslp_failed_count) IMSLP_FAILED_COUNT="$value" ;;
     esac
   done < "$metrics_file"
@@ -277,6 +297,7 @@ SERVICE_JOURNAL="$(service_journal_from_full "$FULL_JOURNAL")"
 IMSLP_ISSUE_LINES="$(echo "$SERVICE_JOURNAL" | filter_imslp_issue_lines)"
 IMSLP_API_OK="$(count_journal_lines "$(echo "$SERVICE_JOURNAL" | grep 'POST /api/v1/partsets/imslp HTTP/1.1" 200' || true)")"
 IMSLP_API_FAIL="$(count_journal_lines "$(echo "$SERVICE_JOURNAL" | grep -E 'POST /api/v1/partsets/imslp HTTP/1.1" (400|500)' || true)")"
+IMSLP_ACTIONABLE_FAIL=$((IMSLP_IMPORT_FAIL + IMSLP_IMPORT_TOO_LARGE))
 
 if [[ "${VERIFY:-}" == 1 ]]; then
   verify_mysql_summary_metrics stuck_count "$STUCK_COUNT" "SELECT COUNT(*) FROM partsets WHERE ${STUCK_WHERE};"
@@ -285,7 +306,10 @@ if [[ "${VERIFY:-}" == 1 ]]; then
   verify_mysql_summary_metrics imslp_attempted "$IMSLP_ATTEMPTED" "SELECT COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND create_ts >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;"
   verify_mysql_summary_metrics imslp_created_analyzed "$IMSLP_CREATED_ANALYZED" "SELECT COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND create_ts >= NOW() - INTERVAL ${ERROR_HOURS} HOUR AND analysis_complete IS NOT NULL AND error IS NULL;"
   verify_mysql_summary_metrics imslp_succeeded "$IMSLP_SUCCEEDED" "SELECT COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND analysis_complete IS NOT NULL AND error IS NULL AND analysis_complete >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;"
-  verify_mysql_summary_metrics imslp_worker_fail "$IMSLP_WORKER_FAIL" "SELECT COUNT(*) FROM partsets WHERE imslp_id IS NOT NULL AND error IN ('import', 'import_size') AND COALESCE(error_ts, create_ts) >= NOW() - INTERVAL ${ERROR_HOURS} HOUR;"
+  verify_mysql_summary_metrics imslp_import_errors_total "$IMSLP_IMPORT_ERRORS_TOTAL" "SELECT COUNT(*) FROM partsets WHERE ${IMSLP_IMPORT_ERROR_WINDOW};"
+  verify_mysql_summary_metrics imslp_import_legacy_link "$IMSLP_IMPORT_LEGACY_LINK" "SELECT COUNT(*) FROM partsets WHERE ${IMSLP_IMPORT_ERROR_WINDOW} AND ${IMSLP_LEGACY_LINK_ERROR_SQL};"
+  verify_mysql_summary_metrics imslp_import_fail "$IMSLP_IMPORT_FAIL" "SELECT COUNT(*) FROM partsets WHERE ${IMSLP_IMPORT_ERROR_WINDOW} AND error = 'import' AND (error_message IS NULL OR error_message NOT LIKE 'This IMSLP link doesn%');"
+  verify_mysql_summary_metrics imslp_import_too_large "$IMSLP_IMPORT_TOO_LARGE" "SELECT COUNT(*) FROM partsets WHERE ${IMSLP_IMPORT_ERROR_WINDOW} AND error = 'import_size';"
   verify_mysql_summary_metrics imslp_failed_count "$IMSLP_FAILED_COUNT" "SELECT COUNT(*) FROM partsets WHERE ${IMSLP_FAILED_WHERE};"
 fi
 
@@ -293,7 +317,7 @@ fi
 section "Summary"
 echo "  health:      ${HEALTH_STATUS}"
 echo "  imslp API:   ${IMSLP_API_OK} ok / ${IMSLP_API_FAIL} fail (POST /partsets/imslp, last ${ERROR_HOURS}h)"
-echo "  imslp DB:    ${IMSLP_ATTEMPTED} created / ${IMSLP_CREATED_ANALYZED} analyzed (of those) / ${IMSLP_WORKER_FAIL} worker fail"
+echo "  imslp DB:    ${IMSLP_ATTEMPTED} created / ${IMSLP_CREATED_ANALYZED} analyzed (of those) / ${IMSLP_IMPORT_ERRORS_TOTAL} import errors (DB)"
 echo "  stuck:       ${STUCK_COUNT} (last ${DAYS}d)"
 echo "  errors:      ${ERROR_COUNT} lines (${ERROR_HOURS}h)"
 echo "  queue:       ${QUEUE_PENDING} pending / ${QUEUE_PROCESSING} processing"
@@ -303,7 +327,8 @@ section "IMSLP imports (last ${ERROR_HOURS}h)"
 echo "  API:         ${IMSLP_API_OK} POST 200 / ${IMSLP_API_FAIL} POST 4xx-5xx"
 echo "  created:     ${IMSLP_ATTEMPTED} partsets (should match POST 200)"
 echo "  analyzed:    ${IMSLP_CREATED_ANALYZED} of those created / ${IMSLP_SUCCEEDED} total finished in window"
-echo "  worker fail: ${IMSLP_WORKER_FAIL} (import / import_size errors)"
+echo "  import err:  ${IMSLP_IMPORT_ERRORS_TOTAL} in DB (legacy link: ${IMSLP_IMPORT_LEGACY_LINK}, import fail: ${IMSLP_IMPORT_FAIL}, too large: ${IMSLP_IMPORT_TOO_LARGE})"
+echo "               (includes API-marked failures; legacy link = unimportable old IMSLP URLs)"
 echo ""
 echo "IMSLP failures (newest first):"
 if [[ -n "$IMSLP_ISSUE_LINES" ]]; then
@@ -341,6 +366,9 @@ if [[ -n "$ERROR_LINES" ]]; then
   echo "$ERROR_LINES"
 else
   echo "(no matching lines)"
+  if [[ "$IMSLP_ACTIONABLE_FAIL" -gt 0 ]]; then
+    echo "(note: ${IMSLP_ACTIONABLE_FAIL} actionable import error(s) in DB with no matching journal lines — logs may have rotated; see IMSLP failures / Failed IMSLP partsets above)"
+  fi
 fi
 
 section "Activity"
