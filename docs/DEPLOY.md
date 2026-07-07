@@ -393,7 +393,7 @@ Recent errors (last 6 hours) — prefer `./scripts/diagnostics.sh`, which skips 
 journalctl --since "6 hours ago" --no-pager \
   | grep -E 'partifi-nextgen-(api|worker|web)' \
   | grep -iE ' ERROR |exception|failed|timed out|exit 137|OOM|Traceback|ValueError|Could not' \
-  | grep -viE 'aborting with incomplete response|http2: stream closed|repaired or ignored|The following errors were encountered|Page drawing error occurred|Output may be incorrect'
+  | grep -viE 'aborting with incomplete response|http2: stream closed|repaired or ignored|The following errors were encountered|Page drawing error occurred|Output may be incorrect|IMSLP HTTP failure.*attempt [0-9]+/[0-9]+|pdf_resolve retry in|PDF download retry in'
 ```
 
 Per-container (tag set in compose):

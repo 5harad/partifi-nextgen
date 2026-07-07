@@ -84,7 +84,7 @@ STUCK_WHERE="
 
 filter_error_lines() {
   grep -iE ' ERROR |exception|failed|timed out|exit 137(\s|$)|\bOOM\b|Out of memory|Traceback|ValueError|Could not' \
-    | grep -viE 'aborting with incomplete response|http2: stream closed|repaired or ignored|The following errors were encountered|Page drawing error occurred|Output may be incorrect'
+    | grep -viE 'aborting with incomplete response|http2: stream closed|repaired or ignored|The following errors were encountered|Page drawing error occurred|Output may be incorrect|IMSLP HTTP failure.*attempt [0-9]+/[0-9]+|pdf_resolve retry in|PDF download retry in'
 }
 
 fetch_full_journal() {
