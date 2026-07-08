@@ -10,6 +10,14 @@ import re
 from pipeline.cut_segments import default_pool_size
 from pipeline.parallel import map_in_parallel
 
+
+def _cap_segments(segments: list, limit: int = 30) -> list:
+	"""Keep at most `limit` cut positions, preserving top-to-bottom order."""
+	if len(segments) <= limit:
+		return segments
+	return sorted(random.sample(segments, limit))
+
+
 def update_db(partset_id, imfile, rotation, margins, segments):
 	match = re.search(r"page-(\d+)", imfile)
 	if not match:
@@ -156,9 +164,9 @@ def find_segments(imfile, fixskew=False):
 			sep = diff(segments)
 			ndx = argmin(sep)
 
-	# generate at most 30 segments
+	# Cap at 30 cuts; keep vertical order so consecutive pairs stay valid segments.
 	if len(segments) > 30:
-		segments = random.sample(segments, 30)
+		segments = _cap_segments(segments, 30)
 
 	# normalize segment positions and left/right margins as a percentage of height
 	norm_segments = [round(100*float(s)/height,1) for s in segments]
@@ -219,6 +227,15 @@ def analyze_score(partset_id: str, imfiles: list[str]) -> None:
 			{"id": partset_id},
 		)
 		return
+	# Clear any partial rows from a previous interrupted analysis before rewriting.
+	db_conn.execute(
+		"DELETE FROM segments WHERE partset_id = :partset_id",
+		{"partset_id": partset_id},
+	)
+	db_conn.execute(
+		"DELETE FROM pages WHERE partset_id = :partset_id",
+		{"partset_id": partset_id},
+	)
 	db_conn.execute(
 		"UPDATE partsets SET status = 'analysis', analysis_start = NOW(), analysis_progress = 0 WHERE id = :id",
 		{"id": partset_id},
