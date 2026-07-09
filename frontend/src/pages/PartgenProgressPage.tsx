@@ -8,9 +8,11 @@ import {
 } from '../lib/api'
 import { triggerPartFileDownload, partgenReturnPath } from '../lib/partDownloads'
 import { pipelineErrorMessage, LOCK_BUSY_MESSAGE, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
+import { useNoIndex } from '../lib/useNoIndex'
 import { TransitionError, TransitionErrorButton } from '../components/TransitionError'
 
 export function PartgenProgressPage() {
+  useNoIndex()
   const { privateId: accessId } = useParams<{ privateId: string }>()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()

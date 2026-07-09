@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /*/import
+Disallow: /*/segment
+Disallow: /*/preview
+Disallow: /*/partgen
+Disallow: /library
+
+Sitemap: https://partifi.org/sitemap.xml

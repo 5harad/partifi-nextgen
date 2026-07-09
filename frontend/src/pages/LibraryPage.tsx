@@ -8,6 +8,7 @@ import { ScoreSourceLinks } from '../components/parts/ScoreSourceLinks'
 import { useAuth } from '../context/AuthContext'
 import { deletePartset, getCsrfToken, updatePartsetMetadata } from '../lib/api'
 import { fetchLibrary, updateFavorite } from '../lib/authApi'
+import { useNoIndex } from '../lib/useNoIndex'
 import type { LibraryItem } from '../types/library'
 
 function LibraryItemPane({
@@ -178,6 +179,7 @@ function LibraryListItem({
 }
 
 export function LibraryPage() {
+  useNoIndex()
   const { user, loading: authLoading } = useAuth()
   const [searchParams] = useSearchParams()
   const [items, setItems] = useState<LibraryItem[]>([])

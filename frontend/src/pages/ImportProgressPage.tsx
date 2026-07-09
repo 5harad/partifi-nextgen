@@ -7,9 +7,11 @@ import {
   retryPartsetPipeline,
 } from '../lib/api'
 import { pipelineErrorMessage, LOCK_BUSY_MESSAGE, POLLING_FAILED_MESSAGE, UNIMPORTABLE_IMSLP_MESSAGE } from '../lib/pipelineErrors'
+import { useNoIndex } from '../lib/useNoIndex'
 import { TransitionError, TransitionErrorButton } from '../components/TransitionError'
 
 export function ImportProgressPage() {
+  useNoIndex()
   const { privateId } = useParams<{ privateId: string }>()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()

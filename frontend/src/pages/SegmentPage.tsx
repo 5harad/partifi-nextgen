@@ -5,12 +5,14 @@ import { SegmentEditor } from '../components/segment/SegmentEditor'
 import { TransitionError } from '../components/TransitionError'
 import { TransitionWait } from '../components/TransitionWait'
 import { getSegmentData } from '../lib/api'
+import { useNoIndex } from '../lib/useNoIndex'
 import type { SegmentDataResponse } from '../types/segment'
 
 const IMAGE_POLL_MS = 2000
 const IMAGE_POLL_MAX = 300
 
 export function SegmentPage() {
+  useNoIndex()
   const { privateId } = useParams<{ privateId: string }>()
   const navigate = useNavigate()
   const [data, setData] = useState<SegmentDataResponse | null>(null)
