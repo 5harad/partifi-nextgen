@@ -124,6 +124,10 @@ def test_page_image_url_includes_png_suffix() -> None:
     from app.services.segments import page_image_url
 
     assert page_image_url("priv1", 3, "lowres") == "/api/v1/partsets/priv1/page-image/3.png?res=lowres"
+    assert (
+        page_image_url("priv1", 3, "lowres", cache_version="90-1718208000")
+        == "/api/v1/partsets/priv1/page-image/3.png?res=lowres&v=90-1718208000"
+    )
 
 
 def test_write_preview_replaces_existing_files(tmp_path: Path) -> None:

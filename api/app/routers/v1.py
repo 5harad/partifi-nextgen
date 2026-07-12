@@ -4,14 +4,14 @@ import re
 import threading
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.deps.auth import get_current_user_id
 from app.db import get_db
-from app.models import Partset
+from app.models import Partset, Score
 from app.schemas.partset import (
     DeletePartsetResponse,
     ImportProgressResponse,
@@ -48,6 +48,12 @@ from app.services.partset_admin import (
     resolve_partset_access,
     update_partset_metadata,
 )
+from app.schemas.orientation import (
+    OrientationDataResponse,
+    ReorientRequest,
+    ReorientResponse,
+    RetryPageCacheResponse,
+)
 from app.schemas.preview import (
     CombinePartsRequest,
     CombinePartsResponse,
@@ -58,6 +64,14 @@ from app.schemas.preview import (
     SaveLayoutRequest,
     SaveLayoutResponse,
 )
+from app.services.orientation_preview import render_orientation_preview_png
+from app.services.partset_pages import (
+    ensure_page_image_path,
+    orientation_data_payload,
+    retry_partset_page_cache,
+    start_reorient,
+)
+from app.services.partset_touch import touch_partset_access
 from app.services.preview import (
     combine_parts,
     ensure_parts_if_needed,
@@ -73,14 +87,13 @@ from app.services.downloads import (
     safe_cached_part_path,
 )
 from app.services.local_cache import get_local_cache
-from app.services.partset_touch import touch_partset_access
-
 from app.services.segments import (
     get_partset_by_private_id,
     get_segments_data,
     save_all_page_segments,
     save_page_segments,
 )
+from pipeline.partset_orientation import normalize_rotation_degrees
 
 router = APIRouter(prefix="/api/v1", tags=["v1"])
 logger = logging.getLogger(__name__)
@@ -209,11 +222,18 @@ def _page_image_response(
         raise HTTPException(status_code=404, detail="Partset not found")
     if not partset.score_id:
         raise HTTPException(status_code=400, detail="Partset has no score")
+    score = db.get(Score, partset.score_id)
+    if not score:
+        raise HTTPException(status_code=400, detail="Partset has no score")
     try:
-        path = get_local_cache().ensure_score_page(partset.score_id, res, page)
+        path = ensure_page_image_path(partset, score, res, page)  # type: ignore[arg-type]
     except Exception as exc:
         raise HTTPException(status_code=404, detail="Page image not found") from exc
-    return FileResponse(path, media_type="image/png")
+    return FileResponse(
+        path,
+        media_type="image/png",
+        headers={"Cache-Control": "private, no-cache"},
+    )
 
 
 @router.get("/scores/{score_id}/score.pdf")
@@ -536,6 +556,93 @@ def retry_pipeline(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return RetryPipelineResponse(stage=stage, job_id=job_id)
+
+
+@router.get(
+    "/partsets/{private_id}/orientation-data",
+    response_model=OrientationDataResponse,
+)
+def orientation_data(private_id: str, db: Session = Depends(get_db)) -> OrientationDataResponse:
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    if not partset.score_id:
+        raise HTTPException(status_code=400, detail="Partset has no score")
+    score = db.get(Score, partset.score_id)
+    if not score:
+        raise HTTPException(status_code=400, detail="Partset has no score")
+    if not partset.import_complete:
+        raise HTTPException(status_code=400, detail="Import not complete")
+    touch_partset_access(db, partset)
+    return OrientationDataResponse(**orientation_data_payload(db, partset, score))
+
+
+@router.get("/partsets/{private_id}/orientation-preview/{degrees}.png")
+def orientation_preview_image(
+    private_id: str,
+    degrees: int,
+    db: Session = Depends(get_db),
+) -> Response:
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    if not partset.score_id:
+        raise HTTPException(status_code=400, detail="Partset has no score")
+    score = db.get(Score, partset.score_id)
+    if not score:
+        raise HTTPException(status_code=400, detail="Partset has no score")
+    try:
+        rotation_degrees = normalize_rotation_degrees(degrees)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        png = render_orientation_preview_png(partset, score, rotation_degrees)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail="Preview not available") from exc
+    return Response(content=png, media_type="image/png")
+
+
+@router.post(
+    "/partsets/{private_id}/reorient",
+    response_model=ReorientResponse,
+)
+def reorient_partset(
+    private_id: str,
+    body: ReorientRequest,
+    x_csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+    db: Session = Depends(get_db),
+) -> ReorientResponse:
+    verify_csrf(x_csrf_token)
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    if not partset.import_complete:
+        raise HTTPException(status_code=400, detail="Import not complete")
+    try:
+        job_id = start_reorient(db, partset, body.rotation_degrees)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ReorientResponse(status="started", job_id=job_id)
+
+
+@router.post(
+    "/partsets/{private_id}/retry-page-cache",
+    response_model=RetryPageCacheResponse,
+)
+def retry_page_cache(
+    private_id: str,
+    x_csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+    db: Session = Depends(get_db),
+) -> RetryPageCacheResponse:
+    verify_csrf(x_csrf_token)
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    try:
+        retry_partset_page_cache(db, partset)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RetryPageCacheResponse()
 
 
 @router.get(

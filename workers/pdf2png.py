@@ -16,6 +16,7 @@ from PIL import Image
 import db_conn
 from pdf_repair import burst_score_pages, run_subprocess_with_repair
 from pipeline.cut_segments import default_pool_size
+from pipeline.partset_orientation import layout_orientation
 from pipeline.orientation_detect import detect_orientation_from_images
 from pipeline.page_dimensions import Orientation, get_dimensions
 from pipeline.page_render import render_page_native_lowres
@@ -56,6 +57,7 @@ def pdf2png(
     num_tasks: int,
     score_id: str | None = None,
     orientation: Orientation = "portrait",
+    rotation_degrees: int = 0,
 ) -> None:
     dims = get_dimensions(orientation)
     outfile = os.path.basename(pdffile).rsplit(".", 1)[0] + ".png"
@@ -84,6 +86,10 @@ def pdf2png(
         os.remove(repair_path)
 
     im = Image.open(highres_file)
+    if rotation_degrees:
+        im = im.rotate(rotation_degrees, expand=True, fillcolor=255)
+        im.save(highres_file)
+        dims = get_dimensions(layout_orientation(orientation, rotation_degrees))
     lowres_im = im.resize(dims.lowres_size, Image.LANCZOS)
     lowres_file = os.path.join(outdir, "lowres", outfile)
     lowres_im.save(lowres_file)
@@ -115,6 +121,7 @@ def par_pdf2png(
     *,
     score_id: str | None = None,
     orientation: Orientation | None = None,
+    rotation_degrees: int = 0,
 ) -> Orientation:
     pdffile = os.path.abspath(pdffile)
     outdir = os.path.abspath(outdir)
@@ -134,7 +141,8 @@ def par_pdf2png(
     pdfpages = sorted(glob.glob(os.path.join(tempdir, "page*.pdf")), key=_page_number)
     num_tasks = max(len(pdfpages), 1)
     params = [
-        (pdfpage, outdir, partset_id, num_tasks, score_id, orientation) for pdfpage in pdfpages
+        (pdfpage, outdir, partset_id, num_tasks, score_id, orientation, rotation_degrees)
+        for pdfpage in pdfpages
     ]
 
     workers = default_pool_size(len(params))

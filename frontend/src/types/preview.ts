@@ -19,6 +19,7 @@ export type PreviewDataResponse = {
   images_ready: boolean
   images_warming: boolean
   image_progress: number
+  image_cache_error_message?: string | null
 }
 
 export type PartgenProgressResponse = {

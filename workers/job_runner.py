@@ -39,10 +39,30 @@ def _partset_has_error(partset_id: str) -> bool:
     return partset_has_error(partset_id)
 
 
+def _record_partset_job_failure(
+    job_type: str,
+    partset_id: str | None,
+    message: str,
+    *,
+    job_id: str | None = None,
+) -> None:
+    if not partset_id:
+        return
+    if job_type == "warm_partset_pages":
+        from partset_cache_status import get_partset_cache_error, set_partset_cache_error
+
+        if get_partset_cache_error(partset_id):
+            return
+        set_partset_cache_error(partset_id, message)
+        return
+    if not partset_has_error(partset_id):
+        mark_partset_error(partset_id, message=message, job_id=job_id)
+
+
 def _release_job_locks(job_type: str, partset_id: str | None) -> None:
     if not partset_id:
         return
-    if job_type in ("import_pipeline", "imslp_import"):
+    if job_type in ("import_pipeline", "imslp_import", "reorient_partset", "warm_partset_pages"):
         release_import_lock(partset_id)
     elif job_type == "gen_parts":
         release_gen_parts_lock(partset_id)
@@ -66,8 +86,7 @@ def _child_entry(job_type: str, payload: dict[str, Any]) -> None:
         run_job(job_type, payload)
     except Exception as exc:
         logger.exception("Job failed in subprocess type=%s", job_type)
-        if partset_id and not partset_has_error(partset_id):
-            mark_partset_error(partset_id, message=str(exc), job_id=job_id)
+        _record_partset_job_failure(job_type, partset_id, str(exc), job_id=job_id)
         raise SystemExit(1) from None
 
 
@@ -116,6 +135,12 @@ def run_job_with_timeout(job: dict[str, Any]) -> JobOutcome:
         _active_proc = None
 
     if outcome is JobOutcome.INTERRUPTED:
+        _record_partset_job_failure(
+            job_type,
+            partset_id,
+            "Job interrupted during worker shutdown",
+            job_id=job_id,
+        )
         _release_job_locks(job_type, partset_id)
         return JobOutcome.INTERRUPTED
 
@@ -128,12 +153,12 @@ def run_job_with_timeout(job: dict[str, Any]) -> JobOutcome:
             partset_id,
         )
         _terminate_proc(proc)
-        if partset_id:
-            mark_partset_error(
-                partset_id,
-                message=f"Job timed out after {timeout}s",
-                job_id=job_id,
-            )
+        _record_partset_job_failure(
+            job_type,
+            partset_id,
+            f"Job timed out after {timeout}s",
+            job_id=job_id,
+        )
         _release_job_locks(job_type, partset_id)
         return JobOutcome.FAILED
 
@@ -145,12 +170,12 @@ def run_job_with_timeout(job: dict[str, Any]) -> JobOutcome:
             job_type,
             partset_id,
         )
-        if partset_id and not _partset_has_error(partset_id):
-            mark_partset_error(
-                partset_id,
-                message=f"Job exited with code {proc.exitcode}",
-                job_id=job_id,
-            )
+        _record_partset_job_failure(
+            job_type,
+            partset_id,
+            f"Job exited with code {proc.exitcode}",
+            job_id=job_id,
+        )
         _release_job_locks(job_type, partset_id)
         return JobOutcome.FAILED
 
