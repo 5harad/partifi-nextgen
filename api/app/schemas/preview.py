@@ -74,4 +74,6 @@ class PartsDataResponse(BaseModel):
     score_pdf_url: str | None = None
     parts: list[PartDownloadItem]
     parts_ready: bool
+    error: str | None = None
+    error_message: str | None = None
     imslp_id: str | None = None

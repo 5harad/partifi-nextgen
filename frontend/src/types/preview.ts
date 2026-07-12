@@ -46,5 +46,7 @@ export type PartsDataResponse = {
     a4_url: string
   }>
   parts_ready: boolean
+  error: string | null
+  error_message: string | null
   imslp_id: string | null
 }

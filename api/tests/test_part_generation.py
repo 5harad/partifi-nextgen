@@ -49,7 +49,30 @@ def db() -> Session:
 @patch("app.services.preview.try_acquire_gen_parts_lock", return_value=True)
 @patch("app.services.preview.clear_partset_failure")
 @patch("app.services.preview.sync_part_rows_from_tags")
-def test_start_part_generation_retries_when_stuck_in_cut(
+def test_start_part_generation_enqueues_when_no_error(
+    _mock_sync: Mock,
+    mock_clear: Mock,
+    _mock_lock: Mock,
+    mock_enqueue: Mock,
+    db: Session,
+) -> None:
+    partset = db.get(Partset, "pub1")
+    assert partset is not None
+    partset.error = None
+    partset.error_message = None
+
+    job_id = start_part_generation(db, partset)
+
+    assert job_id == "job-99"
+    mock_clear.assert_called_once_with(partset)
+    mock_enqueue.assert_called_once_with("gen_parts", {"partset_id": "pub1"})
+
+
+@patch("app.services.preview.enqueue_job")
+@patch("app.services.preview.try_acquire_gen_parts_lock", return_value=True)
+@patch("app.services.preview.clear_partset_failure")
+@patch("app.services.preview.sync_part_rows_from_tags")
+def test_start_part_generation_skips_when_error_set(
     _mock_sync: Mock,
     mock_clear: Mock,
     _mock_lock: Mock,
@@ -61,9 +84,9 @@ def test_start_part_generation_retries_when_stuck_in_cut(
 
     job_id = start_part_generation(db, partset)
 
-    assert job_id == "job-99"
-    mock_clear.assert_called_once_with(partset)
-    mock_enqueue.assert_called_once_with("gen_parts", {"partset_id": "pub1"})
+    assert job_id is None
+    mock_clear.assert_not_called()
+    mock_enqueue.assert_not_called()
 
 
 @patch("app.services.preview.enqueue_job")

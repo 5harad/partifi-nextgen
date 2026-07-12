@@ -422,9 +422,11 @@ def start_part_generation(db: Session, partset: Partset) -> str | None:
     if partset.parts_ready:
         return None
 
+    if partset.error:
+        return None
+
     if (
-        partset.error is None
-        and partset.paste_start is not None
+        partset.paste_start is not None
         and partset.paste_complete is None
     ):
         return None
@@ -495,6 +497,8 @@ def get_parts_data(db: Session, partset: Partset, *, mode: str = "owner") -> dic
         "score_pdf_url": score_pdf_url,
         "parts": download_items,
         "parts_ready": bool(partset.parts_ready),
+        "error": partset.error,
+        "error_message": partset.error_message,
         "imslp_id": partset.imslp_id,
     }
     return payload

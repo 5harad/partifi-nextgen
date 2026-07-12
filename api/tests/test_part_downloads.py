@@ -76,6 +76,20 @@ def test_get_parts_data_includes_imslp_id(db: Session) -> None:
     assert payload["imslp_id"] == "282358"
 
 
+def test_get_parts_data_includes_partgen_error(db: Session) -> None:
+    partset = db.get(Partset, "ofBqc")
+    partset.parts_ready = False
+    partset.error = "paste"
+    partset.error_message = "Part page layout overflow"
+    db.commit()
+
+    payload = get_parts_data(db, partset, mode="owner")
+
+    assert payload["parts_ready"] is False
+    assert payload["error"] == "paste"
+    assert payload["error_message"] == "Part page layout overflow"
+
+
 def test_safe_cached_part_path_returns_none_for_overlong_filename() -> None:
     cache = MagicMock()
     cache.ensure_part_file.side_effect = OSError(36, "File name too long")

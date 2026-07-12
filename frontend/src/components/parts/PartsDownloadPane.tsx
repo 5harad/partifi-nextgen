@@ -6,10 +6,12 @@ import {
   getCsrfToken,
   getPartgenStatusByAccessId,
   getPartsByAccessId,
+  retryPartsetPipelineByAccessId,
   updatePartsetMetadata,
 } from '../../lib/api'
 import { fetchFavoriteStatus, updateFavorite } from '../../lib/authApi'
 import { useAuth } from '../../context/AuthContext'
+import { pipelineErrorMessage, LOCK_BUSY_MESSAGE } from '../../lib/pipelineErrors'
 import { PartsetMetadata, usePartsetMetadata } from '../PartsetMetadata'
 import { GoogleSignInLink } from '../GoogleSignInLink'
 import { PartDownloadLinks } from './PartDownloadLinks'
@@ -36,6 +38,7 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
     publisher: data.publisher,
   })
   const [favorite, setFavorite] = useState(false)
+  const [retrying, setRetrying] = useState(false)
 
   useEffect(() => {
     setDisplay({
@@ -77,7 +80,7 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
   }, [user, accessId, isOwner])
 
   useEffect(() => {
-    if (data.parts_ready || data.parts.length === 0) return
+    if (data.parts_ready || data.parts.length === 0 || data.error) return
 
     let cancelled = false
     let timeoutId: number
@@ -87,6 +90,12 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
         await ensurePartsByAccessId(accessId)
         const status = await getPartgenStatusByAccessId(accessId)
         if (cancelled) return
+        if (status.error) {
+          const fresh = await getPartsByAccessId(accessId)
+          if (cancelled) return
+          onDataChange(fresh)
+          return
+        }
         if (status.is_complete) {
           const fresh = await getPartsByAccessId(accessId)
           if (cancelled) return
@@ -108,7 +117,7 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
       cancelled = true
       window.clearTimeout(timeoutId)
     }
-  }, [accessId, data.parts_ready, data.parts.length, data.partset_id, onDataChange])
+  }, [accessId, data.parts_ready, data.parts.length, data.error, data.partset_id, onDataChange])
 
   const saveMetadata = useCallback(async () => {
     await metadata.save(async (fields) => {
@@ -131,14 +140,44 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
         composer: fields.composer,
         publisher: fields.publisher || null,
         parts_ready: false,
+        error: null,
+        error_message: null,
       }))
       try {
-        await ensurePartsByAccessId(accessId)
+        if (data.error) {
+          const csrf = await getCsrfToken()
+          await retryPartsetPipelineByAccessId(accessId, csrf)
+        } else {
+          await ensurePartsByAccessId(accessId)
+        }
       } catch {
         // Part click or polling will retry ensure-parts.
       }
     })
   }, [metadata, privateId, data, onDataChange, accessId])
+
+  const handleRetry = useCallback(async () => {
+    if (!isOwner || retrying) return
+    setRetrying(true)
+    try {
+      const csrf = await getCsrfToken()
+      const result = await retryPartsetPipelineByAccessId(accessId, csrf)
+      if (result.job_id === null) {
+        window.alert(LOCK_BUSY_MESSAGE)
+        return
+      }
+      onDataChange((prev) => ({
+        ...prev,
+        error: null,
+        error_message: null,
+        parts_ready: false,
+      }))
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Could not restart part generation.')
+    } finally {
+      setRetrying(false)
+    }
+  }, [isOwner, retrying, accessId, onDataChange])
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm('Are you sure you want to delete these parts?')) return
@@ -227,6 +266,26 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
       </div>
       <div className="partset-download">
         <div className="download-title">Download</div>
+        {data.error && (
+          <p className="red partgen-error">
+            {pipelineErrorMessage(data.error, data.error_message)}
+            {isOwner && (
+              <>
+                {' '}
+                <a
+                  href="#"
+                  className="red"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    void handleRetry()
+                  }}
+                >
+                  {retrying ? 'Retrying…' : 'Try again'}
+                </a>
+              </>
+            )}
+          </p>
+        )}
         <ScoreSourceLinks
           scorePdfUrl={data.score_pdf_url}
           imslpId={data.imslp_id}
