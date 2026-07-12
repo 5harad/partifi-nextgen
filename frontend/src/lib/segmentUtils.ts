@@ -1,17 +1,24 @@
+import type { Orientation } from './pageDimensions'
+import { getViewerDimensions } from './pageDimensions'
 import type { PageSegmentData, RegionState, SegmentItem } from '../types/segment'
 import { applySuggestionsToRegions } from './segmentTagSuggestions'
 
+/** @deprecated Use getViewerDimensions(orientation) — portrait defaults for legacy callers. */
 export const VIEWER_HEIGHT = 776
+/** @deprecated Use getViewerDimensions(orientation) — portrait defaults for legacy callers. */
 export const VIEWER_WIDTH = 600
+
 /** Minimum px between segment divider lines (matches legacy region padding). */
 export const MIN_SEGMENT_GAP = 11
 
-export function pctToPx(pct: number): number {
-  return Math.round((pct / 100) * VIEWER_HEIGHT)
+export function pctToPx(pct: number, orientation: Orientation = 'portrait'): number {
+  const { height } = getViewerDimensions(orientation)
+  return Math.round((pct / 100) * height)
 }
 
-export function pxToPct(px: number): number {
-  return Math.round((px / VIEWER_HEIGHT) * 1000) / 10
+export function pxToPct(px: number, orientation: Orientation = 'portrait'): number {
+  const { height } = getViewerDimensions(orientation)
+  return Math.round((px / height) * 1000) / 10
 }
 
 export function pageDataAreEqual(a: PageSegmentData, b: PageSegmentData): boolean {
@@ -45,14 +52,15 @@ export function buildPageData(
   leftMarginPct: number,
   rightMarginPct: number,
   rotation: number,
+  orientation: Orientation = 'portrait',
 ): PageSegmentData {
   const sorted = [...regions].sort((a, b) => a.topPx - b.topPx)
   const segments: SegmentItem[] = []
 
   if (sorted.length >= 2) {
     for (let i = 0; i < sorted.length - 1; i++) {
-      const top = pxToPct(sorted[i].topPx)
-      const bottom = pxToPct(sorted[i + 1].topPx)
+      const top = pxToPct(sorted[i].topPx, orientation)
+      const bottom = pxToPct(sorted[i + 1].topPx, orientation)
       segments.push({
         pos: [top, bottom],
         tags: splitTagsForSave(sorted[i].tags),
@@ -87,14 +95,19 @@ export type RegionLayout = {
   fieldsBottom: number
 }
 
-export function computeRegionLayouts(regions: RegionState[]): Map<string, RegionLayout> {
+export function computeRegionLayouts(
+  regions: RegionState[],
+  orientation: Orientation = 'portrait',
+): Map<string, RegionLayout> {
+  const { height: viewerHeight } = getViewerDimensions(orientation)
   const sorted = [...regions].sort((a, b) => a.topPx - b.topPx)
   const layouts = new Map<string, RegionLayout>()
+  const bottomBound = viewerHeight + 10
 
   sorted.forEach((region, i) => {
     const segPos = region.topPx
     const top = i === 0 ? -12 : sorted[i - 1].topPx + 10
-    const bottom = i === sorted.length - 1 ? 786 : sorted[i + 1].topPx - 11
+    const bottom = i === sorted.length - 1 ? bottomBound : sorted[i + 1].topPx - 11
     const showFields = i < sorted.length - 1
     layouts.set(region.id, {
       regionTop: top,
@@ -112,13 +125,15 @@ export function clampSegmentTopPx(
   topPx: number,
   regionId: string,
   regions: RegionState[],
+  orientation: Orientation = 'portrait',
 ): number {
+  const { height: viewerHeight } = getViewerDimensions(orientation)
   const sorted = [...regions].sort((a, b) => a.topPx - b.topPx)
   const idx = sorted.findIndex((r) => r.id === regionId)
   if (idx < 0) return topPx
 
   let minY = 2
-  let maxY = VIEWER_HEIGHT - 1
+  let maxY = viewerHeight - 1
   if (idx > 0) {
     minY = sorted[idx - 1].topPx + MIN_SEGMENT_GAP
   }
@@ -133,12 +148,14 @@ export function minDistanceToSegments(topPx: number, regions: RegionState[]): nu
   return Math.min(...regions.map((r) => Math.abs(r.topPx - topPx)))
 }
 
-export function marginPxToPct(px: number): number {
-  return Math.round((px / VIEWER_WIDTH) * 1000) / 10
+export function marginPxToPct(px: number, orientation: Orientation = 'portrait'): number {
+  const { width } = getViewerDimensions(orientation)
+  return Math.round((px / width) * 1000) / 10
 }
 
-export function marginPctToPx(pct: number): number {
-  return Math.round((pct / 100) * VIEWER_WIDTH)
+export function marginPctToPx(pct: number, orientation: Orientation = 'portrait'): number {
+  const { width } = getViewerDimensions(orientation)
+  return Math.round((pct / 100) * width)
 }
 
 let regionCounter = 0
@@ -148,12 +165,15 @@ export function nextRegionId() {
   return `region-${regionCounter}`
 }
 
-export function regionsFromPageData(data: PageSegmentData): RegionState[] {
+export function regionsFromPageData(
+  data: PageSegmentData,
+  orientation: Orientation = 'portrait',
+): RegionState[] {
   const regions: RegionState[] = []
   for (const seg of data.segments) {
     regions.push({
       id: nextRegionId(),
-      topPx: pctToPx(seg.pos[0]),
+      topPx: pctToPx(seg.pos[0], orientation),
       tags: seg.tags,
       tagIsSuggestion: seg.tag_is_suggestion,
       label: seg.label,
@@ -164,7 +184,7 @@ export function regionsFromPageData(data: PageSegmentData): RegionState[] {
     const last = data.segments[data.segments.length - 1]
     regions.push({
       id: nextRegionId(),
-      topPx: pctToPx(last.pos[1]),
+      topPx: pctToPx(last.pos[1], orientation),
       tags: '',
       tagIsSuggestion: false,
       label: '',
@@ -177,6 +197,7 @@ export function regionsFromPageData(data: PageSegmentData): RegionState[] {
 export function materializeAllPagesWithSuggestions(
   pagesData: Record<string, PageSegmentData>,
   numPages: number,
+  orientation: Orientation = 'portrait',
 ): Record<string, PageSegmentData> {
   let allPages = { ...pagesData }
   for (let page = 1; page <= numPages; page++) {
@@ -187,7 +208,7 @@ export function materializeAllPagesWithSuggestions(
       rotation: 0,
       segments: [],
     }
-    const regions = regionsFromPageData(base)
+    const regions = regionsFromPageData(base, orientation)
     const suggested = applySuggestionsToRegions(
       regions,
       allPages,
@@ -203,6 +224,7 @@ export function materializeAllPagesWithSuggestions(
         base.left_margin,
         base.right_margin,
         base.rotation,
+        orientation,
       ),
     }
   }

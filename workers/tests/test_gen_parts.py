@@ -3,6 +3,18 @@ from unittest.mock import MagicMock, patch
 from jobs import gen_parts
 
 
+def test_fetch_spacings_preserves_zero() -> None:
+    rows = [MagicMock(tag="bass", spacing=0), MagicMock(tag="violin", spacing=None)]
+    with patch("jobs.gen_parts.fetchall", return_value=rows):
+        spacings = gen_parts._fetch_spacings("part01")
+    assert spacings["bass"] == 0.0
+    assert spacings["violin"] == 0.1
+
+
+@patch("jobs.gen_parts.create_parts")
+@patch("jobs.gen_parts.read_segment_png_heights", return_value=[100.0])
+@patch("jobs.gen_parts.apply_combined_parts")
+@patch("jobs.gen_parts.fetch_score_orientation", return_value="portrait")
 @patch("jobs.gen_parts.build_score_page_cache")
 @patch("jobs.gen_parts.get_local_cache")
 @patch("jobs.gen_parts._fetch_part_files", return_value=[])
@@ -26,6 +38,11 @@ def test_gen_parts_warms_cache_when_highres_missing(
     _parts: MagicMock,
     mock_cache_fn: MagicMock,
     mock_warm: MagicMock,
+    _orientation: MagicMock,
+    _apply_combined: MagicMock,
+    _heights: MagicMock,
+    _create_parts: MagicMock,
+    tmp_path,
 ) -> None:
     mock_segments.return_value = [
         {
@@ -46,18 +63,10 @@ def test_gen_parts_warms_cache_when_highres_missing(
     page_path = MagicMock()
     page_path.read_bytes.return_value = b"png"
     cache.ensure_score_page.return_value = page_path
+    cache.part_is_cached.return_value = True
     mock_cache_fn.return_value = cache
 
-    workdir = MagicMock()
-    workdir.exists.return_value = False
-    pages_dir = MagicMock()
-    segments_dir = MagicMock()
-    outdir = MagicMock()
-    workdir.__truediv__.side_effect = lambda name: {
-        "pages": pages_dir,
-        "segments": segments_dir,
-        "parts": outdir,
-    }[name]
+    workdir = tmp_path / "work"
 
     gen_parts._run_gen_parts("part01", workdir, job_id="job1")
 

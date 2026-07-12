@@ -74,6 +74,19 @@ def test_ensure_score_page_raises_when_missing(tmp_path: Path) -> None:
         cache.ensure_score_page("abc", "highres", 1)
 
 
+def test_store_part_file_replaces_existing(tmp_path: Path) -> None:
+    cache = _cache(tmp_path)
+    dest = cache.part_path("pub1", "violin.pdf")
+    dest.parent.mkdir(parents=True)
+    dest.write_bytes(b"old-part")
+
+    src = tmp_path / "violin.pdf"
+    src.write_bytes(b"new-part")
+    cache.store_part_file("pub1", src)
+
+    assert dest.read_bytes() == b"new-part"
+
+
 def test_write_preview_publishes_complete_dir(tmp_path: Path) -> None:
     cache = _cache(tmp_path)
     segments = tmp_path / "segments"

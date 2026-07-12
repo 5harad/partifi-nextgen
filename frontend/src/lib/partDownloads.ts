@@ -7,6 +7,10 @@ export type PartDownloadItem = {
   a4_url: string
 }
 
+export type PartsPageLocationState = {
+  pendingPartDownload?: string
+}
+
 export function partDownloadFilename(partsetId: string, fileName: string, format: 'letter' | 'a4') {
   return format === 'letter' ? `${partsetId}_${fileName}` : `${partsetId}_a4_${fileName}`
 }
@@ -36,24 +40,11 @@ export function partgenReturnPath(searchParams: URLSearchParams, accessId: strin
   return `/${accessId}`
 }
 
-export async function triggerPartFileDownload(url: string): Promise<void> {
-  try {
-    const res = await fetch(url, { credentials: 'include' })
-    if (!res.ok) {
-      window.location.assign(url)
-      return
-    }
-    const blob = await res.blob()
-    const filename = decodeURIComponent(url.split('/').pop() ?? 'part.pdf')
-    const objectUrl = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = objectUrl
-    anchor.download = filename
-    document.body.appendChild(anchor)
-    anchor.click()
-    anchor.remove()
-    URL.revokeObjectURL(objectUrl)
-  } catch {
-    window.location.assign(url)
-  }
+/** Start a file download from a stable page (after partgen navigation). */
+export function startPartFileDownload(url: string): void {
+  const iframe = document.createElement('iframe')
+  iframe.style.display = 'none'
+  iframe.src = url
+  document.body.appendChild(iframe)
+  window.setTimeout(() => iframe.remove(), 120_000)
 }

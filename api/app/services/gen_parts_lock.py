@@ -20,3 +20,7 @@ def try_acquire_gen_parts_lock(partset_id: str) -> bool:
 
 def release_gen_parts_lock(partset_id: str) -> None:
     get_redis().delete(_lock_key(partset_id))
+
+
+def gen_parts_lock_held(partset_id: str) -> bool:
+    return bool(get_redis().exists(_lock_key(partset_id)))

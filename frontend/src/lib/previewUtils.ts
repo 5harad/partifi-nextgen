@@ -1,4 +1,8 @@
-const PAGE_CHUNK_MAX = 2900
+import {
+  getDimensions,
+  type Orientation,
+} from './pageDimensions'
+
 const SLIDER_RANGE = 46
 
 /** Default line spacing for new parts (matches legacy DB default). */
@@ -38,16 +42,21 @@ export function abbreviate(str: string): string {
     .join(' ')
 }
 
-export function lowresHeight(highresPx: number): number {
-  return Math.round((highresPx * 475) / 3300)
+function previewScale(orientation: Orientation): number {
+  const dims = getDimensions(orientation)
+  return dims.previewPaneWidth / dims.highresWidth
 }
 
-export function lowresWidth(highresPx: number): number {
-  return Math.round((highresPx * 475) / 3300)
+export function lowresHeight(highresPx: number, orientation: Orientation = 'portrait'): number {
+  return Math.round(highresPx * previewScale(orientation))
 }
 
-export function spacingLowres(spacing: number): number {
-  return Math.round((spacing * 475) / 11)
+export function lowresWidth(highresPx: number, orientation: Orientation = 'portrait'): number {
+  return Math.round(highresPx * previewScale(orientation))
+}
+
+export function spacingLowres(spacing: number, orientation: Orientation = 'portrait'): number {
+  return Math.round(spacingHighres(spacing) * previewScale(orientation))
 }
 
 export function spacingHighres(spacing: number): number {
@@ -72,14 +81,16 @@ export function pageChunks(
   heights: number[],
   spacingHighresPx: number,
   breaks: number[],
+  orientation: Orientation = 'portrait',
 ): number[][] {
+  const pageChunkMax = getDimensions(orientation).pageChunkMax
   const chunks: number[][] = []
   let start = 0
   let h = 0
   for (let i = 0; i < segments.length; i++) {
     const segId = segments[i]
     const segH = heights[segId]
-    if (h + segH >= PAGE_CHUNK_MAX || breaks.includes(i - 1)) {
+    if (h + segH > pageChunkMax || breaks.includes(i - 1)) {
       if (start < i) {
         chunks.push(segments.slice(start, i))
       }

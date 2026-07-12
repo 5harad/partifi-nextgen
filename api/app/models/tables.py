@@ -22,6 +22,10 @@ class Score(Base):
     analysis_complete: Mapped[datetime | None] = mapped_column(DateTime)
     num_downloads: Mapped[int] = mapped_column(Integer, default=0)
     s3: Mapped[bool] = mapped_column(Boolean, default=False)
+    orientation: Mapped[str | None] = mapped_column(
+        Enum("portrait", "landscape", name="score_orientation"),
+        default="portrait",
+    )
 
 
 class Partset(Base):

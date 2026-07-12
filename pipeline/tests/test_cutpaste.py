@@ -1,4 +1,5 @@
 from pipeline.cutpaste import build_part_segment_map, page_chunks
+from pipeline.paste_layout import paste_page_chunk_max_px
 
 
 def _row(tags: str, ndx: int) -> dict:
@@ -44,8 +45,9 @@ def test_only_all_tags_yields_no_parts() -> None:
 
 
 def test_page_chunks_oversized_first_segment_no_leading_blank() -> None:
-    """First segment taller than PAGE_CHUNK_MAX must not create an empty first page."""
-    heights = [3300.0, 500.0, 500.0]
+    """First segment taller than the content band must not create an empty first page."""
+    max_px = paste_page_chunk_max_px("portrait")
+    heights = [float(max_px + 100), 500.0, 500.0]
     chunks = page_chunks([0, 1, 2], heights, spacing=30)
     assert chunks[0] == [0]
     assert all(len(c) > 0 for c in chunks)
@@ -64,3 +66,26 @@ def test_page_chunks_respects_break_after_first_segment() -> None:
 def test_page_chunks_normal_fit_on_one_page() -> None:
     chunks = page_chunks([0, 1, 2], [400.0, 400.0, 400.0], spacing=30)
     assert chunks == [[0, 1, 2]]
+
+
+def test_page_chunks_landscape_uses_shorter_page_height() -> None:
+    chunks = page_chunks([0, 1], [1200.0, 1200.0], spacing=30, orientation="landscape")
+    assert chunks == [[0], [1]]
+
+
+def test_page_chunks_respects_user_spacing() -> None:
+    """Larger spacing forces an earlier page break before footer overflow."""
+    heights = [1400.0, 1400.0]
+    tight = page_chunks([0, 1], heights, spacing=30, orientation="portrait")
+    loose = page_chunks([0, 1], heights, spacing=120, orientation="portrait")
+    assert tight == [[0, 1]]
+    assert loose == [[0], [1]]
+
+
+def test_page_chunks_exact_fit_stays_on_one_page() -> None:
+    """Segments that exactly fill the content band should not be split."""
+    max_px = paste_page_chunk_max_px("portrait")
+    spacing = 30
+    heights = [1400.0, max_px - 1400.0 - spacing]
+    chunks = page_chunks([0, 1], heights, spacing=spacing, orientation="portrait")
+    assert chunks == [[0, 1]]

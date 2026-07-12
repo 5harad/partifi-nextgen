@@ -6,7 +6,7 @@ import {
   ensurePartsByAccessId,
   retryPartsetPipelineByAccessId,
 } from '../lib/api'
-import { triggerPartFileDownload, partgenReturnPath } from '../lib/partDownloads'
+import { partgenReturnPath } from '../lib/partDownloads'
 import { pipelineErrorMessage, LOCK_BUSY_MESSAGE, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
 import { useNoIndex } from '../lib/useNoIndex'
 import { TransitionError, TransitionErrorButton } from '../components/TransitionError'
@@ -20,6 +20,7 @@ export function PartgenProgressPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [retrying, setRetrying] = useState(false)
   const pollRef = useRef<(() => void) | null>(null)
+  const ensuredRef = useRef(false)
   const previewError = import.meta.env.DEV ? searchParams.get('previewError') : null
   const pendingDownloadUrl = searchParams.get('download')
   const returnPath = accessId ? partgenReturnPath(searchParams, accessId) : '/'
@@ -37,10 +38,6 @@ export function PartgenProgressPage() {
     let timeoutId: number
     let failedAttempts = 0
 
-    void ensurePartsByAccessId(accessId).catch(() => {
-      // Polling will surface errors; ensure is best-effort on entry.
-    })
-
     const poll = async () => {
       try {
         const data = await getPartgenStatusByAccessId(accessId)
@@ -51,14 +48,19 @@ export function PartgenProgressPage() {
           return
         }
 
+        if (!data.is_complete && !data.in_progress && !ensuredRef.current) {
+          ensuredRef.current = true
+          void ensurePartsByAccessId(accessId).catch(() => {
+            // Polling will surface errors; ensure is best-effort on entry.
+          })
+        }
+
         setProgress(data.total_progress)
         failedAttempts = 0
 
         if (data.is_complete) {
           if (pendingDownloadUrl) {
-            void triggerPartFileDownload(pendingDownloadUrl).finally(() => {
-              if (!cancelled) navigate(returnPath)
-            })
+            navigate(returnPath, { state: { pendingPartDownload: pendingDownloadUrl } })
           } else {
             navigate(returnPath)
           }

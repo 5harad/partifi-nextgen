@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { TransitionError } from '../components/TransitionError'
 import { PartsDownloadPane } from '../components/parts/PartsDownloadPane'
 import { getPartsByAccessId } from '../lib/api'
 import { isPartsetAccessId } from '../lib/partsetRoutes'
+import { startPartFileDownload, type PartsPageLocationState } from '../lib/partDownloads'
 import type { PartsDataResponse } from '../types/preview'
 
 const PARTSET_NOT_FOUND_MESSAGE = 'Partset not found'
 
 export function PartsPage() {
   const { accessId } = useParams<{ accessId: string }>()
+  const location = useLocation()
+  const navigate = useNavigate()
   const [data, setData] = useState<PartsDataResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -43,7 +46,17 @@ export function PartsPage() {
     return () => {
       cancelled = true
     }
-  }, [accessId])
+  }, [accessId, location.key])
+
+  useEffect(() => {
+    if (!data?.parts_ready) return
+    const state = location.state as PartsPageLocationState | null
+    const pendingUrl = state?.pendingPartDownload
+    if (!pendingUrl) return
+
+    startPartFileDownload(pendingUrl)
+    navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: {} })
+  }, [data?.parts_ready, location.pathname, location.search, location.state, navigate])
 
   if (error) {
     return (

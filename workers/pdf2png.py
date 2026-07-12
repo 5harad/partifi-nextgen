@@ -6,8 +6,8 @@ import argparse
 import glob
 import logging
 import os
+import re
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 
@@ -16,9 +16,37 @@ from PIL import Image
 import db_conn
 from pdf_repair import burst_score_pages, run_subprocess_with_repair
 from pipeline.cut_segments import default_pool_size
+from pipeline.orientation_detect import detect_orientation_from_images
+from pipeline.page_dimensions import Orientation, get_dimensions
+from pipeline.page_render import render_page_native_lowres
 from pipeline.parallel import map_in_parallel
 
 logger = logging.getLogger(__name__)
+
+_PAGE_NUM_RE = re.compile(r"page-?(\d+)")
+
+
+def _page_number(path: str) -> int:
+    match = _PAGE_NUM_RE.search(os.path.basename(path))
+    if not match:
+        return 0
+    return int(match.group(1))
+
+
+def _detect_orientation_from_burst(tempdir: str) -> Orientation:
+    page_pdfs = sorted(glob.glob(os.path.join(tempdir, "page*.pdf")), key=_page_number)
+    if not page_pdfs:
+        return "portrait"
+    detect_dir = Path(tempdir) / "orient-detect"
+    native_im = render_page_native_lowres(Path(page_pdfs[0]), detect_dir)
+    detection = detect_orientation_from_images([(1, native_im)])
+    logger.info(
+        "Detected score orientation=%s (confidence=%.3f, uncertain=%s)",
+        detection.orientation,
+        detection.confidence,
+        detection.uncertain,
+    )
+    return detection.orientation
 
 
 def pdf2png(
@@ -27,7 +55,9 @@ def pdf2png(
     partset_id: str | None,
     num_tasks: int,
     score_id: str | None = None,
+    orientation: Orientation = "portrait",
 ) -> None:
+    dims = get_dimensions(orientation)
     outfile = os.path.basename(pdffile).rsplit(".", 1)[0] + ".png"
     highres_file = os.path.join(outdir, "highres", outfile)
     gs_cmd = [
@@ -39,7 +69,7 @@ def pdf2png(
         "-dDOINTERPOLATE",
         "-dUseCropBox",
         "-dPDFFitPage",
-        "-g2550x3300",
+        f"-g{dims.gs_canvas}",
         f"-sOutputFile={highres_file}",
         pdffile,
     ]
@@ -54,11 +84,11 @@ def pdf2png(
         os.remove(repair_path)
 
     im = Image.open(highres_file)
-    lowres_im = im.resize((600, 776), Image.LANCZOS)
+    lowres_im = im.resize(dims.lowres_size, Image.LANCZOS)
     lowres_file = os.path.join(outdir, "lowres", outfile)
     lowres_im.save(lowres_file)
 
-    thumb_im = im.resize((100, 129), Image.LANCZOS)
+    thumb_im = im.resize(dims.thumb_size, Image.LANCZOS)
     thumb_file = os.path.join(outdir, "thumbs", outfile)
     thumb_im.save(thumb_file)
 
@@ -84,7 +114,8 @@ def par_pdf2png(
     partset_id: str | None,
     *,
     score_id: str | None = None,
-) -> None:
+    orientation: Orientation | None = None,
+) -> Orientation:
     pdffile = os.path.abspath(pdffile)
     outdir = os.path.abspath(outdir)
     tempdir = tempfile.mkdtemp(dir="/tmp/partifi")
@@ -94,29 +125,47 @@ def par_pdf2png(
     burst_score_pages(pdffile, tempdir)
     os.chdir(origpath)
 
+    if orientation is None:
+        orientation = _detect_orientation_from_burst(tempdir)
+
     for sub in ("highres", "lowres", "thumbs"):
         os.makedirs(os.path.join(outdir, sub), exist_ok=True)
 
-    pdfpages = glob.glob(os.path.join(tempdir, "page*.pdf"))
+    pdfpages = sorted(glob.glob(os.path.join(tempdir, "page*.pdf")), key=_page_number)
     num_tasks = max(len(pdfpages), 1)
-    params = [(pdfpage, outdir, partset_id, num_tasks, score_id) for pdfpage in pdfpages]
+    params = [
+        (pdfpage, outdir, partset_id, num_tasks, score_id, orientation) for pdfpage in pdfpages
+    ]
 
     workers = default_pool_size(len(params))
     map_in_parallel(pdf2png_star, params, workers=workers)
 
     shutil.rmtree(tempdir)
+    return orientation
 
 
-def convert_score(partset_id: str, pdf_path: Path, workdir: Path) -> None:
+def convert_score(
+    partset_id: str,
+    pdf_path: Path,
+    workdir: Path,
+    *,
+    orientation: Orientation | None = None,
+) -> Orientation:
     db_conn.execute(
         "UPDATE partsets SET status = 'convert', convert_start = NOW(), convert_progress = 0 WHERE id = :id",
         {"id": partset_id},
     )
-    par_pdf2png(str(pdf_path), str(workdir), partset_id)
+    orientation = par_pdf2png(
+        str(pdf_path),
+        str(workdir),
+        partset_id,
+        orientation=orientation,
+    )
     db_conn.execute(
         "UPDATE partsets SET convert_complete = NOW(), convert_progress = 100 WHERE id = :id",
         {"id": partset_id},
     )
+    return orientation
 
 
 def main() -> None:

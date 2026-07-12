@@ -20,6 +20,9 @@ import {
   spacingToSliderUpTop,
   uniqueSorted,
 } from '../../lib/previewUtils'
+import { getPreviewPageStride, getPageBreakMarkerWidth } from '../../lib/pageDimensions'
+import { getPreviewPageLayout, previewPageCssVars } from '../../lib/previewPageLayout'
+import { previewHeaderFontFamily } from '../../lib/previewHeaderFont'
 import { TransitionError } from '../TransitionError'
 import { TransitionWait } from '../TransitionWait'
 import type { PreviewDataResponse } from '../../types/preview'
@@ -49,7 +52,11 @@ export function PreviewEditor({ privateId }: Props) {
   const [hoverSeg, setHoverSeg] = useState<number | null>(null)
   const [sliderUpTop, setSliderUpTop] = useState(42)
   const draggingSlider = useRef<'up' | 'down' | null>(null)
+  const sliderGrabOffsetY = useRef(0)
+  const sliderUpTopRef = useRef(sliderUpTop)
+  const partRef = useRef(part)
   const [reloadToken, setReloadToken] = useState(0)
+  const [pageTransition, setPageTransition] = useState(false)
 
   useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {
@@ -124,12 +131,21 @@ export function PreviewEditor({ privateId }: Props) {
 
   const layout = useMemo(() => {
     if (!data || !part || !partSegments[part]) return { chunks: [] as number[][], numPages: 1 }
+    const orientation = data.orientation ?? 'portrait'
     const segList = partSegments[part]
     const spacingPx = spacingHighres(spacings[part] ?? 0.1)
     const partBreaks = breaks[part] ?? []
-    const chunks = pageChunks(segList, data.segment_heights, spacingPx, partBreaks)
+    const chunks = pageChunks(segList, data.segment_heights, spacingPx, partBreaks, orientation)
     return { chunks, numPages: chunks.length }
   }, [data, part, partSegments, spacings, breaks])
+
+  useEffect(() => {
+    setPageTransition(false)
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setPageTransition(true))
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [data?.orientation, part, layout.numPages])
 
   useEffect(() => {
     setPageNum((p) => Math.min(p, layout.numPages))
@@ -139,6 +155,30 @@ export function PreviewEditor({ privateId }: Props) {
     const spacing = spacings[part] ?? 0.1
     setSliderUpTop(spacingToSliderUpTop(spacing))
   }, [part, spacings])
+
+  useEffect(() => {
+    sliderUpTopRef.current = sliderUpTop
+  }, [sliderUpTop])
+
+  useEffect(() => {
+    partRef.current = part
+  }, [part])
+
+  const applySliderFromClientY = useCallback((clientY: number, which: 'up' | 'down') => {
+    const barId =
+      which === 'down' ? 'spacing-scroll-bar-bottom' : 'spacing-scroll-bar-top'
+    const bar = document.getElementById(barId)
+    if (!bar) return
+    const rect = bar.getBoundingClientRect()
+    const handleTop = Math.max(
+      0,
+      Math.min(SLIDER_RANGE, clientY - rect.top - sliderGrabOffsetY.current),
+    )
+    const upTop = which === 'down' ? SLIDER_RANGE - handleTop : handleTop
+    const snapped = applySliderSnap(Math.round(upTop))
+    setSliderUpTop(snapped)
+    setSpacings((prev) => ({ ...prev, [partRef.current]: sliderUpTopToSpacing(snapped) }))
+  }, [])
 
   const toggleBreak = useCallback(
     (segIndex: number) => {
@@ -156,27 +196,22 @@ export function PreviewEditor({ privateId }: Props) {
 
   const handleSliderMouseDown = (which: 'up' | 'down') => (e: React.MouseEvent) => {
     e.preventDefault()
+    const barId =
+      which === 'down' ? 'spacing-scroll-bar-bottom' : 'spacing-scroll-bar-top'
+    const bar = document.getElementById(barId)
+    if (!bar) return
+    const rect = bar.getBoundingClientRect()
+    const currentHandleTop =
+      which === 'down' ? SLIDER_RANGE - sliderUpTopRef.current : sliderUpTopRef.current
+    sliderGrabOffsetY.current = e.clientY - rect.top - currentHandleTop
     draggingSlider.current = which
+    applySliderFromClientY(e.clientY, which)
   }
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!draggingSlider.current) return
-      const barId =
-        draggingSlider.current === 'down'
-          ? 'spacing-scroll-bar-bottom'
-          : 'spacing-scroll-bar-top'
-      const bar = document.getElementById(barId)
-      if (!bar) return
-      const rect = bar.getBoundingClientRect()
-      const handleTop = Math.max(0, Math.min(SLIDER_RANGE, e.clientY - rect.top))
-      const upTop =
-        draggingSlider.current === 'down'
-          ? SLIDER_RANGE - handleTop
-          : handleTop
-      const snapped = applySliderSnap(Math.round(upTop))
-      setSliderUpTop(snapped)
-      setSpacings((prev) => ({ ...prev, [part]: sliderUpTopToSpacing(snapped) }))
+      applySliderFromClientY(e.clientY, draggingSlider.current)
     }
     const onUp = () => {
       draggingSlider.current = null
@@ -187,7 +222,7 @@ export function PreviewEditor({ privateId }: Props) {
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
-  }, [part])
+  }, [applySliderFromClientY])
 
   const handlePartifi = async () => {
     try {
@@ -271,7 +306,24 @@ export function PreviewEditor({ privateId }: Props) {
     )
   }
 
-  const spacingPx = spacingLowres(spacings[part] ?? 0.1)
+  const orientation = data.orientation ?? 'portrait'
+  const isLandscape = orientation === 'landscape'
+  const pageLayout = getPreviewPageLayout(orientation)
+  const pageStride = getPreviewPageStride(orientation)
+  const pageBreakWidth = getPageBreakMarkerWidth(orientation)
+  const headerFontFamily = previewHeaderFontFamily(
+    data.title ?? '',
+    data.composer ?? '',
+    part,
+    data.partset_id,
+  )
+  const previewPaneStyle = {
+    ...previewPageCssVars(pageLayout),
+    '--page-break-width': `${pageBreakWidth}px`,
+    '--page-break-delete-left': `${pageBreakWidth - 15}px`,
+    '--part-page-font-family': headerFontFamily,
+  } as React.CSSProperties
+  const spacingPx = spacingLowres(spacings[part] ?? 0.1, orientation)
   const partBreaks = breaks[part] ?? []
   const canGoPrev = pageNum > 1
   const canGoNext = pageNum < layout.numPages
@@ -292,7 +344,11 @@ export function PreviewEditor({ privateId }: Props) {
         width={949}
         alt=""
       />
-      <div id="preview-pane">
+      <div
+        id="preview-pane"
+        className={isLandscape ? 'orientation-landscape' : undefined}
+        style={previewPaneStyle}
+      >
         <div id="preview-header">STEP 3. &nbsp; Preview the parts</div>
         <div
           id="adjust-spacing"
@@ -316,26 +372,57 @@ export function PreviewEditor({ privateId }: Props) {
         {mode === 'spacing' && (
           <>
             <div id="part-pages-viewer">
-              <div id="part-pages" style={{ left: `${-380 * (pageNum - 1)}px` }}>
+              <div
+                id="part-pages"
+                className={pageTransition ? 'part-pages-animated' : undefined}
+                style={{ left: `${-pageStride * (pageNum - 1)}px` }}
+              >
                 {layout.chunks.map((chunk, chunkIdx) => (
-                  <div
-                    key={chunkIdx}
-                    className="part-page"
-                    style={chunkIdx > 0 ? { left: `${chunkIdx * 380}px` } : undefined}
-                  >
+                    <div
+                      key={chunkIdx}
+                      className="part-page"
+                      style={chunkIdx > 0 ? { left: `${chunkIdx * pageStride}px` } : undefined}
+                    >
+                      <img
+                        className="part-page-logo"
+                        src="/images/scroll.png"
+                        width={pageLayout.logoSize}
+                        height={pageLayout.logoSize}
+                        alt=""
+                      />
+                      {data.title ? (
+                        <div className="part-page-title">{data.title}</div>
+                      ) : null}
+                      {data.composer ? (
+                        <div className="part-page-composer">{data.composer}</div>
+                      ) : null}
+                      <div className="part-page-part-name">{part}</div>
+                      <span className="part-page-partifi-id">
+                        partifi.org/{data.partset_id}
+                      </span>
+                      <div className="part-page-rule" />
+                      <div className="part-page-content">
                     {chunk.map((segId, segIndexInPart) => {
                       const globalIndex = partSegments[part]?.indexOf(segId) ?? segIndexInPart
-                      const lrH = lowresHeight(data.segment_heights[segId])
-                      const lrW = lowresWidth(data.segment_widths[segId])
+                      const lrH = lowresHeight(data.segment_heights[segId], orientation)
+                      const lrW = lowresWidth(data.segment_widths[segId], orientation)
                       const isCue = cues.has(segId)
                       const hasBreakAfter = partBreaks.includes(globalIndex)
+                      const isLastOnPage = segIndexInPart === chunk.length - 1
+                      const marginBottom = hasBreakAfter
+                        ? isLastOnPage
+                          ? 0
+                          : 5
+                        : isLastOnPage
+                          ? 0
+                          : spacingPx
                       return (
-                        <div key={segId}>
+                        <div key={segId} className="part-segment-slot">
                           <div
                             className={`partseg${isCue ? ' cue' : ''}`}
                             style={{
                               height: lrH,
-                              marginBottom: hasBreakAfter ? 5 : spacingPx,
+                              marginBottom,
                             }}
                             onClick={() => toggleBreak(globalIndex)}
                             onMouseEnter={() => setHoverSeg(globalIndex)}
@@ -345,7 +432,7 @@ export function PreviewEditor({ privateId }: Props) {
                             {data.segment_labels[segId] && (
                               <div
                                 className="rotate"
-                                style={{ width: lrH - 2, top: lrH }}
+                                style={{ width: lrH - 2, top: lrH / 2 }}
                               >
                                 {data.segment_labels[segId]}
                               </div>
@@ -357,18 +444,16 @@ export function PreviewEditor({ privateId }: Props) {
                               style={{ left: data.left_margin }}
                               alt=""
                             />
-                            {hoverSeg === globalIndex &&
-                              !partBreaks.includes(globalIndex) && (
-                                <div
-                                  className="proposed-break"
-                                  style={{
-                                    top:
-                                      lrH +
-                                      Math.min(10, Math.round(spacingPx / 2)),
-                                  }}
-                                />
-                              )}
                           </div>
+                          {hoverSeg === globalIndex &&
+                            !partBreaks.includes(globalIndex) && (
+                              <div
+                                className="proposed-break"
+                                style={{
+                                  top: lrH + marginBottom / 2,
+                                }}
+                              />
+                            )}
                           {hasBreakAfter && (
                             <div className="page-break">
                               page break
@@ -385,6 +470,8 @@ export function PreviewEditor({ privateId }: Props) {
                         </div>
                       )
                     })}
+                    </div>
+                    <div className="part-page-footer">Page {chunkIdx + 1}</div>
                   </div>
                 ))}
               </div>

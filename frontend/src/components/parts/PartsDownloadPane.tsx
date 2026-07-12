@@ -5,6 +5,7 @@ import {
   ensurePartsByAccessId,
   getCsrfToken,
   getPartgenStatusByAccessId,
+  getPartsByAccessId,
   updatePartsetMetadata,
 } from '../../lib/api'
 import { fetchFavoriteStatus, updateFavorite } from '../../lib/authApi'
@@ -87,7 +88,9 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
         const status = await getPartgenStatusByAccessId(accessId)
         if (cancelled) return
         if (status.is_complete) {
-          onDataChange((prev) => ({ ...prev, parts_ready: true }))
+          const fresh = await getPartsByAccessId(accessId)
+          if (cancelled) return
+          onDataChange(fresh)
           return
         }
       } catch {

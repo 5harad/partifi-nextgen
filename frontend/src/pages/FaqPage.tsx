@@ -13,9 +13,9 @@ const FAQ_ITEMS: FaqItem[] = [
     answer: 'Yes! Partifi is completely free and open to everyone.',
   },
   {
-    question: 'Can I partifi a landscape score? How do I rotate a score before I partifi it?',
+    question: 'Can I partifi a landscape score?',
     answer:
-      'Partifi doesn\u2019t directly support landscape scores. However, it often works to rotate the score before importing it into Partifi. For example, on a Mac, you can create a portrait version of the landscape score by opening the PDF in Preview, selecting print, ensuring the \u201cauto rotate\u201d option is unselected, and then \u201cSave as PDF\u201d. But in some cases, the lines of music in the rotated score are too small to be usable!',
+      'Yes! Partifi supports landscape scores and detects page orientation automatically when you import a PDF. You don\u2019t need to rotate a true landscape PDF to portrait first.\n\nSometimes a score is landscape in disguise: the PDF page is portrait-shaped, but the music is turned sideways on the page. Partifi goes by the page dimensions, so those files import as portrait and won\u2019t look right.\n\nThe fix is to rotate the PDF before importing. On a Mac, for example, open it in Preview, choose Print, turn off \u201cAuto Rotate,\u201d and use \u201cSave as PDF\u201d to create a properly oriented copy\u2014then import that file.\n\nIf a page is only slightly crooked (not turned 90\u00b0), you can fine-tune it with the page rotation control in the segment editor (Step 2).',
   },
   {
     question: 'Partifi doesn\u2019t seem to be working correctly. What can I do?',
@@ -29,9 +29,9 @@ const FAQ_ITEMS: FaqItem[] = [
       'Your work on the score is automatically saved every time you make a change. To return to it, just bookmark the URL. Alternatively, the score will be added to your Partifi library automatically if you are logged in to the site.',
   },
   {
-    question: 'Is there a way that I can log into Partifi other than through Google?',
+    question: 'How do I log in to Partifi?',
     answer:
-      'Partifi should all work fine without logging in through Google. You don\u2019t need to log in to use the app and most of the functionality is there even if you don\u2019t log in. The only part of Partifi that you need to login to access, is the Partifi library. If you don\u2019t have a Google account, you need to save the links of your Partifi scores on your personal computer, and access them again that way.',
+      'You can log in with your Google account. But you don\u2019t need to log in to use most of Partifi \u2014 import, edit, preview, and download parts all work without an account. Logging in is only required for the Partifi library, which saves your scores so you can return to them later. If you don\u2019t have a Google account, bookmark the link to each score on your computer and use that to open it again.',
   },
   {
     question: 'Does Partifi make scores from parts?',
@@ -63,7 +63,9 @@ export function FaqPage() {
                 <p className="faq-question">
                   {index + 1}. {item.question}
                 </p>
-                <p>{item.answer}</p>
+                {item.answer.split('\n\n').map((paragraph) => (
+                  <p key={paragraph}>{paragraph}</p>
+                ))}
               </div>
             ))}
 

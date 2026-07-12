@@ -8,9 +8,16 @@ from unittest.mock import MagicMock
 
 import httpx
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-WORKERS_ROOT = REPO_ROOT / "workers"
-for root in (str(REPO_ROOT), str(WORKERS_ROOT)):
+def _workers_root() -> Path:
+    here = Path(__file__).resolve()
+    for candidate in (here.parents[2] / "workers", Path("/workers")):
+        if (candidate / "imslp_client.py").is_file():
+            return candidate
+    raise ModuleNotFoundError("workers tree not found (mount ./workers for Docker tests)")
+
+
+WORKERS_ROOT = _workers_root()
+for root in (str(WORKERS_ROOT.parent), str(WORKERS_ROOT)):
     if root not in sys.path:
         sys.path.insert(0, root)
 

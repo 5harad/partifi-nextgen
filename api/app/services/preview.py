@@ -2,19 +2,26 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
 
+from PIL import Image
+
 from sqlalchemy.orm import Session
 
-from app.models import Break, Part, Partset, Segment
+from app.models import Break, Part, Partset, Score, Segment
 from app.config import get_settings
 from app.services.local_cache import get_local_cache
 from app.services.partset_touch import touch_partset_access
-from app.services.gen_parts_lock import release_gen_parts_lock, try_acquire_gen_parts_lock
+from app.services.gen_parts_lock import (
+    gen_parts_lock_held,
+    release_gen_parts_lock,
+    try_acquire_gen_parts_lock,
+)
 from app.services.partset_failure import clear_partset_failure
 from app.services.queue import enqueue_job
 from app.services.downloads import part_file_url, score_pdf_url_for_partset
@@ -29,7 +36,10 @@ for root in (APP_ROOT, REPO_ROOT):
     if root_str not in sys.path:
         sys.path.insert(0, root_str)
 
-from pipeline.cut_segments import cut_segment_tasks  # noqa: E402
+from pipeline.cut_segments import (  # noqa: E402
+    cut_segment_tasks,
+    read_segment_png_heights,
+)
 from pipeline.cutpaste import (  # noqa: E402
     apply_combined_parts,
     build_part_segment_map,
@@ -57,6 +67,10 @@ def _partgen_total_progress(status: str | None, progress: float) -> float:
 def _partgen_in_progress(partset: Partset) -> bool:
     if partset.error:
         return False
+    if partset.parts_ready:
+        return False
+    if gen_parts_lock_held(partset.id):
+        return True
     if (
         partset.status == "convert"
         and partset.cut_start is None
@@ -70,8 +84,8 @@ def _partgen_in_progress(partset: Partset) -> bool:
     return False
 
 
-def partgen_progress_payload(partset: Partset) -> dict:
-    is_complete = bool(partset.parts_ready) and not partset.error
+def partgen_progress_payload(partset: Partset, db: Session | None = None) -> dict:
+    del db  # Reserved for callers; completion is driven by DB state after worker stores PDFs.
     progress = 0.0
     if partset.status == "cut":
         progress = partset.cut_progress or 0.0
@@ -80,13 +94,18 @@ def partgen_progress_payload(partset: Partset) -> dict:
     elif partset.status == "convert":
         progress = partset.convert_progress or 0.0
 
+    in_progress = _partgen_in_progress(partset)
+    is_complete = bool(partset.parts_ready) and not partset.error
+
     if is_complete:
         total_progress = 100.0
-    elif not _partgen_in_progress(partset):
+    elif not in_progress:
         progress = 0.0
         total_progress = 0.0
     else:
         total_progress = _partgen_total_progress(partset.status, progress)
+        if total_progress == 0.0 and gen_parts_lock_held(partset.id):
+            total_progress = 1.0
 
     return {
         "error": partset.error,
@@ -94,6 +113,7 @@ def partgen_progress_payload(partset: Partset) -> dict:
         "progress": progress,
         "total_progress": total_progress,
         "is_complete": is_complete,
+        "in_progress": in_progress,
     }
 
 
@@ -163,46 +183,71 @@ def _preview_scratch_dir() -> Path:
     return scratch
 
 
+_PREVIEW_HEIGHTS_NAME = ".segment_heights.json"
+
+
+def _preview_cut_tasks(
+    segment_rows: list[dict],
+    pages_dir: Path,
+    segments_dir: Path,
+) -> list[tuple[Path, float, float, float, float, float, Path]]:
+    tasks: list[tuple[Path, float, float, float, float, float, Path]] = []
+    for ndx, row in enumerate(segment_rows):
+        page_path = pages_dir / f"page-{row['page']}.png"
+        out_path = segments_dir / f"s{ndx}.png"
+        tasks.append(
+            (
+                page_path,
+                row["rotation"],
+                row["left_margin"],
+                row["top"],
+                row["right_margin"],
+                row["bottom"],
+                out_path,
+            )
+        )
+    return tasks
+
+
 def _ensure_preview_segments(
     partset: Partset,
     segment_rows: list[dict],
     fingerprint: str,
-) -> None:
+) -> list[float]:
     cache = get_local_cache()
     num_segments = len(segment_rows)
-    if cache.preview_is_valid(partset.id, fingerprint, num_segments):
-        return
+    preview_dir = cache.preview_dir(partset.id)
+    heights_file = preview_dir / _PREVIEW_HEIGHTS_NAME
+    pages_needed = sorted({row["page"] for row in segment_rows})
+
+    if cache.preview_is_valid(partset.id, fingerprint, num_segments) and heights_file.is_file():
+        return [float(h) for h in json.loads(heights_file.read_text())]
 
     work_root = Path(tempfile.mkdtemp(prefix=f"preview-{partset.id}-", dir=_preview_scratch_dir()))
     try:
-        pages_dir = work_root / "pages"
-        segments_dir = work_root / "segments"
-        pages_dir.mkdir(parents=True)
-        segments_dir.mkdir(parents=True)
+        pages_lowres = work_root / "pages-lowres"
+        pages_highres = work_root / "pages-highres"
+        segments_lowres = work_root / "segments-lowres"
+        segments_highres = work_root / "segments-highres"
+        for directory in (pages_lowres, pages_highres, segments_lowres, segments_highres):
+            directory.mkdir(parents=True)
 
-        pages_needed = sorted({row["page"] for row in segment_rows})
         for page in pages_needed:
-            local_page = pages_dir / f"page-{page}.png"
-            cached = cache.ensure_score_page(partset.score_id, "lowres", page)
-            local_page.write_bytes(cached.read_bytes())
-
-        cut_tasks: list[tuple[Path, float, float, float, float, float, Path]] = []
-        for ndx, row in enumerate(segment_rows):
-            page_path = pages_dir / f"page-{row['page']}.png"
-            out_path = segments_dir / f"s{ndx}.png"
-            cut_tasks.append(
-                (
-                    page_path,
-                    row["rotation"],
-                    row["left_margin"],
-                    row["top"],
-                    row["right_margin"],
-                    row["bottom"],
-                    out_path,
-                )
+            lowres_path = pages_lowres / f"page-{page}.png"
+            lowres_path.write_bytes(
+                cache.ensure_score_page(partset.score_id, "lowres", page).read_bytes()
             )
-        cut_segment_tasks(cut_tasks)
-        cache.write_preview(partset.id, fingerprint, segments_dir)
+            highres_path = pages_highres / f"page-{page}.png"
+            highres_path.write_bytes(
+                cache.ensure_score_page(partset.score_id, "highres", page).read_bytes()
+            )
+
+        cut_segment_tasks(_preview_cut_tasks(segment_rows, pages_lowres, segments_lowres))
+        cut_segment_tasks(_preview_cut_tasks(segment_rows, pages_highres, segments_highres))
+        segment_heights = read_segment_png_heights(segments_highres, num_segments)
+        cache.write_preview(partset.id, fingerprint, segments_lowres)
+        heights_file.write_text(json.dumps(segment_heights))
+        return segment_heights
     finally:
         shutil.rmtree(work_root, ignore_errors=True)
 
@@ -218,11 +263,14 @@ def get_preview_data(db: Session, partset: Partset) -> dict:
 
     image_status = ensure_score_pages_warming(db, partset.score_id)
     if not image_status["images_ready"]:
+        score = db.get(Score, partset.score_id) if partset.score_id else None
+        orientation = score.orientation if score and score.orientation else "portrait"
         return {
             "partset_id": partset.id,
             "private_id": partset.private_id or "",
             "title": partset.title,
             "composer": partset.composer,
+            "orientation": orientation,
             "part_names": [],
             "combined_part_names": [],
             "part_segments": {},
@@ -262,11 +310,12 @@ def get_preview_data(db: Session, partset: Partset) -> dict:
         spacings.setdefault(name, 0.1)
 
     fingerprint = LocalCache.preview_fingerprint(segment_rows)
-    _ensure_preview_segments(partset, segment_rows, fingerprint)
+    segment_heights = _ensure_preview_segments(partset, segment_rows, fingerprint)
     touch_partset_access(db, partset)
 
-    segment_heights = [prct2pixel(h) for h in heights_pct]
-    segment_widths = [prct2pixel(w, "width") for w in widths_pct]
+    score = db.get(Score, partset.score_id)
+    orientation = score.orientation if score and score.orientation else "portrait"
+    segment_widths = [prct2pixel(w, "width", orientation=orientation) for w in widths_pct]
     private_id = partset.private_id or ""
 
     segment_urls = {
@@ -287,7 +336,8 @@ def get_preview_data(db: Session, partset: Partset) -> dict:
         "segment_labels": labels,
         "breaks": breaks,
         "spacings": spacings,
-        "left_margin": preview_left_margin(widths_pct),
+        "left_margin": preview_left_margin(widths_pct, orientation=orientation),
+        "orientation": orientation,
         "segment_urls": segment_urls,
         "images_ready": True,
         "images_warming": False,
@@ -366,21 +416,6 @@ def ensure_parts_if_needed(db: Session, partset: Partset) -> str | None:
         return start_part_generation(db, partset)
     except ValueError:
         return None
-
-
-def ensure_part_file_on_cache_miss(db: Session, partset: Partset, filename: str) -> None:
-    """Start part regeneration when a cached PDF is missing (evicted or invalidated)."""
-    cache = get_local_cache()
-    if cache.part_is_cached(partset.id, filename):
-        return
-    cleared_ready = False
-    if partset.parts_ready:
-        partset.parts_ready = False
-        partset.mod_ts = datetime.utcnow()
-        cleared_ready = True
-    job_id = ensure_parts_if_needed(db, partset)
-    if cleared_ready and job_id is None:
-        db.commit()
 
 
 def start_part_generation(db: Session, partset: Partset) -> str | None:

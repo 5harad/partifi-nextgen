@@ -8,8 +8,6 @@ import {
 } from '../../lib/segmentTagSuggestions'
 import { TagsInput } from './TagsInput'
 import {
-  VIEWER_HEIGHT,
-  VIEWER_WIDTH,
   MIN_SEGMENT_GAP,
   buildPageData,
   clampSegmentTopPx,
@@ -22,6 +20,11 @@ import {
   pageDataAreEqual,
   regionsFromPageData,
 } from '../../lib/segmentUtils'
+import { getViewerDimensions, type Orientation } from '../../lib/pageDimensions'
+import {
+  getSegmentEditorLayout,
+  segmentEditorCssVars,
+} from '../../lib/segmentEditorLayout'
 import type { PageSegmentData, RegionState, SegmentDataResponse } from '../../types/segment'
 
 type Props = {
@@ -32,6 +35,16 @@ export function SegmentEditor({ data }: Props) {
   const navigate = useNavigate()
   const segmenterRef = useRef<HTMLDivElement>(null)
   const sliderRef = useRef<HTMLDivElement>(null)
+
+  const orientation: Orientation = data.orientation ?? 'portrait'
+  const { width: viewerWidth, height: viewerHeight } = getViewerDimensions(orientation)
+  const segmentLayout = useMemo(() => getSegmentEditorLayout(orientation), [orientation])
+  const segmentCssVars = useMemo(
+    () => segmentEditorCssVars(segmentLayout),
+    [segmentLayout],
+  )
+  const thumbStride = segmentLayout.thumbStride
+  const isLandscape = orientation === 'landscape'
 
   const [pagesData, setPagesData] = useState(() => {
     const pages = { ...data.pages }
@@ -46,14 +59,18 @@ export function SegmentEditor({ data }: Props) {
 
   const [pageNum, setPageNum] = useState(1)
   const [previewerStart, setPreviewerStart] = useState(1)
+  const [thumbTransition, setThumbTransition] = useState(false)
   const [regions, setRegions] = useState<RegionState[]>(() =>
-    regionsFromPageData(pagesData.p1 ?? { left_margin: 0, right_margin: 100, rotation: 0, segments: [] }),
+    regionsFromPageData(
+      pagesData.p1 ?? { left_margin: 0, right_margin: 100, rotation: 0, segments: [] },
+      orientation,
+    ),
   )
   const [leftMarginPx, setLeftMarginPx] = useState(() =>
-    marginPctToPx(pagesData.p1?.left_margin ?? 0),
+    marginPctToPx(pagesData.p1?.left_margin ?? 0, orientation),
   )
   const [rightMarginPx, setRightMarginPx] = useState(() =>
-    marginPctToPx(pagesData.p1?.right_margin ?? 100),
+    marginPctToPx(pagesData.p1?.right_margin ?? 100, orientation),
   )
   const [rotation, setRotation] = useState(pagesData.p1?.rotation ?? 0)
   const serverPageDataRef = useRef<PageSegmentData>(
@@ -80,14 +97,22 @@ export function SegmentEditor({ data }: Props) {
     stateRef.current = { regions, leftMarginPx, rightMarginPx, rotation, pageNum, pagesData }
   }, [regions, leftMarginPx, rightMarginPx, rotation, pageNum, pagesData])
 
+  useEffect(() => {
+    setThumbTransition(false)
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setThumbTransition(true))
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [orientation])
+
   const currentPageKey = `p${pageNum}`
   const pageImageUrl = data.image_urls.lowres[String(pageNum)]
-  const layouts = useMemo(() => computeRegionLayouts(regions), [regions])
+  const layouts = useMemo(() => computeRegionLayouts(regions, orientation), [regions, orientation])
 
   const leftMargin = Math.min(leftMarginPx, rightMarginPx)
   const rightMargin = Math.max(leftMarginPx, rightMarginPx)
   const leftGrayWidth = Math.min(leftMarginPx, rightMarginPx) + 7
-  const rightGrayWidth = 593 - Math.max(leftMarginPx, rightMarginPx)
+  const rightGrayWidth = viewerWidth - 7 - Math.max(leftMarginPx, rightMarginPx)
 
   const sliderHandleLeft = Math.min(99, Math.round(50 + -rotation * 5))
 
@@ -113,14 +138,15 @@ export function SegmentEditor({ data }: Props) {
     (nextRegions: RegionState[]) => {
       const pageData = buildPageData(
         nextRegions,
-        marginPxToPct(leftMargin),
-        marginPxToPct(rightMargin),
+        marginPxToPct(leftMargin, orientation),
+        marginPxToPct(rightMargin, orientation),
         rotation,
+        orientation,
       )
       const allPages = { ...stateRef.current.pagesData, [currentPageKey]: pageData }
       return syncWithSuggestions(nextRegions, allPages)
     },
-    [currentPageKey, leftMargin, rightMargin, rotation, syncWithSuggestions],
+    [currentPageKey, leftMargin, rightMargin, rotation, syncWithSuggestions, orientation],
   )
 
   const refreshSuggestions = useCallback(() => {
@@ -131,9 +157,10 @@ export function SegmentEditor({ data }: Props) {
     (nextRegions: RegionState[]) => {
       const pageData = buildPageData(
         nextRegions,
-        marginPxToPct(leftMargin),
-        marginPxToPct(rightMargin),
+        marginPxToPct(leftMargin, orientation),
+        marginPxToPct(rightMargin, orientation),
         rotation,
+        orientation,
       )
       const allPages = { ...stateRef.current.pagesData, [currentPageKey]: pageData }
       const suggested = applySuggestionsToRegions(
@@ -150,7 +177,7 @@ export function SegmentEditor({ data }: Props) {
       setTagList(buildTagList(allPages, data.num_pages))
       return suggested
     },
-    [currentPageKey, leftMargin, rightMargin, rotation, pageNum, data.num_pages],
+    [currentPageKey, leftMargin, rightMargin, rotation, pageNum, data.num_pages, orientation],
   )
 
   useEffect(() => {
@@ -192,11 +219,12 @@ export function SegmentEditor({ data }: Props) {
   const getCurrentPageData = useCallback(() => {
     return buildPageData(
       regions,
-      marginPxToPct(leftMargin),
-      marginPxToPct(rightMargin),
+      marginPxToPct(leftMargin, orientation),
+      marginPxToPct(rightMargin, orientation),
       rotation,
+      orientation,
     )
-  }, [regions, leftMargin, rightMargin, rotation])
+  }, [regions, leftMargin, rightMargin, rotation, orientation])
 
   const persistPage = useCallback(
     async (page: number, pageData: PageSegmentData, csrfToken: string) => {
@@ -214,7 +242,7 @@ export function SegmentEditor({ data }: Props) {
       segments: [],
     }
     serverPageDataRef.current = JSON.parse(JSON.stringify(pageData))
-    const rawRegions = regionsFromPageData(pageData)
+    const rawRegions = regionsFromPageData(pageData, orientation)
     const suggested = applySuggestionsToRegions(
       rawRegions,
       allPages,
@@ -225,8 +253,8 @@ export function SegmentEditor({ data }: Props) {
     )
     setRegions(suggested)
     setTagList(buildTagList(allPages, data.num_pages))
-    setLeftMarginPx(marginPctToPx(pageData.left_margin))
-    setRightMarginPx(marginPctToPx(pageData.right_margin))
+    setLeftMarginPx(marginPctToPx(pageData.left_margin, orientation))
+    setRightMarginPx(marginPctToPx(pageData.right_margin, orientation))
     setRotation(pageData.rotation)
     setPageNum(nextPage)
   }
@@ -245,9 +273,10 @@ export function SegmentEditor({ data }: Props) {
 
       const pageData = buildPageData(
         currentRegions,
-        marginPxToPct(Math.min(leftPx, rightPx)),
-        marginPxToPct(Math.max(leftPx, rightPx)),
+        marginPxToPct(Math.min(leftPx, rightPx), orientation),
+        marginPxToPct(Math.max(leftPx, rightPx), orientation),
         rot,
+        orientation,
       )
       const key = `p${current}`
       const updatedPages = { ...currentPages, [key]: pageData }
@@ -268,7 +297,7 @@ export function SegmentEditor({ data }: Props) {
         setSaving(false)
       }
     },
-    [persistPage, data.num_pages],
+    [persistPage, data.num_pages, orientation],
   )
 
   const addRegion = (topPx: number) => {
@@ -298,7 +327,7 @@ export function SegmentEditor({ data }: Props) {
     const rect = el.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
-    if (y <= 1 || y >= 775 || x <= 0 || x >= 600) return
+    if (y <= 1 || y >= viewerHeight - 1 || x <= 0 || x >= viewerWidth) return
 
     if (minDistanceToSegments(y, regions) <= MIN_SEGMENT_GAP) {
       window.alert('Please do not add a new segment so close to an existing one.')
@@ -323,40 +352,78 @@ export function SegmentEditor({ data }: Props) {
 
     let segmentDragMoved = false
     let segmentDragStartY = 0
-    if (kind === 'segment' && regionId) {
+    let segmentGrabOffsetY = 0
+    if (kind === 'segment' && regionId && segmenterRef.current) {
+      const rect = segmenterRef.current.getBoundingClientRect()
       segmentDragStartY =
         stateRef.current.regions.find((r) => r.id === regionId)?.topPx ?? 0
+      segmentGrabOffsetY = e.clientY - rect.top - segmentDragStartY
+    }
+
+    let marginGrabOffsetX = 0
+    if (kind === 'left-margin' && segmenterRef.current) {
+      const rect = segmenterRef.current.getBoundingClientRect()
+      marginGrabOffsetX = e.clientX - rect.left - stateRef.current.leftMarginPx
+    } else if (kind === 'right-margin' && segmenterRef.current) {
+      const rect = segmenterRef.current.getBoundingClientRect()
+      marginGrabOffsetX = e.clientX - rect.left - stateRef.current.rightMarginPx
+    }
+
+    let rotationGrabOffset = 0
+    if (kind === 'rotation' && sliderRef.current) {
+      const sliderRect = sliderRef.current.getBoundingClientRect()
+      rotationGrabOffset = e.clientX - sliderRect.left - target.offsetLeft
+    }
+
+    const updateRotation = (clientX: number) => {
+      if (!sliderRef.current) return
+      const rect = sliderRef.current.getBoundingClientRect()
+      const left = Math.max(0, Math.min(99, clientX - rect.left - rotationGrabOffset))
+      const deg = 10 - left / 5
+      setRotation(deg)
+      stateRef.current.rotation = deg
+    }
+
+    const updateSegmentY = (clientY: number) => {
+      if (!regionId || !segmenterRef.current) return
+      const rect = segmenterRef.current.getBoundingClientRect()
+      const y = Math.max(0, Math.min(viewerHeight, clientY - rect.top - segmentGrabOffsetY))
+      if (Math.abs(y - segmentDragStartY) > 3) {
+        segmentDragMoved = true
+      }
+      setRegions((prev) => {
+        const clamped = clampSegmentTopPx(y, regionId, prev, orientation)
+        const updated = prev.map((r) => (r.id === regionId ? { ...r, topPx: clamped } : r))
+        stateRef.current.regions = updated
+        return updated
+      })
+    }
+
+    const updateLeftMargin = (clientX: number) => {
+      if (!segmenterRef.current) return
+      const rect = segmenterRef.current.getBoundingClientRect()
+      const x = Math.max(0, Math.min(viewerWidth, clientX - rect.left - marginGrabOffsetX))
+      setLeftMarginPx(x)
+      stateRef.current.leftMarginPx = x
+    }
+
+    const updateRightMargin = (clientX: number) => {
+      if (!segmenterRef.current) return
+      const rect = segmenterRef.current.getBoundingClientRect()
+      const x = Math.max(0, Math.min(viewerWidth, clientX - rect.left - marginGrabOffsetX))
+      setRightMarginPx(x)
+      stateRef.current.rightMarginPx = x
     }
 
     const onMove = (ev: PointerEvent) => {
-      if (kind === 'segment' && regionId && segmenterRef.current) {
-        const rect = segmenterRef.current.getBoundingClientRect()
-        const y = Math.max(0, Math.min(VIEWER_HEIGHT, ev.clientY - rect.top))
-        if (Math.abs(y - segmentDragStartY) > 3) {
-          segmentDragMoved = true
-        }
-        setRegions((prev) => {
-          const clamped = clampSegmentTopPx(y, regionId, prev)
-          const updated = prev.map((r) => (r.id === regionId ? { ...r, topPx: clamped } : r))
-          stateRef.current.regions = updated
-          return updated
-        })
-      } else if (kind === 'left-margin' && segmenterRef.current) {
-        const rect = segmenterRef.current.getBoundingClientRect()
-        const x = Math.max(0, Math.min(VIEWER_WIDTH, ev.clientX - rect.left))
-        setLeftMarginPx(x)
-        stateRef.current.leftMarginPx = x
-      } else if (kind === 'right-margin' && segmenterRef.current) {
-        const rect = segmenterRef.current.getBoundingClientRect()
-        const x = Math.max(0, Math.min(VIEWER_WIDTH, ev.clientX - rect.left))
-        setRightMarginPx(x)
-        stateRef.current.rightMarginPx = x
-      } else if (kind === 'rotation' && sliderRef.current) {
-        const rect = sliderRef.current.getBoundingClientRect()
-        const left = Math.max(0, Math.min(99, ev.clientX - rect.left))
-        const deg = 10 - left / 5
-        setRotation(deg)
-        stateRef.current.rotation = deg
+      if (kind === 'segment') {
+        updateSegmentY(ev.clientY)
+      } else if (kind === 'left-margin') {
+        updateLeftMargin(ev.clientX)
+      } else if (kind === 'right-margin') {
+        updateRightMargin(ev.clientX)
+      } else if (kind === 'rotation') {
+        updateRotation(ev.clientX)
       }
     }
 
@@ -385,12 +452,23 @@ export function SegmentEditor({ data }: Props) {
       } = stateRef.current
       const pageData = buildPageData(
         latestRegions,
-        marginPxToPct(Math.min(latestLeft, latestRight)),
-        marginPxToPct(Math.max(latestLeft, latestRight)),
+        marginPxToPct(Math.min(latestLeft, latestRight), orientation),
+        marginPxToPct(Math.max(latestLeft, latestRight), orientation),
         latestRotation,
+        orientation,
       )
       const allPages = { ...latestPages, [`p${latestPage}`]: pageData }
       syncWithSuggestions(latestRegions, allPages)
+    }
+
+    if (kind === 'rotation') {
+      updateRotation(e.clientX)
+    } else if (kind === 'segment') {
+      updateSegmentY(e.clientY)
+    } else if (kind === 'left-margin') {
+      updateLeftMargin(e.clientX)
+    } else if (kind === 'right-margin') {
+      updateRightMargin(e.clientX)
     }
 
     target.addEventListener('pointermove', onMove)
@@ -399,7 +477,7 @@ export function SegmentEditor({ data }: Props) {
 
   const handleContinue = async () => {
     const currentPages = { ...pagesData, [currentPageKey]: getCurrentPageData() }
-    const allPages = materializeAllPagesWithSuggestions(currentPages, data.num_pages)
+    const allPages = materializeAllPagesWithSuggestions(currentPages, data.num_pages, orientation)
     const hasTag = Object.values(allPages).some((page) =>
       page.segments.some((s) => s.tags !== '' && s.tags !== '(none)'),
     )
@@ -419,7 +497,7 @@ export function SegmentEditor({ data }: Props) {
     }
   }
 
-  const thumbsOffset = -(previewerStart - 1) * 120
+  const thumbsOffset = -(previewerStart - 1) * thumbStride
   const canGoPrev = pageNum > 1
   const canGoNext = pageNum < data.num_pages
   const navDisabledStyle = { color: 'gray', cursor: 'default' as const }
@@ -433,10 +511,24 @@ export function SegmentEditor({ data }: Props) {
         style={{ position: 'absolute', left: 0, top: 200, zIndex: -1, opacity: 0.3 }}
         alt=""
       />
-      <div id="segment-header">STEP 2. &nbsp; Label each part for separation</div>
-      <div id="segment-panel">
+      <div
+        id="segment-header"
+        className={isLandscape ? 'orientation-landscape' : undefined}
+        style={segmentCssVars}
+      >
+        STEP 2. &nbsp; Label each part for separation
+      </div>
+      <div
+        id="segment-panel"
+        className={isLandscape ? 'orientation-landscape' : undefined}
+        style={segmentCssVars}
+      >
         <div id="previewer">
-          <div id="thumbs" style={{ left: thumbsOffset }}>
+          <div
+            id="thumbs"
+            className={thumbTransition ? 'thumbs-animated' : undefined}
+            style={{ left: thumbsOffset }}
+          >
             {Array.from({ length: data.num_pages }, (_, i) => {
               const n = i + 1
               const active = n === pageNum
@@ -446,7 +538,7 @@ export function SegmentEditor({ data }: Props) {
                   className="thumb"
                   id={`preview-${n}`}
                   style={{
-                    left: (n - 1) * 120,
+                    left: (n - 1) * thumbStride,
                     color: active ? '#E00000' : 'black',
                   }}
                   onClick={() => void changePage(n)}
@@ -524,7 +616,8 @@ export function SegmentEditor({ data }: Props) {
         <div id="viewer">
           <img
             src={pageImageUrl}
-            height={VIEWER_HEIGHT}
+            width={viewerWidth}
+            height={viewerHeight}
             alt={`Score page ${pageNum}`}
             style={{ transform: `rotate(${-rotation}deg)` }}
           />

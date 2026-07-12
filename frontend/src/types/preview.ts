@@ -1,8 +1,11 @@
+import type { Orientation } from '../lib/pageDimensions'
+
 export type PreviewDataResponse = {
   partset_id: string
   private_id: string
   title: string | null
   composer: string | null
+  orientation: Orientation
   part_names: string[]
   combined_part_names: string[]
   part_segments: Record<string, number[]>
@@ -24,6 +27,7 @@ export type PartgenProgressResponse = {
   progress: number
   total_progress: number
   is_complete: boolean
+  in_progress: boolean
 }
 
 export type PartsDataResponse = {

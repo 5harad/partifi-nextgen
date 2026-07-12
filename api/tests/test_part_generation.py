@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import Base
 from app.models import Part, Partset, Score
-from app.services.preview import ensure_part_file_on_cache_miss, start_part_generation
+from app.services.preview import start_part_generation
 
 
 @pytest.fixture
@@ -106,57 +106,3 @@ def test_start_part_generation_skips_when_paste_in_progress(
     mock_lock.assert_not_called()
     mock_sync.assert_not_called()
     mock_enqueue.assert_not_called()
-
-
-@patch("app.services.preview.ensure_parts_if_needed", return_value="job-1")
-@patch("app.services.preview.get_local_cache")
-def test_ensure_part_file_on_cache_miss_clears_parts_ready(
-    mock_get_cache: Mock,
-    mock_ensure: Mock,
-    db: Session,
-) -> None:
-    mock_get_cache.return_value.part_is_cached.return_value = False
-    partset = db.get(Partset, "pub1")
-    assert partset is not None
-    partset.parts_ready = True
-    db.commit()
-
-    ensure_part_file_on_cache_miss(db, partset, "pub1_violin.pdf")
-
-    assert partset.parts_ready is False
-    mock_ensure.assert_called_once()
-
-
-@patch("app.services.preview.ensure_parts_if_needed", return_value=None)
-@patch("app.services.preview.get_local_cache")
-def test_ensure_part_file_on_cache_miss_persists_when_not_enqueued(
-    mock_get_cache: Mock,
-    mock_ensure: Mock,
-    db: Session,
-) -> None:
-    mock_get_cache.return_value.part_is_cached.return_value = False
-    partset = db.get(Partset, "pub1")
-    assert partset is not None
-    partset.parts_ready = True
-    db.commit()
-
-    ensure_part_file_on_cache_miss(db, partset, "pub1_violin.pdf")
-
-    db.refresh(partset)
-    assert partset.parts_ready is False
-
-
-@patch("app.services.preview.ensure_parts_if_needed")
-@patch("app.services.preview.get_local_cache")
-def test_ensure_part_file_on_cache_miss_skips_when_cached(
-    mock_get_cache: Mock,
-    mock_ensure: Mock,
-    db: Session,
-) -> None:
-    mock_get_cache.return_value.part_is_cached.return_value = True
-    partset = db.get(Partset, "pub1")
-    assert partset is not None
-
-    ensure_part_file_on_cache_miss(db, partset, "pub1_violin.pdf")
-
-    mock_ensure.assert_not_called()
