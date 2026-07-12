@@ -15,7 +15,7 @@ const FAQ_ITEMS: FaqItem[] = [
   {
     question: 'Can I partifi a landscape score?',
     answer:
-      'Yes! Partifi supports landscape scores and tries to automatically detect the correct page orientation when you first import a PDF.\n\nBut sometimes a score is landscape in disguise: the PDF is portrait-shaped, but the music is turned sideways on the page. Partifi goes by the page dimensions, so those files import as portrait and won\u2019t look right. If that happens, click on "Fix page orientation" in Step 2 (the option is right below the score). Partifi re-analyzes the score in the correct orientation and you should be good to go.',
+      'Yes! Partifi supports landscape scores and tries to automatically detect the correct page orientation when you first import a PDF.\n\nBut sometimes a score is landscape in disguise: the PDF is portrait-shaped, but the music is turned sideways on the page. Partifi goes by the page dimensions, so those files import as portrait and won\u2019t look right. If that happens, click on \u201cFix page orientation\u201d in Step 2 (the option is right below the score). Partifi re-analyzes the score in the correct orientation and you should be good to go.',
   },
   {
     question: 'Partifi doesn\u2019t seem to be working correctly. What can I do?',

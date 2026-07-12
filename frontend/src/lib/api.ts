@@ -160,7 +160,7 @@ export async function reorientPartset(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(apiErrorDetail(err, 'Re-orient failed'))
+    throw new Error(apiErrorDetail(err, 'Reorient failed'))
   }
   return res.json()
 }

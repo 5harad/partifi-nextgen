@@ -84,7 +84,7 @@ export function OrientationPage() {
         }
 
         if (payload.reimport_error) {
-          setError(payload.reimport_error_message || 'Re-orient failed')
+          setError(payload.reimport_error_message || 'Reorient failed')
           return
         }
 
@@ -160,7 +160,7 @@ export function OrientationPage() {
       )
       pollRef.current?.()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Re-orient failed')
+      setError(err instanceof Error ? err.message : 'Reorient failed')
     } finally {
       setRetrying(false)
     }
@@ -183,7 +183,7 @@ export function OrientationPage() {
       )
       pollRef.current?.()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Re-orient failed')
+      setError(err instanceof Error ? err.message : 'Reorient failed')
     } finally {
       setSubmitting(false)
     }
@@ -200,7 +200,7 @@ export function OrientationPage() {
         </div>
       ) : reimporting ? (
         <TransitionWait
-          message="Re-orienting the score"
+          message="Reorienting the score"
           progress={data?.reimport_progress ?? 0}
         />
       ) : error ? (
@@ -231,7 +231,7 @@ export function OrientationPage() {
           >
             <div className="orientation-intro">
               <p>
-                Select the correct orientation. Beware that re-orienting the score will erase any
+                Select the correct orientation. Beware that reorienting the score will erase any
                 existing segments and parts!
               </p>
             </div>
@@ -285,7 +285,7 @@ export function OrientationPage() {
                   }
                 }}
               >
-                Re-orient &raquo;
+                Reorient &raquo;
               </div>
             </div>
           </div>

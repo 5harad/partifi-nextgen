@@ -191,7 +191,7 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
     uses_partset_pages = partset_uses_custom_pages(rotation_degrees)
     if uses_partset_pages and not cache.partset_has_kind(partset_id, "highres"):
         raise RuntimeError(
-            f"Rotated page images missing from cache for partset {partset_id}; re-orient the score"
+            f"Rotated page images missing from cache for partset {partset_id}; reorient the score"
         )
     if not uses_partset_pages and not cache.score_has_kind(score_id, "highres"):
         logger.info("Score %s highres pages missing from cache; warming from PDF", score_id)

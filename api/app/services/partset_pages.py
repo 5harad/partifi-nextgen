@@ -139,7 +139,7 @@ def retry_partset_page_cache(db: Session, partset: Partset) -> None:
 
 
 def reset_partset_for_reorient(db: Session, partset: Partset) -> None:
-    """Clear segment/analysis state so the UI shows re-orient in progress immediately."""
+    """Clear segment/analysis state so the UI shows reorient in progress immediately."""
     db.query(Segment).filter(Segment.partset_id == partset.id).delete()
     db.query(Page).filter(Page.partset_id == partset.id).delete()
 
@@ -178,7 +178,7 @@ def start_reorient(db: Session, partset: Partset, rotation_degrees: int) -> str:
         raise ValueError("Partset has no score")
     rotation_degrees = normalize_rotation_degrees(rotation_degrees)
     if not try_acquire_import_lock(partset.id):
-        raise ValueError("A re-orient is already in progress for this partset")
+        raise ValueError("A reorient is already in progress for this partset")
 
     reset_partset_for_reorient(db, partset)
 

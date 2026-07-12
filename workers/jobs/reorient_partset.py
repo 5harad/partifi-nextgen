@@ -1,4 +1,4 @@
-"""Re-orient a partset's page images without changing score-level orientation."""
+"""Reorient a partset's page images without changing score-level orientation."""
 
 from __future__ import annotations
 
@@ -157,7 +157,7 @@ def run_reorient_partset(
         pages_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(
-            "Re-orienting partset %s (gs_orientation=%s rotation=%s effective=%s)",
+            "Reorienting partset %s (gs_orientation=%s rotation=%s effective=%s)",
             partset_id,
             gs_orientation,
             rotation_degrees,
@@ -199,9 +199,9 @@ def run_reorient_partset(
             "UPDATE partsets SET last_access = NOW() WHERE id = :id",
             {"id": partset_id},
         )
-        logger.info("Re-orient complete for partset %s", partset_id)
+        logger.info("Reorient complete for partset %s", partset_id)
     except Exception as exc:
-        logger.exception("Re-orient failed for partset %s", partset_id)
+        logger.exception("Reorient failed for partset %s", partset_id)
         mark_partset_error(partset_id, message=str(exc), job_id=job_id)
         raise
     finally:
