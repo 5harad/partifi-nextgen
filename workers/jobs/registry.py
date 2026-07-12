@@ -7,6 +7,8 @@ from typing import Any, Callable
 from jobs.gen_parts import run_gen_parts
 from jobs.imslp_import import run_imslp_import
 from jobs.import_pipeline import run_import_pipeline
+from jobs.reorient_partset import run_reorient_partset
+from jobs.warm_partset_pages import run_warm_partset_pages
 from jobs.warm_score_pages import run_warm_score_pages
 
 JobHandler = Callable[[dict[str, Any]], None]
@@ -26,6 +28,18 @@ JOB_HANDLERS: dict[str, JobHandler] = {
     ),
     "warm_score_pages": lambda payload: run_warm_score_pages(
         payload["score_id"], job_id=payload.get("job_id")
+    ),
+    "reorient_partset": lambda payload: run_reorient_partset(
+        payload["partset_id"],
+        payload["score_id"],
+        payload["rotation_degrees"],
+        job_id=payload.get("job_id"),
+    ),
+    "warm_partset_pages": lambda payload: run_warm_partset_pages(
+        payload["partset_id"],
+        payload["score_id"],
+        payload["rotation_degrees"],
+        job_id=payload.get("job_id"),
     ),
 }
 

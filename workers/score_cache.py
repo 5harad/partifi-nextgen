@@ -38,6 +38,20 @@ def fetch_score_orientation(score_id: str) -> str:
     return str(row.orientation)
 
 
+def fetch_partset_effective_orientation(partset_id: str, score_id: str) -> str:
+    row = db_conn.fetchone(
+        "SELECT orientation_override, rotation_degrees FROM partsets WHERE id = :id",
+        {"id": partset_id},
+    )
+    from pipeline.partset_orientation import effective_partset_orientation
+
+    return effective_partset_orientation(
+        score_orientation=fetch_score_orientation(score_id),
+        orientation_override=row.orientation_override if row else None,
+        rotation_degrees=int(row.rotation_degrees or 0) if row else 0,
+    )
+
+
 def copy_score_segs_to_partset(score_id: str, partset_id: str) -> None:
     db_conn.execute(
         "DELETE FROM segments WHERE partset_id = :partset_id",

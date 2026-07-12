@@ -1,3 +1,4 @@
+import type { OrientationDataResponse } from '../types/orientation'
 import type { PageSegmentData, SegmentDataResponse } from '../types/segment'
 import type {
   PartgenProgressResponse,
@@ -116,6 +117,35 @@ export async function getSegmentData(privateId: string): Promise<SegmentDataResp
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail || 'Failed to load segment data')
+  }
+  return res.json()
+}
+
+export async function getOrientationData(privateId: string): Promise<OrientationDataResponse> {
+  const res = await apiFetch(`/api/v1/partsets/${privateId}/orientation-data`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to load orientation data')
+  }
+  return res.json()
+}
+
+export async function reorientPartset(
+  privateId: string,
+  rotationDegrees: number,
+  csrfToken: string,
+): Promise<{ status: string; job_id: string }> {
+  const res = await apiFetch(`/api/v1/partsets/${privateId}/reorient`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify({ rotation_degrees: rotationDegrees }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(apiErrorDetail(err, 'Re-orient failed'))
   }
   return res.json()
 }

@@ -25,7 +25,11 @@ from app.services.gen_parts_lock import (
 from app.services.partset_failure import clear_partset_failure
 from app.services.queue import enqueue_job
 from app.services.downloads import part_file_url, score_pdf_url_for_partset
-from app.services.score_pages import ensure_score_pages_warming
+from app.services.partset_pages import (
+    effective_orientation,
+    ensure_page_image_path,
+    ensure_page_images_status,
+)
 from app.services.part_rows import upsert_part_row
 from app.services.segments import ensure_import_complete, get_partset_by_private_id, sync_part_rows_from_tags
 
@@ -211,6 +215,7 @@ def _preview_cut_tasks(
 
 def _ensure_preview_segments(
     partset: Partset,
+    score: Score,
     segment_rows: list[dict],
     fingerprint: str,
 ) -> list[float]:
@@ -235,11 +240,11 @@ def _ensure_preview_segments(
         for page in pages_needed:
             lowres_path = pages_lowres / f"page-{page}.png"
             lowres_path.write_bytes(
-                cache.ensure_score_page(partset.score_id, "lowres", page).read_bytes()
+                ensure_page_image_path(partset, score, "lowres", page).read_bytes()
             )
             highres_path = pages_highres / f"page-{page}.png"
             highres_path.write_bytes(
-                cache.ensure_score_page(partset.score_id, "highres", page).read_bytes()
+                ensure_page_image_path(partset, score, "highres", page).read_bytes()
             )
 
         cut_segment_tasks(_preview_cut_tasks(segment_rows, pages_lowres, segments_lowres))
@@ -261,10 +266,13 @@ def get_preview_data(db: Session, partset: Partset) -> dict:
     if not partset.score_id:
         raise ValueError("Partset has no score")
 
-    image_status = ensure_score_pages_warming(db, partset.score_id)
+    score = db.get(Score, partset.score_id)
+    if not score:
+        raise ValueError("Partset has no score")
+
+    image_status = ensure_page_images_status(db, partset, score)
     if not image_status["images_ready"]:
-        score = db.get(Score, partset.score_id) if partset.score_id else None
-        orientation = score.orientation if score and score.orientation else "portrait"
+        orientation = effective_orientation(partset, score)
         return {
             "partset_id": partset.id,
             "private_id": partset.private_id or "",
@@ -310,11 +318,10 @@ def get_preview_data(db: Session, partset: Partset) -> dict:
         spacings.setdefault(name, 0.1)
 
     fingerprint = LocalCache.preview_fingerprint(segment_rows)
-    segment_heights = _ensure_preview_segments(partset, segment_rows, fingerprint)
+    segment_heights = _ensure_preview_segments(partset, score, segment_rows, fingerprint)
     touch_partset_access(db, partset)
 
-    score = db.get(Score, partset.score_id)
-    orientation = score.orientation if score and score.orientation else "portrait"
+    orientation = effective_orientation(partset, score)
     segment_widths = [prct2pixel(w, "width", orientation=orientation) for w in widths_pct]
     private_id = partset.private_id or ""
 

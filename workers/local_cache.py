@@ -28,3 +28,9 @@ def ensure_lowres_files(score_id: str) -> list[Path]:
 
     build_score_page_cache(score_id)
     return sorted(lowres_dir.glob("page-*.png"))
+
+
+def ensure_partset_lowres_files(partset_id: str) -> list[Path]:
+    cache = get_local_cache()
+    lowres_dir = cache.partset_kind_dir(partset_id, "lowres")
+    return sorted(lowres_dir.glob("page-*.png"))

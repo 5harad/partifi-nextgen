@@ -30,7 +30,8 @@ from pipeline.paste_segments import create_parts
 from gen_parts_lock import release_gen_parts_lock
 from score_page_cache import build_score_page_cache
 from local_cache import get_local_cache
-from score_cache import fetch_score_orientation
+from pipeline.partset_orientation import partset_uses_custom_pages
+from score_cache import fetch_partset_effective_orientation, fetch_score_orientation
 
 logger = logging.getLogger("partifi.gen_parts")
 
@@ -156,7 +157,7 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
         raise ValueError(msg)
 
     score_id = partset.score_id
-    orientation = fetch_score_orientation(score_id)
+    orientation = fetch_partset_effective_orientation(partset_id, score_id)
     orient: Orientation = "landscape" if orientation == "landscape" else "portrait"
     if workdir.exists():
         shutil.rmtree(workdir)
@@ -182,7 +183,17 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
 
     pages_needed = sorted({row["page"] for row in segment_rows})
     cache = get_local_cache()
-    if not cache.score_has_kind(score_id, "highres"):
+    rotation_row = fetchone(
+        "SELECT rotation_degrees FROM partsets WHERE id = :id",
+        {"id": partset_id},
+    )
+    rotation_degrees = int(rotation_row.rotation_degrees or 0) if rotation_row else 0
+    uses_partset_pages = partset_uses_custom_pages(rotation_degrees)
+    if uses_partset_pages and not cache.partset_has_kind(partset_id, "highres"):
+        raise RuntimeError(
+            f"Rotated page images missing from cache for partset {partset_id}; re-orient the score"
+        )
+    if not uses_partset_pages and not cache.score_has_kind(score_id, "highres"):
         logger.info("Score %s highres pages missing from cache; warming from PDF", score_id)
         execute(
             "UPDATE partsets SET status = 'convert', convert_progress = 0, "
@@ -200,7 +211,10 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
 
     for page in pages_needed:
         local_page = pages_dir / f"page-{page}.png"
-        cached = cache.ensure_score_page(score_id, "highres", page)
+        if uses_partset_pages:
+            cached = cache.ensure_partset_page(partset_id, "highres", page)
+        else:
+            cached = cache.ensure_score_page(score_id, "highres", page)
         local_page.write_bytes(cached.read_bytes())
 
     cut_tasks: list[tuple[Path, float, float, float, float, float, Path]] = []

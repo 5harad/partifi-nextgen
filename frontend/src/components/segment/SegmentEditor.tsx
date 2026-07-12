@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { getCsrfToken, saveAllPageSegments, savePageSegments } from '../../lib/api'
 import {
   applySuggestionsToRegions,
@@ -835,42 +835,50 @@ export function SegmentEditor({ data }: Props) {
         </div>
 
         <div id="seg-nav-bar">
-          <div id="page-num">
-            page {pageNum} of {data.num_pages}
-            {saving ? ' (saving…)' : ''}
+          <div id="seg-nav-row">
+            <div id="prev-page">
+              {canGoPrev ? (
+                <a
+                  href="#"
+                  className="red"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    void changePage(pageNum - 1)
+                  }}
+                >
+                  &laquo; previous
+                </a>
+              ) : (
+                <span style={navDisabledStyle}>&laquo; previous</span>
+              )}
+            </div>
+            <div id="page-num">
+              page {pageNum} of {data.num_pages}
+              {saving ? ' (saving…)' : ''}
+            </div>
+            <div id="next-page">
+              {canGoNext ? (
+                <a
+                  href="#"
+                  className="red"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    void changePage(pageNum + 1)
+                  }}
+                >
+                  next &raquo;
+                </a>
+              ) : (
+                <span style={navDisabledStyle}>next &raquo;</span>
+              )}
+            </div>
           </div>
-          <div id="prev-page">
-            {canGoPrev ? (
-              <a
-                href="#"
-                className="red"
-                onClick={(e) => {
-                  e.preventDefault()
-                  void changePage(pageNum - 1)
-                }}
-              >
-                &laquo; previous
-              </a>
-            ) : (
-              <span style={navDisabledStyle}>&laquo; previous</span>
-            )}
-          </div>
-          <div id="next-page">
-            {canGoNext ? (
-              <a
-                href="#"
-                className="red"
-                onClick={(e) => {
-                  e.preventDefault()
-                  void changePage(pageNum + 1)
-                }}
-              >
-                next &raquo;
-              </a>
-            ) : (
-              <span style={navDisabledStyle}>next &raquo;</span>
-            )}
-          </div>
+          <p id="orientation-hint">
+            Page sideways or upside down?{' '}
+            <Link className="red" to={`/${data.private_id}/orientation`}>
+              Fix page orientation
+            </Link>
+          </p>
         </div>
       </div>
 

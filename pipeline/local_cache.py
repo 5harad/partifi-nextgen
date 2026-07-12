@@ -103,6 +103,54 @@ class LocalCache:
         for kind in SCORE_KINDS:
             shutil.rmtree(self.score_kind_dir(score_id, kind), ignore_errors=True)
 
+    # --- partset page overrides (per-partset rotation without changing score cache) ---
+
+    def partset_root(self, partset_id: str) -> Path:
+        return self.root / "partsets" / partset_id
+
+    def partset_kind_dir(self, partset_id: str, kind: ScoreKind) -> Path:
+        return self.partset_root(partset_id) / kind
+
+    def partset_page_path(self, partset_id: str, kind: ScoreKind, page: int) -> Path:
+        return self.partset_kind_dir(partset_id, kind) / f"page-{page}.png"
+
+    def partset_has_kind(self, partset_id: str, kind: ScoreKind) -> bool:
+        directory = self.partset_kind_dir(partset_id, kind)
+        return directory.is_dir() and any(directory.glob("page-*.png"))
+
+    def partset_has_pages(self, partset_id: str) -> bool:
+        return self.partset_has_kind(partset_id, "lowres")
+
+    def ensure_partset_page(self, partset_id: str, kind: ScoreKind, page: int) -> Path:
+        path = self.partset_page_path(partset_id, kind, page)
+        if path.is_file():
+            self._touch(path)
+            return path
+        raise FileNotFoundError(
+            f"Partset page not in local cache: partset_id={partset_id} kind={kind} page={page}"
+        )
+
+    def copy_partset_pages_tree(self, partset_id: str, pages_dir: Path) -> None:
+        for kind in SCORE_KINDS:
+            src = pages_dir / kind
+            if not src.is_dir():
+                continue
+            target = self.partset_kind_dir(partset_id, kind)
+            target.mkdir(parents=True, exist_ok=True)
+            for png in src.glob("*.png"):
+                dest = target / png.name
+                tmp = self._temp_path(dest)
+                try:
+                    shutil.copy2(png, tmp)
+                    self._replace_file(tmp, dest)
+                except Exception:
+                    tmp.unlink(missing_ok=True)
+                    if not dest.is_file():
+                        raise
+
+    def invalidate_partset_pages(self, partset_id: str) -> None:
+        shutil.rmtree(self.partset_root(partset_id), ignore_errors=True)
+
     def invalidate_score(self, score_id: str) -> None:
         """Drop all cached score data including the PDF (e.g. after S3 replacement)."""
         shutil.rmtree(self.score_root(score_id), ignore_errors=True)
@@ -216,6 +264,7 @@ class LocalCache:
         for category, base in (
             ("preview", self.root / "preview"),
             ("parts", self.root / "parts"),
+            ("partsets", self.root / "partsets"),
             ("scores", self.root / "scores"),
         ):
             if not base.is_dir():

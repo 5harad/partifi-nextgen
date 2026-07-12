@@ -4,15 +4,32 @@ from sqlalchemy.orm import Session
 from app.models import Page, Part, Partset, Score, Segment
 from app.services.local_cache import get_local_cache
 from app.services.part_rows import upsert_part_row
+from app.services.partset_pages import effective_orientation, ensure_page_images_status
 from app.services.partset_touch import touch_partset_access
-from app.services.score_pages import ensure_score_pages_warming
 from app.utils.strings import rm_space, tag_to_filename
 
 ScoreImageKind = str
 
 
-def page_image_url(private_id: str, page: int, res: ScoreImageKind) -> str:
-    return f"/api/v1/partsets/{private_id}/page-image/{page}.png?res={res}"
+def page_image_cache_version(partset: Partset) -> str:
+    rotation = int(partset.rotation_degrees or 0)
+    stamp = partset.convert_complete or partset.analysis_complete
+    if stamp:
+        return f"{rotation}-{int(stamp.timestamp())}"
+    return str(rotation)
+
+
+def page_image_url(
+    private_id: str,
+    page: int,
+    res: ScoreImageKind,
+    *,
+    cache_version: str | None = None,
+) -> str:
+    url = f"/api/v1/partsets/{private_id}/page-image/{page}.png?res={res}"
+    if cache_version:
+        url += f"&v={cache_version}"
+    return url
 
 
 def _sync_part_rows_from_tags(db: Session, partset_id: str) -> None:
@@ -125,12 +142,19 @@ def get_segments_data(db: Session, partset: Partset) -> dict:
     num_pages = get_num_pages(db, partset.id, partset.score_id)
     private_id = partset.private_id or ""
     score = db.get(Score, partset.score_id)
-    orientation = score.orientation if score and score.orientation else "portrait"
-    image_status = ensure_score_pages_warming(db, partset.score_id)
+    if not score:
+        raise ValueError("Partset has no score")
+    orientation = effective_orientation(partset, score)
+    image_status = ensure_page_images_status(db, partset, score)
+    cache_version = page_image_cache_version(partset)
     image_urls: dict[str, dict[str, str]] = {"lowres": {}, "thumbs": {}}
     for page in range(1, num_pages + 1):
-        image_urls["lowres"][str(page)] = page_image_url(private_id, page, "lowres")
-        image_urls["thumbs"][str(page)] = page_image_url(private_id, page, "thumbs")
+        image_urls["lowres"][str(page)] = page_image_url(
+            private_id, page, "lowres", cache_version=cache_version
+        )
+        image_urls["thumbs"][str(page)] = page_image_url(
+            private_id, page, "thumbs", cache_version=cache_version
+        )
 
     return {
         "score_id": partset.score_id,

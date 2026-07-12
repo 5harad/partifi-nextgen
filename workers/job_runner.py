@@ -42,7 +42,7 @@ def _partset_has_error(partset_id: str) -> bool:
 def _release_job_locks(job_type: str, partset_id: str | None) -> None:
     if not partset_id:
         return
-    if job_type in ("import_pipeline", "imslp_import"):
+    if job_type in ("import_pipeline", "imslp_import", "reorient_partset", "warm_partset_pages"):
         release_import_lock(partset_id)
     elif job_type == "gen_parts":
         release_gen_parts_lock(partset_id)

@@ -12,6 +12,7 @@ from app.services.import_lock import try_acquire_import_lock
 from app.services.partset_failure import clear_partset_failure, mark_partset_failure
 from app.services.queue import enqueue_job
 from pipeline.imslp_ids import UNIMPORTABLE_IMSLP_MESSAGE, normalize_imslp_id
+from pipeline.partset_orientation import partset_uses_custom_pages
 
 
 def import_pipeline_complete(partset: Partset) -> bool:
@@ -20,6 +21,15 @@ def import_pipeline_complete(partset: Partset) -> bool:
         and partset.convert_complete
         and partset.analysis_complete
     )
+
+
+def partset_needs_reorient(partset: Partset) -> bool:
+    """True when a rotated partset still needs convert/analysis (not a fresh import)."""
+    if not partset.score_id or not partset.import_complete:
+        return False
+    if not partset_uses_custom_pages(int(partset.rotation_degrees or 0)):
+        return False
+    return not import_pipeline_complete(partset)
 
 
 def _imslp_import_blocked(partset: Partset) -> str | None:
@@ -70,10 +80,20 @@ def ensure_import_if_needed(db: Session, partset: Partset) -> str | None:
         partset.status = "import"
 
     if partset.score_id:
-        job_id = enqueue_job(
-            "import_pipeline",
-            {"partset_id": partset.id, "score_id": partset.score_id},
-        )
+        if partset_needs_reorient(partset):
+            job_id = enqueue_job(
+                "reorient_partset",
+                {
+                    "partset_id": partset.id,
+                    "score_id": partset.score_id,
+                    "rotation_degrees": int(partset.rotation_degrees or 0),
+                },
+            )
+        else:
+            job_id = enqueue_job(
+                "import_pipeline",
+                {"partset_id": partset.id, "score_id": partset.score_id},
+            )
     else:
         normalized = _imslp_id_for_import_job(db, partset)
         job_id = enqueue_job(
@@ -97,6 +117,20 @@ def retry_partset_pipeline(db: Session, partset: Partset) -> tuple[str, str | No
 
     if not import_pipeline_complete(partset):
         if partset.score_id:
+            if partset_needs_reorient(partset):
+                if not try_acquire_import_lock(partset.id):
+                    db.commit()
+                    return "reorient", None
+                job_id = enqueue_job(
+                    "reorient_partset",
+                    {
+                        "partset_id": partset.id,
+                        "score_id": partset.score_id,
+                        "rotation_degrees": int(partset.rotation_degrees or 0),
+                    },
+                )
+                db.commit()
+                return "reorient", job_id
             if not try_acquire_import_lock(partset.id):
                 db.commit()
                 return "import", None

@@ -80,6 +80,10 @@ class Partset(Base):
     paste_start: Mapped[datetime | None] = mapped_column(DateTime)
     paste_complete: Mapped[datetime | None] = mapped_column(DateTime)
     paste_progress: Mapped[float] = mapped_column(Float, default=0.0)
+    orientation_override: Mapped[str | None] = mapped_column(
+        Enum("portrait", "landscape", name="partset_orientation_override"), nullable=True
+    )
+    rotation_degrees: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class OriginalPage(Base):

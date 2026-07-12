@@ -97,6 +97,34 @@ def test_ensure_import_skips_when_lock_held(_mock_enqueue: patch, _mock_lock: pa
 
 
 @patch("app.services.retry.try_acquire_import_lock", return_value=True)
+@patch("app.services.retry.enqueue_job", return_value="88")
+def test_ensure_import_enqueues_reorient_when_rotated_incomplete(
+    _mock_enqueue: patch,
+    _mock_lock: patch,
+) -> None:
+    db = Mock()
+    now = datetime.utcnow()
+    partset = _partset(
+        import_complete=now,
+        convert_complete=None,
+        analysis_complete=None,
+        rotation_degrees=90,
+        error=None,
+    )
+    job_id = ensure_import_if_needed(db, partset)
+    assert job_id == "88"
+    _mock_enqueue.assert_called_once_with(
+        "reorient_partset",
+        {
+            "partset_id": "pub01",
+            "score_id": "score1",
+            "rotation_degrees": 90,
+        },
+    )
+    db.commit.assert_called_once()
+
+
+@patch("app.services.retry.try_acquire_import_lock", return_value=True)
 @patch("app.services.retry.enqueue_job", return_value="42")
 def test_retry_import_pipeline(_mock_enqueue: patch, _mock_lock: patch) -> None:
     db = Mock()
@@ -110,6 +138,32 @@ def test_retry_import_pipeline(_mock_enqueue: patch, _mock_lock: patch) -> None:
         {"partset_id": "pub01", "score_id": "score1"},
     )
     db.commit.assert_called_once()
+
+
+@patch("app.services.retry.try_acquire_import_lock", return_value=True)
+@patch("app.services.retry.enqueue_job", return_value="89")
+def test_retry_reorient_when_rotated_incomplete(_mock_enqueue: patch, _mock_lock: patch) -> None:
+    db = Mock()
+    now = datetime.utcnow()
+    partset = _partset(
+        import_complete=now,
+        convert_complete=None,
+        analysis_complete=None,
+        rotation_degrees=270,
+        error="convert",
+    )
+    stage, job_id = retry_partset_pipeline(db, partset)
+    assert stage == "reorient"
+    assert job_id == "89"
+    assert partset.error is None
+    _mock_enqueue.assert_called_once_with(
+        "reorient_partset",
+        {
+            "partset_id": "pub01",
+            "score_id": "score1",
+            "rotation_degrees": 270,
+        },
+    )
 
 
 @patch("app.services.retry.try_acquire_import_lock", return_value=True)
