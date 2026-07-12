@@ -4,6 +4,7 @@ import {
   combineParts,
   getCsrfToken,
   getPreviewData,
+  retryPartsetPageCache,
   saveLayout,
   startPartGeneration,
 } from '../../lib/api'
@@ -28,7 +29,7 @@ import {
   segmentLabelLayout,
 } from '../../lib/previewPageLayout'
 import { previewHeaderFontFamily } from '../../lib/previewHeaderFont'
-import { TransitionError } from '../TransitionError'
+import { TransitionError, TransitionErrorButton } from '../TransitionError'
 import { TransitionWait } from '../TransitionWait'
 import type { PreviewDataResponse } from '../../types/preview'
 
@@ -46,6 +47,8 @@ export function PreviewEditor({ privateId }: Props) {
   const [data, setData] = useState<PreviewDataResponse | null>(null)
   const [warmProgress, setWarmProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [cacheError, setCacheError] = useState(false)
+  const [retrying, setRetrying] = useState(false)
   const [mode, setMode] = useState<Mode>('spacing')
   const [part, setPart] = useState<string>('')
   const [pageNum, setPageNum] = useState(1)
@@ -68,6 +71,7 @@ export function PreviewEditor({ privateId }: Props) {
       if (!event.persisted) return
       setData(null)
       setError(null)
+      setCacheError(false)
       setWarmProgress(0)
       setReloadToken((token) => token + 1)
     }
@@ -86,6 +90,13 @@ export function PreviewEditor({ privateId }: Props) {
         if (cancelled) return
 
         if (!preview.images_ready) {
+          if (preview.image_cache_error_message) {
+            setCacheError(true)
+            setError(preview.image_cache_error_message)
+            return
+          }
+          setCacheError(false)
+          setError(null)
           setWarmProgress(preview.image_progress)
           pollCount += 1
           if (pollCount >= 300) {
@@ -310,8 +321,37 @@ export function PreviewEditor({ privateId }: Props) {
     await combineParts(privateId, 'remove', partName, csrf)
   }
 
+  const handleRetryPageCache = async () => {
+    if (retrying) return
+    setRetrying(true)
+    try {
+      const token = await getCsrfToken()
+      await retryPartsetPageCache(privateId, token)
+      setError(null)
+      setCacheError(false)
+      setWarmProgress(0)
+      setReloadToken((token) => token + 1)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to retry page images'
+      setError(message)
+      setCacheError(true)
+    } finally {
+      setRetrying(false)
+    }
+  }
+
   if (error) {
-    return <TransitionError message={error} />
+    return (
+      <TransitionError message={error}>
+        {cacheError ? (
+          <TransitionErrorButton
+            label={retrying ? 'Retrying…' : 'Try again'}
+            onClick={handleRetryPageCache}
+            disabled={retrying}
+          />
+        ) : null}
+      </TransitionError>
+    )
   }
 
   if (!data) {

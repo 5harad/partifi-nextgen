@@ -56,6 +56,15 @@ def _fetch_num_pages(score_id: str) -> int:
     return int(row.num_pages)
 
 
+def _ensure_score_highres_pages(score_id: str, *, job_id: str | None = None) -> None:
+    cache = get_local_cache()
+    if cache.score_has_kind(score_id, "highres"):
+        return
+    from score_page_cache import build_score_page_cache
+
+    build_score_page_cache(score_id, job_id=job_id)
+
+
 def _render_partset_pages(
     *,
     score_id: str,
@@ -64,7 +73,9 @@ def _render_partset_pages(
     pages_dir: Path,
     num_pages: int,
     partset_id: str | None = None,
+    job_id: str | None = None,
 ) -> list[str]:
+    _ensure_score_highres_pages(score_id, job_id=job_id)
     cache = get_local_cache()
     lowres_files: list[str] = []
     for page in range(1, num_pages + 1):
@@ -96,6 +107,7 @@ def rebuild_partset_page_cache(
     rotation_degrees: int,
     *,
     workdir: Path,
+    job_id: str | None = None,
 ) -> None:
     """Render rotated score pages into the partset page cache."""
     rotation_degrees = normalize_rotation_degrees(rotation_degrees)
@@ -111,6 +123,7 @@ def rebuild_partset_page_cache(
         rotation_degrees=rotation_degrees,
         pages_dir=pages_dir,
         num_pages=num_pages,
+        job_id=job_id,
     )
     get_local_cache().copy_partset_pages_tree(partset_id, pages_dir)
 
@@ -159,6 +172,7 @@ def run_reorient_partset(
                 pages_dir=pages_dir,
                 num_pages=num_pages,
                 partset_id=partset_id,
+                job_id=job_id,
             )
             cache.copy_partset_pages_tree(partset_id, pages_dir)
         else:

@@ -28,3 +28,7 @@ class ReorientRequest(BaseModel):
 class ReorientResponse(BaseModel):
     status: str
     job_id: str
+
+
+class RetryPageCacheResponse(BaseModel):
+    status: str = "started"

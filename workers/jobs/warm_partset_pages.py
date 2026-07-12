@@ -8,6 +8,7 @@ from pathlib import Path
 
 from import_lock import release_import_lock
 from jobs.reorient_partset import rebuild_partset_page_cache
+from partset_cache_status import clear_partset_cache_error, set_partset_cache_error
 from pipeline.partset_orientation import normalize_rotation_degrees, partset_uses_custom_pages
 
 logger = logging.getLogger("partifi.warm_partset_pages")
@@ -41,10 +42,13 @@ def run_warm_partset_pages(
             score_id,
             rotation_degrees,
             workdir=workdir,
+            job_id=job_id,
         )
+        clear_partset_cache_error(partset_id)
         logger.info("Rotated page cache warm complete for partset %s", partset_id)
-    except Exception:
+    except Exception as exc:
         logger.exception("Rotated page cache warm failed for partset %s", partset_id)
+        set_partset_cache_error(partset_id, str(exc))
         raise
     finally:
         shutil.rmtree(workdir, ignore_errors=True)

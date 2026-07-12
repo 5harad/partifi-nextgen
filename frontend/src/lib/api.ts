@@ -82,6 +82,21 @@ export async function ensureImportByPrivateId(privateId: string): Promise<void> 
   }
 }
 
+export async function retryPartsetPageCache(
+  privateId: string,
+  csrfToken: string,
+): Promise<{ status: string }> {
+  const res = await apiFetch(`/api/v1/partsets/${privateId}/retry-page-cache`, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': csrfToken },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(apiErrorDetail(err, 'Failed to retry page images'))
+  }
+  return res.json()
+}
+
 export async function retryPartsetPipeline(
   privateId: string,
   csrfToken: string,

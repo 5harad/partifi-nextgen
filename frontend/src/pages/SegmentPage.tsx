@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { SegmentEditor } from '../components/segment/SegmentEditor'
-import { TransitionError } from '../components/TransitionError'
+import { TransitionError, TransitionErrorButton } from '../components/TransitionError'
 import { TransitionWait } from '../components/TransitionWait'
-import { getSegmentData } from '../lib/api'
+import { getCsrfToken, getSegmentData, retryPartsetPageCache } from '../lib/api'
+import { LOCK_BUSY_MESSAGE } from '../lib/pipelineErrors'
 import { useNoIndex } from '../lib/useNoIndex'
 import type { SegmentDataResponse } from '../types/segment'
 
@@ -20,6 +21,9 @@ export function SegmentPage() {
   const [loading, setLoading] = useState(true)
   const [warming, setWarming] = useState(false)
   const [warmProgress, setWarmProgress] = useState(0)
+  const [cacheError, setCacheError] = useState(false)
+  const [retrying, setRetrying] = useState(false)
+  const pollRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     if (!privateId) return
@@ -34,6 +38,16 @@ export function SegmentPage() {
 
         setData(payload)
         setLoading(false)
+
+        if (payload.image_cache_error_message) {
+          setCacheError(true)
+          setWarming(false)
+          setError(payload.image_cache_error_message)
+          return
+        }
+
+        setCacheError(false)
+        setError(null)
         setWarming(!payload.images_ready)
         setWarmProgress(payload.image_progress)
 
@@ -60,13 +74,39 @@ export function SegmentPage() {
       }
     }
 
-    poll()
+    pollRef.current = () => {
+      cancelled = false
+      pollCount = 0
+      window.clearTimeout(timeoutId)
+      void poll()
+    }
+
+    void poll()
 
     return () => {
       cancelled = true
       window.clearTimeout(timeoutId)
     }
   }, [privateId, navigate])
+
+  const handleRetryPageCache = async () => {
+    if (!privateId || retrying) return
+    setRetrying(true)
+    try {
+      const token = await getCsrfToken()
+      await retryPartsetPageCache(privateId, token)
+      setError(null)
+      setCacheError(false)
+      setWarming(true)
+      setWarmProgress(0)
+      pollRef.current?.()
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to retry page images'
+      setError(message === 'Failed to fetch' ? LOCK_BUSY_MESSAGE : message)
+    } finally {
+      setRetrying(false)
+    }
+  }
 
   return (
     <Layout>
@@ -80,7 +120,15 @@ export function SegmentPage() {
           progress={warmProgress}
         />
       ) : error ? (
-        <TransitionError message={error} />
+        <TransitionError message={error}>
+          {cacheError ? (
+            <TransitionErrorButton
+              label={retrying ? 'Retrying…' : 'Try again'}
+              onClick={handleRetryPageCache}
+              disabled={retrying}
+            />
+          ) : null}
+        </TransitionError>
       ) : data ? (
         <SegmentEditor data={data} />
       ) : null}

@@ -52,6 +52,7 @@ from app.schemas.orientation import (
     OrientationDataResponse,
     ReorientRequest,
     ReorientResponse,
+    RetryPageCacheResponse,
 )
 from app.schemas.preview import (
     CombinePartsRequest,
@@ -67,6 +68,7 @@ from app.services.orientation_preview import render_orientation_preview_png
 from app.services.partset_pages import (
     ensure_page_image_path,
     orientation_data_payload,
+    retry_partset_page_cache,
     start_reorient,
 )
 from app.services.partset_touch import touch_partset_access
@@ -614,11 +616,33 @@ def reorient_partset(
     partset = get_partset_by_private_id(db, private_id)
     if not partset:
         raise HTTPException(status_code=404, detail="Partset not found")
+    if not partset.import_complete:
+        raise HTTPException(status_code=400, detail="Import not complete")
     try:
         job_id = start_reorient(db, partset, body.rotation_degrees)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ReorientResponse(status="started", job_id=job_id)
+
+
+@router.post(
+    "/partsets/{private_id}/retry-page-cache",
+    response_model=RetryPageCacheResponse,
+)
+def retry_page_cache(
+    private_id: str,
+    x_csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+    db: Session = Depends(get_db),
+) -> RetryPageCacheResponse:
+    verify_csrf(x_csrf_token)
+    partset = get_partset_by_private_id(db, private_id)
+    if not partset:
+        raise HTTPException(status_code=404, detail="Partset not found")
+    try:
+        retry_partset_page_cache(db, partset)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RetryPageCacheResponse()
 
 
 @router.get(

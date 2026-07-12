@@ -29,6 +29,7 @@ class SegmentDataResponse(BaseModel):
     images_ready: bool = True
     images_warming: bool = False
     image_progress: float = 100.0
+    image_cache_error_message: str | None = None
 
 
 class SavePageSegmentsRequest(BaseModel):

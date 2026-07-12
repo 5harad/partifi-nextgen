@@ -9,6 +9,10 @@ from sqlalchemy.orm import Session
 
 from app.models import Page, Partset, Score, Segment
 from app.services.import_lock import try_acquire_import_lock
+from app.services.partset_cache_status import (
+    clear_partset_cache_error,
+    get_partset_cache_error,
+)
 from app.services.local_cache import get_local_cache
 from app.services.partsets import import_progress_payload
 from app.services.queue import enqueue_job
@@ -47,12 +51,28 @@ def ensure_page_image_path(
     return cache.ensure_score_page(score.id, kind, page)
 
 
+def _image_status_payload(
+    *,
+    images_ready: bool,
+    images_warming: bool,
+    image_progress: float,
+    image_cache_error_message: str | None = None,
+) -> dict[str, bool | float | str | None]:
+    return {
+        "images_ready": images_ready,
+        "images_warming": images_warming,
+        "image_progress": image_progress,
+        "image_cache_error_message": image_cache_error_message,
+    }
+
+
 def _enqueue_warm_partset_pages(db: Session, partset: Partset) -> bool:
     """Enqueue a cache-only rebuild for rotated pages. Returns True if a job was enqueued."""
     if not partset.score_id:
         return False
     if not try_acquire_import_lock(partset.id):
         return False
+    clear_partset_cache_error(partset.id)
     enqueue_job(
         "warm_partset_pages",
         {
@@ -65,21 +85,57 @@ def _enqueue_warm_partset_pages(db: Session, partset: Partset) -> bool:
     return True
 
 
-def ensure_page_images_status(db: Session, partset: Partset, score: Score) -> dict[str, bool | float]:
+def _rotated_partset_images_ready(partset_id: str) -> bool:
+    cache = get_local_cache()
+    return cache.partset_has_kind(partset_id, "lowres") and cache.partset_has_kind(
+        partset_id, "highres"
+    )
+
+
+def ensure_page_images_status(
+    db: Session, partset: Partset, score: Score
+) -> dict[str, bool | float | str | None]:
     if uses_custom_pages(partset):
-        cache = get_local_cache()
-        if cache.partset_has_kind(partset.id, "lowres"):
-            return {"images_ready": True, "images_warming": False, "image_progress": 100.0}
+        if _rotated_partset_images_ready(partset.id):
+            clear_partset_cache_error(partset.id)
+            return _image_status_payload(
+                images_ready=True,
+                images_warming=False,
+                image_progress=100.0,
+            )
         progress = import_progress_payload(partset)
         if progress["is_complete"]:
+            cache_error = get_partset_cache_error(partset.id)
+            if cache_error:
+                return _image_status_payload(
+                    images_ready=False,
+                    images_warming=False,
+                    image_progress=0.0,
+                    image_cache_error_message=cache_error,
+                )
             _enqueue_warm_partset_pages(db, partset)
-            return {"images_ready": False, "images_warming": True, "image_progress": 0.0}
-        return {
-            "images_ready": False,
-            "images_warming": True,
-            "image_progress": float(progress["total_progress"]),
-        }
+            return _image_status_payload(
+                images_ready=False,
+                images_warming=True,
+                image_progress=0.0,
+            )
+        clear_partset_cache_error(partset.id)
+        return _image_status_payload(
+            images_ready=False,
+            images_warming=True,
+            image_progress=float(progress["total_progress"]),
+        )
     return ensure_score_pages_warming(db, score.id)
+
+
+def retry_partset_page_cache(db: Session, partset: Partset) -> None:
+    if not partset.score_id:
+        raise ValueError("Partset has no score")
+    if not uses_custom_pages(partset):
+        raise ValueError("Partset does not use rotated page images")
+    clear_partset_cache_error(partset.id)
+    if not _enqueue_warm_partset_pages(db, partset):
+        raise ValueError("Page images are already being prepared for this partset")
 
 
 def reset_partset_for_reorient(db: Session, partset: Partset) -> None:
@@ -102,8 +158,6 @@ def reset_partset_for_reorient(db: Session, partset: Partset) -> None:
     partset.paste_complete = None
     partset.paste_progress = 0.0
     partset.parts_ready = False
-    partset.orientation_override = None
-    partset.rotation_degrees = 0
     partset.error = None
     partset.error_message = None
     partset.error_ts = None
@@ -117,11 +171,20 @@ def reset_partset_for_reorient(db: Session, partset: Partset) -> None:
 def start_reorient(db: Session, partset: Partset, rotation_degrees: int) -> str:
     if not partset.score_id:
         raise ValueError("Partset has no score")
+    if not partset.import_complete:
+        raise ValueError("Import not complete")
+    score = db.get(Score, partset.score_id)
+    if not score:
+        raise ValueError("Partset has no score")
     rotation_degrees = normalize_rotation_degrees(rotation_degrees)
     if not try_acquire_import_lock(partset.id):
-        raise ValueError("A re-orient is already in progress for this score")
+        raise ValueError("A re-orient is already in progress for this partset")
 
     reset_partset_for_reorient(db, partset)
+
+    score_orientation = score.orientation if score.orientation else "portrait"
+    partset.rotation_degrees = rotation_degrees
+    partset.orientation_override = layout_orientation(score_orientation, rotation_degrees)  # type: ignore[arg-type]
 
     job_id = enqueue_job(
         "reorient_partset",

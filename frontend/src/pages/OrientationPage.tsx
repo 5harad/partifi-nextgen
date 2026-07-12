@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
-import { TransitionError } from '../components/TransitionError'
+import { TransitionError, TransitionErrorButton } from '../components/TransitionError'
 import { TransitionWait } from '../components/TransitionWait'
-import { getCsrfToken, getOrientationData, reorientPartset } from '../lib/api'
+import { getCsrfToken, getOrientationData, reorientPartset, retryPartsetPipeline } from '../lib/api'
+import { LOCK_BUSY_MESSAGE } from '../lib/pipelineErrors'
 import { getDimensions } from '../lib/pageDimensions'
 import { useNoIndex } from '../lib/useNoIndex'
 import type { OrientationDataResponse, OrientationOption } from '../types/orientation'
@@ -51,6 +52,7 @@ export function OrientationPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [retrying, setRetrying] = useState(false)
   const wasReimportingRef = useRef(false)
   const sawReimportInProgressRef = useRef(false)
   const pollRef = useRef<(() => void) | null>(null)
@@ -131,6 +133,39 @@ export function OrientationPage() {
     }
   }, [data, navigate, privateId])
 
+  const handleRetry = async () => {
+    if (!privateId || retrying) return
+    setRetrying(true)
+    try {
+      const token = await getCsrfToken()
+      const result = await retryPartsetPipeline(privateId, token)
+      if (result.job_id === null) {
+        setError(LOCK_BUSY_MESSAGE)
+        return
+      }
+      setError(null)
+      wasReimportingRef.current = true
+      sawReimportInProgressRef.current = true
+      setLoading(false)
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              reimport_in_progress: true,
+              reimport_progress: 33,
+              reimport_error: null,
+              reimport_error_message: null,
+            }
+          : prev,
+      )
+      pollRef.current?.()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Re-orient failed')
+    } finally {
+      setRetrying(false)
+    }
+  }
+
   const handleReimport = async () => {
     if (!privateId || submitting) return
     try {
@@ -169,7 +204,13 @@ export function OrientationPage() {
           progress={data?.reimport_progress ?? 0}
         />
       ) : error ? (
-        <TransitionError message={error} />
+        <TransitionError message={error}>
+          <TransitionErrorButton
+            label={retrying ? 'Retrying…' : 'Try again'}
+            onClick={handleRetry}
+            disabled={retrying}
+          />
+        </TransitionError>
       ) : data ? (
         <div id="main">
           <img
