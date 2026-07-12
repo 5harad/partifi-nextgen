@@ -38,7 +38,8 @@ def _new_id(table: str) -> str:
 
 def _make_pdf(path: Path, pagesize) -> None:
     c = canvas.Canvas(str(path), pagesize=pagesize)
-    c.drawString(72, 720, "e2e test")
+    _width, height = pagesize
+    c.drawString(72, height - 72, "e2e test")
     c.showPage()
     c.save()
 

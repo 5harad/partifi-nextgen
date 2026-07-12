@@ -32,8 +32,6 @@ export function PartDownloadLinks({
     e: React.MouseEvent<HTMLAnchorElement>,
     url: string,
   ) => {
-    if (partsReady) return
-
     e.preventDefault()
 
     if (ensureOnClick) {
@@ -61,16 +59,16 @@ export function PartDownloadLinks({
             className="red"
             href={part.letter_url}
             download={partDownloadFilename(partsetId, part.file_name, 'letter')}
-            onClick={(e) => void handlePartClick(e, part.letter_url)}
+            onClick={partsReady ? undefined : (e) => void handlePartClick(e, part.letter_url)}
           >
-            letter size
+            letter
           </a>
           {' | '}
           <a
             className="red"
             href={part.a4_url}
             download={partDownloadFilename(partsetId, part.file_name, 'a4')}
-            onClick={(e) => void handlePartClick(e, part.a4_url)}
+            onClick={partsReady ? undefined : (e) => void handlePartClick(e, part.a4_url)}
           >
             a4
           </a>

@@ -36,7 +36,9 @@ class PageDimensions:
 
     @property
     def page_chunk_max(self) -> int:
-        return self.highres_height - 400
+        from pipeline.paste_layout import paste_page_chunk_max_px
+
+        return paste_page_chunk_max_px(self.orientation)
 
     @property
     def preview_pane_width(self) -> int:

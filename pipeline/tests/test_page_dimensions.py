@@ -32,8 +32,8 @@ def test_get_dimensions() -> None:
 
 
 def test_page_chunk_max_and_preview_pane() -> None:
-    assert PORTRAIT.page_chunk_max == 2900
-    assert LANDSCAPE.page_chunk_max == 2150
+    assert PORTRAIT.page_chunk_max == 2865
+    assert LANDSCAPE.page_chunk_max == 1925
     assert PORTRAIT.preview_pane_width == 367
     assert LANDSCAPE.preview_pane_width == 475
 

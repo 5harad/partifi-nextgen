@@ -117,8 +117,23 @@ docker compose restart api worker-1 worker-2 worker-3
 
 ### Tests
 
+**Local (recommended):**
+
 ```bash
 cd api && uv sync --group dev && uv run pytest
+cd ../workers && uv sync --group dev && uv run pytest
+cd ../workers && uv run pytest ../pipeline/tests
+```
+
+**Docker** (install dev deps once per venv volume, then run):
+
+```bash
+docker compose exec api uv sync --group dev
+docker compose exec api uv run pytest
+
+docker compose exec worker-1 uv sync --group dev
+docker compose exec worker-1 uv run pytest
+docker compose exec worker-1 uv run pytest /app/pipeline/tests
 ```
 
 ## API (v1)

@@ -89,18 +89,22 @@ class LocalCache:
             target.mkdir(parents=True, exist_ok=True)
             for png in src.glob("*.png"):
                 dest = target / png.name
-                if dest.is_file():
-                    continue
                 tmp = self._temp_path(dest)
                 try:
                     shutil.copy2(png, tmp)
-                    self._install_file(tmp, dest)
+                    self._replace_file(tmp, dest)
                 except Exception:
                     tmp.unlink(missing_ok=True)
                     if not dest.is_file():
                         raise
 
+    def invalidate_score_pages(self, score_id: str) -> None:
+        """Drop derived page PNGs; keep cached score.pdf."""
+        for kind in SCORE_KINDS:
+            shutil.rmtree(self.score_kind_dir(score_id, kind), ignore_errors=True)
+
     def invalidate_score(self, score_id: str) -> None:
+        """Drop all cached score data including the PDF (e.g. after S3 replacement)."""
         shutil.rmtree(self.score_root(score_id), ignore_errors=True)
 
     # --- preview ---
@@ -178,7 +182,7 @@ class LocalCache:
         tmp = self._temp_path(dest)
         try:
             shutil.copy2(src, tmp)
-            self._install_file(tmp, dest)
+            self._replace_file(tmp, dest)
         except Exception:
             tmp.unlink(missing_ok=True)
             if not dest.is_file():

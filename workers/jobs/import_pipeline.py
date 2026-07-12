@@ -13,7 +13,6 @@ from pdf2png import convert_score
 from pdf_validate_repair import ensure_valid_score_pdf
 from pipeline.orientation_probe import infer_orientation_from_pdf
 from pipeline.page_dimensions import Orientation
-from s3_storage import download_file, score_pdf_s3_key
 from score_cache import (
     copy_partset_segs_to_score,
     copy_score_segs_to_partset,
@@ -68,8 +67,8 @@ def _score_pages_available(score_id: str) -> bool:
 
 def _ensure_score_pdf(score_id: str, workdir: Path) -> Path:
     pdf_path = workdir / "score.pdf"
-    logger.info("Downloading score %s", score_id)
-    download_file(score_pdf_s3_key(score_id), pdf_path)
+    cached = get_local_cache().ensure_score_pdf(score_id)
+    shutil.copy2(cached, pdf_path)
     ensure_valid_score_pdf(pdf_path, workdir)
     return pdf_path
 
@@ -136,7 +135,7 @@ def run_import_pipeline(partset_id: str, score_id: str, *, job_id: str | None = 
                 inferred,
             )
             invalidate_score_analysis(score_id)
-            get_local_cache().invalidate_score(score_id)
+            get_local_cache().invalidate_score_pages(score_id)
             cache_warm = False
 
         need_convert = first_time or mismatch or not cache_warm

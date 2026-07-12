@@ -61,9 +61,15 @@ def test_library_empty_for_new_user() -> None:
     assert response.json()["items"] == []
 
 
-def test_google_login_not_configured() -> None:
+def test_google_login_not_configured(monkeypatch) -> None:
+    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_CLIENT_SECRET", raising=False)
+    from app.config import get_settings
+
+    get_settings.cache_clear()
     response = client.post("/api/v1/auth/google", json={"id_token": "invalid"})
     assert response.status_code == 503
+    get_settings.cache_clear()
 
 
 def test_google_login_id_token_success(monkeypatch) -> None:

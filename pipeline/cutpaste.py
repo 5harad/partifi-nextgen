@@ -3,13 +3,9 @@
 from __future__ import annotations
 
 from pipeline.page_dimensions import Orientation, get_dimensions, prct2pixel as _prct2pixel
+from pipeline.paste_layout import paste_page_chunk_max_px
 
 ALL_TAG_KEYS = ("all", "All", "ALL")
-
-# Legacy portrait constants kept for tests and callers that import these names.
-HIGHRES_HEIGHT = 3300
-HIGHRES_WIDTH = 2550
-PAGE_CHUNK_MAX = 2900
 
 
 def prct2pixel(
@@ -29,13 +25,13 @@ def page_chunks(
     orientation: Orientation = "portrait",
 ) -> list[list[int]]:
     breaks = breaks or []
-    page_chunk_max = get_dimensions(orientation).page_chunk_max
+    page_chunk_max = paste_page_chunk_max_px(orientation)
     chunks: list[list[int]] = []
     start = 0
     h = 0.0
     for i, seg_id in enumerate(segments):
         seg_h = heights[seg_id]
-        if h + seg_h >= page_chunk_max or (i - 1) in breaks:
+        if h + seg_h > page_chunk_max or (i - 1) in breaks:
             if start < i:
                 chunks.append(segments[start:i])
             start = i

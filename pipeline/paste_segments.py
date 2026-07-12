@@ -8,16 +8,81 @@ from pathlib import Path
 
 from PIL import Image
 from reportlab.lib.colors import black, gray
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import A4, letter, landscape as landscape_page
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
+from pipeline.page_dimensions import Orientation
+from pipeline.paste_layout import (
+    RESOLUTION,
+    page_dims_inches,
+    paste_packing_bottom_in,
+    paste_packing_top_in,
+    vertical_layout,
+)
 from pipeline.pdf_fonts import set_header_font, set_header_font_for_fields
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 LOGO_PATH = ASSETS_DIR / "scroll.png"
-RESOLUTION = 300.0
+HEADER_FONT_SIZE = 11
+
+
+def _draw_partifi_link(
+    doc: canvas.Canvas,
+    *,
+    right_in: float,
+    top_in: float,
+    partset_id: str,
+    font_name: str,
+) -> None:
+    label = f"partifi.org/{partset_id}"
+    url = f"https://partifi.org/{partset_id}"
+    y = top_in - 24
+    doc.drawRightString(right_in, y, label)
+    width = stringWidth(label, font_name, HEADER_FONT_SIZE)
+    doc.linkURL(url, (right_in - width, y - 2, right_in, y + HEADER_FONT_SIZE), relative=1)
+
+
+def _reportlab_pagesize(pagesize: str, orientation: Orientation):
+    base = letter if pagesize == "letter" else A4
+    return landscape_page(base) if orientation == "landscape" else base
+
+
+def _draw_page_number(
+    doc: canvas.Canvas,
+    *,
+    center: float,
+    bottom: float,
+    page_num: int,
+) -> None:
+    page_label = f"Page {page_num}"
+    set_header_font(doc, page_label, HEADER_FONT_SIZE)
+    doc.drawCentredString(center * inch, bottom * inch, page_label)
+
+
+def _pdf_document_title(part_name: str, composer: str, title: str) -> str:
+    part_name = part_name.strip()
+    composer = composer.strip()
+    title = title.strip()
+    if title:
+        return f"{part_name} — {title}"
+    if composer:
+        return f"{part_name} — {composer}"
+    return part_name or "Partifi part"
+
+
+def _pdf_document_subject(composer: str, title: str) -> str | None:
+    composer = composer.strip()
+    title = title.strip()
+    if composer and title:
+        return f"{composer}: {title}"
+    if composer:
+        return composer
+    if title:
+        return title
+    return None
 
 
 @lru_cache
@@ -54,7 +119,7 @@ def _add_page_info(
 
     part_name_text = str(part_name)
     page_label = f"Page {page_num}"
-    set_header_font_for_fields(
+    header_font = set_header_font_for_fields(
         doc,
         title,
         composer,
@@ -62,13 +127,18 @@ def _add_page_info(
         partset_id,
         f"partifi.org/{partset_id}",
         page_label,
-        size=11,
+        size=HEADER_FONT_SIZE,
     )
     doc.drawString(left_in + 28, top_in - 12, title)
     doc.drawString(left_in + 28, top_in - 24, composer)
     doc.drawRightString(right_in, top_in - 12, part_name_text)
-    doc.drawRightString(right_in, top_in - 24, f"partifi.org/{partset_id}")
-    doc.drawCentredString(center_in, bottom_in, page_label)
+    _draw_partifi_link(
+        doc,
+        right_in=right_in,
+        top_in=top_in,
+        partset_id=partset_id,
+        font_name=header_font,
+    )
     doc.line(left_in, top_in - 36, right_in, top_in - 36)
 
 
@@ -87,11 +157,13 @@ def _add_images(
     x: float,
     y: float,
     vspace: float,
+    *,
+    min_y_in: float,
 ) -> None:
     x_in = x * inch
     y_in = y * inch
 
-    for image in images:
+    for i, image in enumerate(images):
         with Image.open(image["file"]) as src:
             if image.get("cue"):
                 im_white = Image.new("L", src.size, 255)
@@ -101,6 +173,10 @@ def _add_images(
 
             w, h = [d / RESOLUTION * inch for d in im.size]
             y_in -= h
+            if y_in < min_y_in:
+                raise RuntimeError(
+                    "Part page layout overflow: segment image extends into the footer band"
+                )
             doc.drawImage(ImageReader(im), x_in, y_in, width=w, height=h)
 
             label = image.get("label") or ""
@@ -119,7 +195,8 @@ def _add_images(
                     doc.setStrokeColor(black)
                     doc.setFillColor(black)
 
-            y_in -= vspace * inch
+            if i < len(images) - 1:
+                y_in -= vspace * inch
 
 
 def create_part(
@@ -132,9 +209,12 @@ def create_part(
     pages: list[list[dict]],
     outfile: Path,
     pagesize: str = "letter",
+    orientation: Orientation = "portrait",
 ) -> None:
-    dims = {"letter": (8.5, 11), "a4": (8.27, 11.69)}
-    page_w, page_h = dims[pagesize]
+    page_w, page_h = page_dims_inches(pagesize, orientation)
+    bottom_margin, top_margin = vertical_layout(page_h, orientation)
+    packing_top_in = paste_packing_top_in(pagesize, orientation)
+    packing_bottom_in = paste_packing_bottom_in(pagesize, orientation)
 
     header_left = 0.75
     header_right = page_w - 0.75
@@ -143,13 +223,12 @@ def create_part(
     max_width = _max_segment_width(pages)
     left_margin = max(0, (page_w - max_width / RESOLUTION) / 2)
 
-    bottom_margin = (page_h - 10.5) / 2
-    top_margin = bottom_margin + 10.5
-
-    if pagesize == "letter":
-        part = canvas.Canvas(str(outfile), pagesize=letter)
-    else:
-        part = canvas.Canvas(str(outfile))
+    part = canvas.Canvas(str(outfile), pagesize=_reportlab_pagesize(pagesize, orientation))
+    part.setTitle(_pdf_document_title(part_name, composer, title))
+    if subject := _pdf_document_subject(composer, title):
+        part.setSubject(subject)
+    if composer:
+        part.setAuthor(composer)
 
     for ndx, page_segments in enumerate(pages):
         _add_page_info(
@@ -165,7 +244,15 @@ def create_part(
             partset_id,
             ndx + 1,
         )
-        _add_images(part, page_segments, left_margin, top_margin - 0.7, sep)
+        _add_images(
+            part,
+            page_segments,
+            left_margin,
+            packing_top_in,
+            sep,
+            min_y_in=packing_bottom_in * inch,
+        )
+        _draw_page_number(part, center=center, bottom=bottom_margin, page_num=ndx + 1)
         part.showPage()
 
     part.save()
@@ -179,6 +266,7 @@ def _serialize_part_job(job: dict) -> dict:
         "partset_id": job["partset_id"],
         "sep": job["sep"],
         "pagesize": job["pagesize"],
+        "orientation": job.get("orientation", "portrait"),
         "outfile": str(job["outfile"]),
         "pages": [
             [
@@ -202,6 +290,7 @@ def _create_part_job(serialized: dict) -> None:
         partset_id=serialized["partset_id"],
         sep=serialized["sep"],
         pagesize=serialized["pagesize"],
+        orientation=serialized.get("orientation", "portrait"),
         outfile=Path(serialized["outfile"]),
         pages=[
             [

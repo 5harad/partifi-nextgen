@@ -2,7 +2,15 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import ANY, MagicMock, patch
 
+import pytest
+
 from jobs import import_pipeline
+
+
+@pytest.fixture(autouse=True)
+def _no_import_lock_release():
+    with patch.object(import_pipeline, "release_import_lock"):
+        yield
 
 
 def test_run_import_pipeline_reuses_warm_cache_and_analysis() -> None:
@@ -70,6 +78,6 @@ def test_run_import_pipeline_orientation_mismatch_invalidates_and_reconverts() -
         import_pipeline.run_import_pipeline("part01", "abc12", job_id="job1")
 
     invalidate_analysis.assert_called_once_with("abc12")
-    cache.invalidate_score.assert_called_once_with("abc12")
+    cache.invalidate_score_pages.assert_called_once_with("abc12")
     run_convert.assert_called_once_with("part01", "abc12", ANY, workdir / "score.pdf", "landscape")
     analyze.assert_called_once()

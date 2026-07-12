@@ -849,6 +849,11 @@ iframe[src*="accounts.google.com/gsi"]
 	position: absolute;
 }
 
+#thumbs.thumbs-animated
+{
+	transition: left 0.75s ease-out;
+}
+
 .thumb 
 {
 	width: 102px;
@@ -889,7 +894,7 @@ iframe[src*="accounts.google.com/gsi"]
 }
 
 .seg-under-rule { 
-	width: 915px; 
+	width: var(--seg-under-rule-width, 915px); 
 	height: 1px; 
 	background: #D8D8C2;
 	position: absolute;
@@ -1086,6 +1091,99 @@ iframe[src*="accounts.google.com/gsi"]
 	left: 715px;
 }
 
+/* Segment editor — landscape score pages (layout vars from segmentEditorLayout.ts). */
+#segment-header.orientation-landscape,
+#segment-panel.orientation-landscape {
+	width: var(--segment-panel-width);
+}
+
+#segment-header.orientation-landscape {
+	background-repeat: no-repeat;
+	background-size: 100% 100%;
+}
+
+#segment-panel.orientation-landscape {
+	height: var(--segment-panel-height);
+}
+
+#segment-panel.orientation-landscape #segmenter,
+#segment-panel.orientation-landscape #margins,
+#segment-panel.orientation-landscape #viewer {
+	width: var(--viewer-width);
+	height: var(--viewer-height);
+}
+
+#segment-panel.orientation-landscape #seg-nav-bar {
+	top: var(--seg-nav-top);
+	width: var(--seg-nav-width);
+}
+
+#segment-panel.orientation-landscape #preview-button {
+	top: var(--preview-button-top);
+	left: var(--preview-button-left);
+}
+
+#segment-panel.orientation-landscape #rotator {
+	width: var(--rotator-width);
+	left: var(--rotator-left);
+	background-repeat: no-repeat;
+	background-size: 100% 100%;
+}
+
+#segment-panel.orientation-landscape #slider-label {
+	left: var(--slider-label-left);
+}
+
+#segment-panel.orientation-landscape #slider {
+	left: var(--slider-left);
+}
+
+#segment-panel.orientation-landscape #labels-title {
+	left: var(--labels-title-left);
+}
+
+#segment-panel.orientation-landscape #systems-title,
+#segment-panel.orientation-landscape #labels-title {
+	bottom: var(--title-row-bottom);
+}
+
+#segment-panel.orientation-landscape .thumb {
+	width: var(--thumb-width);
+}
+
+#segment-panel.orientation-landscape .img-frame {
+	width: var(--thumb-img-width);
+	height: var(--thumb-img-height);
+}
+
+#segment-panel.orientation-landscape #previewer {
+	width: var(--previewer-width);
+}
+
+#segment-panel.orientation-landscape #previewer-next {
+	left: var(--previewer-next-left);
+}
+
+#segment-panel.orientation-landscape .region {
+	width: var(--viewer-width);
+}
+
+#segment-panel.orientation-landscape .seg-delete {
+	left: var(--seg-delete-left);
+}
+
+#segment-panel.orientation-landscape .seg-handle {
+	left: var(--seg-handle-left);
+}
+
+#segment-panel.orientation-landscape .tags {
+	left: var(--tags-left);
+}
+
+#segment-panel.orientation-landscape .tag-delete {
+	left: var(--tag-delete-left);
+}
+
 /* PREVIEW — desk overlay; stand GIF is .stand-figure-img on #main (see .site-canvas--long-pole). */
 
 #preview-pane 
@@ -1131,30 +1229,142 @@ iframe[src*="accounts.google.com/gsi"]
 }
 
 
-#part-pages 
+#part-pages
 {
 	width: auto;
-	height: 100%;
+	height: var(--part-page-height, 475px);
 	left: 0px;
-	top: 0px;
+	top: 50%;
 	position: absolute;
+	transform: translateY(-50%);
+}
+
+#part-pages.part-pages-animated
+{
+	transition: left 0.25s ease-out;
 }
 
 .part-page {
 	position: absolute;
 	left: 0px;
 	top: 0px;
-	width: 367px;
-	height: 437px;
-	padding-top: 38px;
+	width: var(--part-page-width, 367px);
+	height: var(--part-page-height, 475px);
 	background-color: white;
 	border: 1px solid #BEBA9F;
+	overflow: visible;
+}
+
+.part-page-logo {
+	position: absolute;
+	left: var(--part-page-logo-left, 32px);
+	top: var(--part-page-logo-top, 11px);
+	width: var(--part-page-logo-size, 14px);
+	height: var(--part-page-logo-size, 14px);
+}
+
+.part-page-title,
+.part-page-composer,
+.part-page-part-name,
+.part-page-partifi-id {
+	position: absolute;
+	font-family: var(--part-page-font-family, "Times New Roman", Times, serif);
+	font-size: var(--part-page-font-size, 8px);
+	font-variant: normal;
+	font-feature-settings: normal;
+	text-transform: none;
+	line-height: 1;
+	color: black;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.part-page-title {
+	top: var(--part-page-title-top, 12px);
+	left: var(--part-page-text-left, 42px);
+	right: 50%;
+	text-align: left;
+}
+
+.part-page-composer {
+	top: var(--part-page-composer-top, 19px);
+	left: var(--part-page-text-left, 42px);
+	right: 50%;
+	text-align: left;
+}
+
+.part-page-part-name {
+	top: var(--part-page-part-name-top, 12px);
+	right: var(--part-page-header-right, 32px);
+	left: 50%;
+	text-align: right;
+}
+
+.part-page-partifi-id {
+	top: var(--part-page-link-top, 19px);
+	right: var(--part-page-header-right, 32px);
+	left: 50%;
+	text-align: right;
+	color: black;
+}
+
+.part-page-rule {
+	position: absolute;
+	left: var(--part-page-header-left, 32px);
+	right: var(--part-page-header-right, 32px);
+	top: var(--part-page-rule-top, 32px);
+	height: 0;
+	border-top: 1px solid black;
+	z-index: 3;
+}
+
+.part-page-logo,
+.part-page-title,
+.part-page-composer,
+.part-page-part-name,
+.part-page-partifi-id {
+	z-index: 3;
+}
+
+.part-page-content {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: var(--part-page-content-top, 41px);
+	height: var(--part-page-content-height, 408px);
+	box-sizing: border-box;
+	padding-top: var(--part-page-content-padding-top, 0px);
+	padding-bottom: var(--part-page-content-padding-bottom, 0px);
+	overflow: visible;
+	z-index: 2;
+}
+
+.part-page-footer {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: var(--part-page-number-bottom, 11px);
+	text-align: center;
+	font-family: var(--part-page-font-family, "Times New Roman", Times, serif);
+	font-size: var(--part-page-font-size, 8px);
+	line-height: 1;
+	color: black;
+	z-index: 1;
 }
 
 .partseg {
 	position: relative;
 	cursor: url('/images/break_cursor.png'), pointer;
-	width: 367px;
+	width: var(--part-page-width, 367px);
+}
+
+.part-segment-slot {
+	position: relative;
+}
+
+.part-segment-slot:has(.proposed-break) {
+	z-index: 2;
 }
 
 .partseg img {
@@ -1173,20 +1383,21 @@ iframe[src*="accounts.google.com/gsi"]
 .rotate {
 	position: absolute;
 	left: 5px;
-	-webkit-transform: rotate(-90deg);
-	-webkit-transform-origin: left top;
-	-moz-transform: rotate(-90deg);
-	-moz-transform-origin: left top;
-	-ms-transform: rotate(-90deg);
-	-ms-transform-origin: left top;
-	-o-transform: rotate(-90deg);
-	-o-transform-origin: left top;
-	transform: rotate(-90deg);
-	transform-origin: left top;
+	-webkit-transform: translateY(-50%) rotate(-90deg);
+	-webkit-transform-origin: left center;
+	-moz-transform: translateY(-50%) rotate(-90deg);
+	-moz-transform-origin: left center;
+	-ms-transform: translateY(-50%) rotate(-90deg);
+	-ms-transform-origin: left center;
+	-o-transform: translateY(-50%) rotate(-90deg);
+	-o-transform-origin: left center;
+	transform: translateY(-50%) rotate(-90deg);
+	transform-origin: left center;
 	border: 1px solid black;
 	font-size: 8px;
 	padding-top: 1px;
 	padding-bottom: 1px;
+	z-index: 2;
 }
 
 .cue {
@@ -1202,6 +1413,25 @@ iframe[src*="accounts.google.com/gsi"]
 	left: 402px;
 	font-family: 'IM Fell DW Pica SC', serif;
 	font-size: 17px;
+}
+
+/* Preview — landscape scores (wider part column inside unchanged viewer). */
+#preview-pane.orientation-landscape .part-page,
+#preview-pane.orientation-landscape .partseg {
+	width: var(--part-page-width, 475px);
+}
+
+#preview-pane.orientation-landscape #part-nav-bar {
+	width: 475px;
+}
+
+#preview-pane.orientation-landscape .page-break,
+#preview-pane.orientation-landscape .proposed-break {
+	width: var(--page-break-width);
+}
+
+#preview-pane.orientation-landscape .page-break-delete {
+	left: var(--page-break-delete-left);
 }
 
 #part-page-num
@@ -1326,22 +1556,27 @@ iframe[src*="accounts.google.com/gsi"]
 .proposed-break
 {
 	height: 0px;
-	width: 340px;
+	width: var(--page-break-width, 340px);
 	left: 13px;
 	position: absolute;
-	border-bottom :dashed 2px #E00000;
+	border-bottom: dashed 2px #E00000;
+	transform: translateY(-50%);
+	z-index: 3;
+	pointer-events: none;
 }
 
 .page-break
 {
 	margin: auto;
 	height: auto;
-	width: 340px;
+	width: var(--page-break-width, 340px);
 	border-top: 2px solid #E00000;
 	color: #E00000;
 	font-family: 'IM Fell DW Pica SC', serif;
 	font-size: 12px;
 	position: relative;
+	z-index: 4;
+	background-color: white;
 }
 
 .page-break-delete

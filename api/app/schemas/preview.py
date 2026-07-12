@@ -53,6 +53,7 @@ class PartgenProgressResponse(BaseModel):
     progress: float = 0.0
     total_progress: float = 0.0
     is_complete: bool = False
+    in_progress: bool = False
 
 
 class PartDownloadItem(BaseModel):

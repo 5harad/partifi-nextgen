@@ -13,10 +13,15 @@ export type PageSegmentData = {
   segments: SegmentItem[]
 }
 
+import type { Orientation } from '../lib/pageDimensions'
+
+export type { Orientation }
+
 export type SegmentDataResponse = {
   score_id: string
   partset_id: string
   private_id: string
+  orientation: Orientation
   num_pages: number
   pages: Record<string, PageSegmentData>
   image_urls: {

@@ -86,6 +86,7 @@ services:
     volumes:
       - ./api:/app
       - ./pipeline:/app/pipeline
+      - ./workers:/workers:ro
       - api_venv:/app/.venv
       - api_tmp:/tmp/partifi
       - partifi_cache:/data/partifi

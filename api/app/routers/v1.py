@@ -4,7 +4,7 @@ import re
 import threading
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy.orm import Session
 
@@ -60,7 +60,6 @@ from app.schemas.preview import (
 )
 from app.services.preview import (
     combine_parts,
-    ensure_part_file_on_cache_miss,
     ensure_parts_if_needed,
     get_parts_data,
     get_preview_data,
@@ -69,7 +68,6 @@ from app.services.preview import (
     start_part_generation,
 )
 from app.services.downloads import (
-    partgen_redirect_url,
     record_part_download,
     resolve_part_cache_filename,
     safe_cached_part_path,
@@ -120,7 +118,8 @@ def _serve_cached_part(
     access_id: str,
     download_path: str,
     user_id: str | None = None,
-) -> FileResponse | RedirectResponse:
+) -> FileResponse:
+    del access_id, download_path  # kept for stable call sites
     if not PART_FILE_PATTERN.match(filename):
         raise HTTPException(status_code=400, detail="Invalid filename")
     cache_filename = resolve_part_cache_filename(db, partset, filename)
@@ -129,11 +128,17 @@ def _serve_cached_part(
     cache = get_local_cache()
     path = safe_cached_part_path(cache, partset.id, cache_filename)
     if not path:
-        ensure_part_file_on_cache_miss(db, partset, cache_filename)
-        return RedirectResponse(
-            partgen_redirect_url(access_id, download_path),
-            status_code=302,
-        )
+        from app.services.preview import _partgen_in_progress
+
+        if _partgen_in_progress(partset):
+            raise HTTPException(status_code=409, detail="generating")
+        if partset.parts_ready:
+            logger.error(
+                "parts_ready but cached part missing partset_id=%s filename=%s",
+                partset.id,
+                cache_filename,
+            )
+        raise HTTPException(status_code=404, detail="Part file not found")
     record_part_download(db, partset, filename, user_id=user_id)
     return FileResponse(path, media_type="application/pdf", filename=filename)
 
@@ -682,7 +687,7 @@ def partgen_status(private_id: str, db: Session = Depends(get_db)) -> PartgenPro
     partset = get_partset_by_private_id(db, private_id)
     if not partset:
         raise HTTPException(status_code=404, detail="Partset not found")
-    return PartgenProgressResponse(**partgen_progress_payload(partset))
+    return PartgenProgressResponse(**partgen_progress_payload(partset, db))
 
 
 @router.get(
@@ -727,7 +732,7 @@ def partgen_status_by_access(
     if not resolved:
         raise HTTPException(status_code=404, detail="Partset not found")
     partset, _mode = resolved
-    return PartgenProgressResponse(**partgen_progress_payload(partset))
+    return PartgenProgressResponse(**partgen_progress_payload(partset, db))
 
 
 @router.post(

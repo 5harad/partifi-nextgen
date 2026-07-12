@@ -17,14 +17,14 @@ for root in (APP_ROOT, REPO_ROOT):
 from db_conn import execute, fetchall, fetchone
 from config import get_settings
 from jobs.errors import mark_partset_error
-from pipeline.cut_segments import cut_segment_tasks, default_pool_size
+from pipeline.cut_segments import cut_segment_tasks, read_segment_png_heights, default_pool_size
+from pipeline.page_dimensions import Orientation
 from pipeline.part_filenames import resolve_part_filename
 from pipeline.cutpaste import (
     apply_combined_parts,
     build_part_segment_map,
     compute_cues,
     page_chunks,
-    prct2pixel,
 )
 from pipeline.paste_segments import create_parts
 from gen_parts_lock import release_gen_parts_lock
@@ -94,7 +94,10 @@ def _fetch_spacings(partset_id: str) -> dict[str, float]:
         "SELECT tag, spacing FROM parts WHERE partset_id = :partset_id",
         {"partset_id": partset_id},
     )
-    return {row.tag: float(row.spacing or 0.1) for row in rows}
+    return {
+        row.tag: float(row.spacing if row.spacing is not None else 0.1)
+        for row in rows
+    }
 
 
 def _fetch_part_files(partset_id: str) -> list[dict]:
@@ -107,7 +110,7 @@ def _fetch_part_files(partset_id: str) -> list[dict]:
         {
             "tag": row.tag,
             "file_name": row.file_name,
-            "spacing": float(row.spacing or 0.1),
+            "spacing": float(row.spacing if row.spacing is not None else 0.1),
             "combined": bool(row.combined),
         }
         for row in rows
@@ -154,6 +157,7 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
 
     score_id = partset.score_id
     orientation = fetch_score_orientation(score_id)
+    orient: Orientation = "landscape" if orientation == "landscape" else "portrait"
     if workdir.exists():
         shutil.rmtree(workdir)
     pages_dir = workdir / "pages"
@@ -165,10 +169,15 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
 
     segment_rows = _fetch_segment_rows(partset_id)
     if not segment_rows:
-        execute(
-            "UPDATE partsets SET parts_ready = 1, mod_ts = NOW() WHERE id = :id",
+        part_count = fetchone(
+            "SELECT COUNT(*) AS n FROM parts WHERE partset_id = :id",
             {"id": partset_id},
         )
+        if part_count and part_count.n == 0:
+            execute(
+                "UPDATE partsets SET parts_ready = 1, mod_ts = NOW() WHERE id = :id",
+                {"id": partset_id},
+            )
         return
 
     pages_needed = sorted({row["page"] for row in segment_rows})
@@ -227,7 +236,7 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
     combined_tags = _fetch_combined_tags(partset_id)
     apply_combined_parts(segments_map, combined_tags)
 
-    segment_heights = [prct2pixel(h, orientation=orientation) for h in heights_pct]
+    segment_heights = read_segment_png_heights(segments_dir, len(segment_rows))
     breaks = _fetch_breaks(partset_id)
     spacings = _fetch_spacings(partset_id)
     part_rows = _fetch_part_files(partset_id)
@@ -285,11 +294,16 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
                     "pages": pages,
                     "outfile": outfile,
                     "pagesize": pagesize,
+                    "orientation": orient,
                 }
             )
 
     num_paste = len(paste_jobs) or 1
     paste_inc = 100.0 / num_paste
+    if part_rows and not paste_jobs:
+        raise RuntimeError(f"No part PDFs to generate for {partset_id}")
+
+    expected_names = [job["outfile"].name for job in paste_jobs]
     create_parts(
         paste_jobs,
         pool_size=_pool_size(len(paste_jobs)),
@@ -298,6 +312,14 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
 
     for path in outdir.glob("*.pdf"):
         cache.store_part_file(partset_id, path)
+
+    missing = [
+        name for name in expected_names if not cache.part_is_cached(partset_id, name)
+    ]
+    if missing:
+        msg = f"Part cache incomplete for {partset_id}: {missing}"
+        logger.error(msg)
+        raise RuntimeError(msg)
 
     execute(
         "UPDATE partsets SET paste_complete = NOW(), parts_ready = 1, mod_ts = NOW(), "

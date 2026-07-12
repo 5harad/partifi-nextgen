@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { PartsetMetadata, usePartsetMetadata } from '../components/PartsetMetadata'
 import { PartDownloadLinks } from '../components/parts/PartDownloadLinks'
 import { PartsetShareLinks } from '../components/parts/PartsetShareLinks'
 import { ScoreSourceLinks } from '../components/parts/ScoreSourceLinks'
 import { useAuth } from '../context/AuthContext'
-import { deletePartset, getCsrfToken, updatePartsetMetadata } from '../lib/api'
+import { deletePartset, getCsrfToken, getPartgenStatusByAccessId, updatePartsetMetadata } from '../lib/api'
 import { fetchLibrary, updateFavorite } from '../lib/authApi'
+import { startPartFileDownload, type PartsPageLocationState } from '../lib/partDownloads'
 import { useNoIndex } from '../lib/useNoIndex'
 import type { LibraryItem } from '../types/library'
 
@@ -181,11 +182,14 @@ function LibraryListItem({
 export function LibraryPage() {
   useNoIndex()
   const { user, loading: authLoading } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [items, setItems] = useState<LibraryItem[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const handledPendingDownloadRef = useRef<string | null>(null)
 
   const removeItem = useCallback((partsetId: string) => {
     setItems((prev) => {
@@ -257,6 +261,62 @@ export function LibraryPage() {
     }
     void loadLibrary()
   }, [authLoading, user, loadLibrary])
+
+  useEffect(() => {
+    const state = location.state as PartsPageLocationState | null
+    const pendingUrl = state?.pendingPartDownload
+    if (!pendingUrl || handledPendingDownloadRef.current === pendingUrl) return
+
+    const partsetId = searchParams.get('partset')
+    const item = partsetId
+      ? items.find((entry) => entry.partset_id === partsetId)
+      : items.find((entry) => entry.partset_id === selectedId)
+    if (!item) return
+
+    const accessId = item.private_id || item.partset_id
+    let cancelled = false
+    let timeoutId = 0
+
+    const finish = () => {
+      if (cancelled || handledPendingDownloadRef.current === pendingUrl) return
+      handledPendingDownloadRef.current = pendingUrl
+      startPartFileDownload(pendingUrl)
+      navigate({ pathname: '/library', search: location.search }, { replace: true, state: {} })
+    }
+
+    if (item.parts_ready) {
+      finish()
+      return
+    }
+
+    const poll = async () => {
+      try {
+        const status = await getPartgenStatusByAccessId(accessId)
+        if (cancelled) return
+        if (status.is_complete) {
+          setItems((prev) =>
+            prev.map((entry) =>
+              entry.partset_id === item.partset_id ? { ...entry, parts_ready: true } : entry,
+            ),
+          )
+          finish()
+          return
+        }
+      } catch {
+        // Transient errors — keep polling until partgen reports complete.
+      }
+      if (!cancelled) {
+        timeoutId = window.setTimeout(poll, 500)
+      }
+    }
+
+    void poll()
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [items, selectedId, location.search, location.state, navigate, searchParams])
 
   const selectedItem = items.find((item) => item.partset_id === selectedId) ?? null
 
