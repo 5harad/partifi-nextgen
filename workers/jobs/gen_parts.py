@@ -30,6 +30,7 @@ from pipeline.paste_segments import create_parts
 from gen_parts_lock import release_gen_parts_lock
 from score_page_cache import build_score_page_cache
 from local_cache import get_local_cache
+from score_cache import fetch_score_orientation
 
 logger = logging.getLogger("partifi.gen_parts")
 
@@ -152,6 +153,7 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
         raise ValueError(msg)
 
     score_id = partset.score_id
+    orientation = fetch_score_orientation(score_id)
     if workdir.exists():
         shutil.rmtree(workdir)
     pages_dir = workdir / "pages"
@@ -225,7 +227,7 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
     combined_tags = _fetch_combined_tags(partset_id)
     apply_combined_parts(segments_map, combined_tags)
 
-    segment_heights = [prct2pixel(h) for h in heights_pct]
+    segment_heights = [prct2pixel(h, orientation=orientation) for h in heights_pct]
     breaks = _fetch_breaks(partset_id)
     spacings = _fetch_spacings(partset_id)
     part_rows = _fetch_part_files(partset_id)
@@ -244,7 +246,7 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
         breakpoints = breaks.get(tag, [])
         spacing_px = round(spacings.get(tag, 0.1) * 300)
         cues = compute_cues(tag, segments_map)
-        chunks = page_chunks(seg_list, segment_heights, spacing_px, breakpoints)
+        chunks = page_chunks(seg_list, segment_heights, spacing_px, breakpoints, orientation=orientation)
 
         pages: list[list[dict]] = []
         for chunk in chunks:

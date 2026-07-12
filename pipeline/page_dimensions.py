@@ -34,6 +34,14 @@ class PageDimensions:
     def gs_canvas(self) -> str:
         return f"{self.highres_width}x{self.highres_height}"
 
+    @property
+    def page_chunk_max(self) -> int:
+        return self.highres_height - 400
+
+    @property
+    def preview_pane_width(self) -> int:
+        return round(367 * self.lowres_width / PORTRAIT.lowres_width)
+
 
 PORTRAIT = PageDimensions(
     orientation="portrait",

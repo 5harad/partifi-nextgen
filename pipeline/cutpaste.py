@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+from pipeline.page_dimensions import Orientation, get_dimensions, prct2pixel as _prct2pixel
+
+ALL_TAG_KEYS = ("all", "All", "ALL")
+
+# Legacy portrait constants kept for tests and callers that import these names.
 HIGHRES_HEIGHT = 3300
 HIGHRES_WIDTH = 2550
 PAGE_CHUNK_MAX = 2900
-ALL_TAG_KEYS = ("all", "All", "ALL")
 
 
-def prct2pixel(p: float, dim: str = "height") -> float:
-    scale = HIGHRES_HEIGHT if dim == "height" else HIGHRES_WIDTH
-    return p / 100.0 * scale
+def prct2pixel(
+    p: float,
+    dim: str = "height",
+    orientation: Orientation = "portrait",
+) -> float:
+    return _prct2pixel(p, dim, orientation)
 
 
 def page_chunks(
@@ -18,14 +25,17 @@ def page_chunks(
     heights: list[float],
     spacing: float,
     breaks: list[int] | None = None,
+    *,
+    orientation: Orientation = "portrait",
 ) -> list[list[int]]:
     breaks = breaks or []
+    page_chunk_max = get_dimensions(orientation).page_chunk_max
     chunks: list[list[int]] = []
     start = 0
     h = 0.0
     for i, seg_id in enumerate(segments):
         seg_h = heights[seg_id]
-        if h + seg_h >= PAGE_CHUNK_MAX or (i - 1) in breaks:
+        if h + seg_h >= page_chunk_max or (i - 1) in breaks:
             if start < i:
                 chunks.append(segments[start:i])
             start = i
@@ -99,7 +109,11 @@ def compute_cues(part_name: str, part_segments: dict[str, list[int]]) -> set[int
     return set(cue_segs) - set(non_cue_segs)
 
 
-def preview_left_margin(widths_pct: list[float]) -> int:
+def preview_left_margin(
+    widths_pct: list[float],
+    orientation: Orientation = "portrait",
+) -> int:
     if not widths_pct:
         return 0
-    return round((1 - max(widths_pct) / 100.0) / 2 * 367)
+    pane_width = get_dimensions(orientation).preview_pane_width
+    return round((1 - max(widths_pct) / 100.0) / 2 * pane_width)

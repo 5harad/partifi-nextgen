@@ -92,6 +92,7 @@ def refetch_score_pdf(
                 convert_start = NULL,
                 convert_complete = NULL,
                 num_pages = NULL,
+                orientation = 'portrait',
                 analysis_start = NULL,
                 analysis_complete = NULL
             WHERE id = :id

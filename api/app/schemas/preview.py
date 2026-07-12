@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -6,6 +8,7 @@ class PreviewDataResponse(BaseModel):
     private_id: str
     title: str | None = None
     composer: str | None = None
+    orientation: Literal["portrait", "landscape"] = "portrait"
     part_names: list[str]
     combined_part_names: list[str]
     part_segments: dict[str, list[int]]

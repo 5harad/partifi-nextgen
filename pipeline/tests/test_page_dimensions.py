@@ -1,5 +1,6 @@
 """Tests for page dimension helpers."""
 
+from pipeline.cutpaste import preview_left_margin
 from pipeline.page_dimensions import LANDSCAPE, PORTRAIT, get_dimensions, prct2pixel
 
 
@@ -28,3 +29,15 @@ def test_prct2pixel_landscape_width() -> None:
 def test_get_dimensions() -> None:
     assert get_dimensions("portrait").orientation == "portrait"
     assert get_dimensions("landscape").orientation == "landscape"
+
+
+def test_page_chunk_max_and_preview_pane() -> None:
+    assert PORTRAIT.page_chunk_max == 2900
+    assert LANDSCAPE.page_chunk_max == 2150
+    assert PORTRAIT.preview_pane_width == 367
+    assert LANDSCAPE.preview_pane_width == 475
+
+
+def test_preview_left_margin_scales_with_orientation() -> None:
+    assert preview_left_margin([80.0], orientation="portrait") == 37
+    assert preview_left_margin([80.0], orientation="landscape") == 47

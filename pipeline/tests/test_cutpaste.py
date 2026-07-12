@@ -64,3 +64,8 @@ def test_page_chunks_respects_break_after_first_segment() -> None:
 def test_page_chunks_normal_fit_on_one_page() -> None:
     chunks = page_chunks([0, 1, 2], [400.0, 400.0, 400.0], spacing=30)
     assert chunks == [[0, 1, 2]]
+
+
+def test_page_chunks_landscape_uses_shorter_page_height() -> None:
+    chunks = page_chunks([0, 1], [1200.0, 1200.0], spacing=30, orientation="landscape")
+    assert chunks == [[0], [1]]

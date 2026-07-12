@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 from jobs import gen_parts
 
 
+@patch("jobs.gen_parts.fetch_score_orientation", return_value="portrait")
 @patch("jobs.gen_parts.build_score_page_cache")
 @patch("jobs.gen_parts.get_local_cache")
 @patch("jobs.gen_parts._fetch_part_files", return_value=[])
@@ -26,6 +27,7 @@ def test_gen_parts_warms_cache_when_highres_missing(
     _parts: MagicMock,
     mock_cache_fn: MagicMock,
     mock_warm: MagicMock,
+    _orientation: MagicMock,
 ) -> None:
     mock_segments.return_value = [
         {

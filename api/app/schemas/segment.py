@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -21,6 +23,7 @@ class SegmentDataResponse(BaseModel):
     partset_id: str
     private_id: str
     num_pages: int
+    orientation: Literal["portrait", "landscape"] = "portrait"
     pages: dict[str, PageSegmentData]
     image_urls: dict[str, dict[str, str]]
     images_ready: bool = True

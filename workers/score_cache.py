@@ -13,6 +13,31 @@ def score_analysis_complete(score_id: str) -> bool:
     return bool(row and row.analysis_complete)
 
 
+def invalidate_score_analysis(score_id: str) -> None:
+    db_conn.execute(
+        "DELETE FROM original_segments WHERE score_id = :score_id",
+        {"score_id": score_id},
+    )
+    db_conn.execute(
+        "DELETE FROM original_pages WHERE score_id = :score_id",
+        {"score_id": score_id},
+    )
+    db_conn.execute(
+        "UPDATE scores SET analysis_start = NULL, analysis_complete = NULL WHERE id = :id",
+        {"id": score_id},
+    )
+
+
+def fetch_score_orientation(score_id: str) -> str:
+    row = db_conn.fetchone(
+        "SELECT orientation FROM scores WHERE id = :id",
+        {"id": score_id},
+    )
+    if not row or not row.orientation:
+        return "portrait"
+    return str(row.orientation)
+
+
 def copy_score_segs_to_partset(score_id: str, partset_id: str) -> None:
     db_conn.execute(
         "DELETE FROM segments WHERE partset_id = :partset_id",

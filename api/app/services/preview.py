@@ -10,7 +10,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from app.models import Break, Part, Partset, Segment
+from app.models import Break, Part, Partset, Score, Segment
 from app.config import get_settings
 from app.services.local_cache import get_local_cache
 from app.services.partset_touch import touch_partset_access
@@ -218,11 +218,14 @@ def get_preview_data(db: Session, partset: Partset) -> dict:
 
     image_status = ensure_score_pages_warming(db, partset.score_id)
     if not image_status["images_ready"]:
+        score = db.get(Score, partset.score_id) if partset.score_id else None
+        orientation = score.orientation if score and score.orientation else "portrait"
         return {
             "partset_id": partset.id,
             "private_id": partset.private_id or "",
             "title": partset.title,
             "composer": partset.composer,
+            "orientation": orientation,
             "part_names": [],
             "combined_part_names": [],
             "part_segments": {},
@@ -265,8 +268,10 @@ def get_preview_data(db: Session, partset: Partset) -> dict:
     _ensure_preview_segments(partset, segment_rows, fingerprint)
     touch_partset_access(db, partset)
 
-    segment_heights = [prct2pixel(h) for h in heights_pct]
-    segment_widths = [prct2pixel(w, "width") for w in widths_pct]
+    score = db.get(Score, partset.score_id)
+    orientation = score.orientation if score and score.orientation else "portrait"
+    segment_heights = [prct2pixel(h, orientation=orientation) for h in heights_pct]
+    segment_widths = [prct2pixel(w, "width", orientation=orientation) for w in widths_pct]
     private_id = partset.private_id or ""
 
     segment_urls = {
@@ -287,7 +292,8 @@ def get_preview_data(db: Session, partset: Partset) -> dict:
         "segment_labels": labels,
         "breaks": breaks,
         "spacings": spacings,
-        "left_margin": preview_left_margin(widths_pct),
+        "left_margin": preview_left_margin(widths_pct, orientation=orientation),
+        "orientation": orientation,
         "segment_urls": segment_urls,
         "images_ready": True,
         "images_warming": False,

@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS scores (
     analysis_complete DATETIME,
     num_downloads INT NOT NULL DEFAULT 0,
     s3 BOOLEAN NOT NULL DEFAULT 0,
+    orientation ENUM('portrait', 'landscape') NOT NULL DEFAULT 'portrait',
     UNIQUE KEY uq_scores_file_hash (file_hash),
     INDEX idx_scores_imslp_id (imslp_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
