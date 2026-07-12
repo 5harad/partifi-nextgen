@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext.tsx'
 import { getGoogleClientId } from './lib/authApi.ts'
 import App from './App.tsx'
+import './styles/partifi.css'
 
 const googleClientId = getGoogleClientId()
 

@@ -202,18 +202,31 @@ a.red:hover
 	background-image: url('/images/header_bg.gif');
 	height:61px;
 	min-width:1190px;
-	text-align:center;
 	padding-top:25px;
 	font-family: 'IM Fell Great Primer', serif;
 	font-size: 15px;
 	color: #C0C0C0;
 }
 
+#header-inner
+{
+	/* Match #segment-header border box (885px content + 19px side padding). */
+	width: 923px;
+	margin: 0 auto;
+	display: flex;
+	align-items: center;
+	gap: 15px;
+}
+
+#logo-link
+{
+	flex-shrink: 0;
+	line-height: 0;
+}
+
 #searchbox
 {
-	position:relative;
-	top:-12px;
-	left: 428px;
+	flex-shrink: 0;
 	width:250px;
 	height:30px;
 	font-family: 'IM Fell DW Pica SC', serif;
@@ -229,12 +242,33 @@ a.red:hover
 
 #login
 {
-	display:inline-block;
-	position:relative;
-	top:-3px;
-	width: 400px;
-	left: -275px;
-	text-align:left;
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	height: 30px;
+	margin-top: 4px;
+	gap: 15px;
+	overflow: hidden;
+}
+
+.header-greeting
+{
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: white;
+}
+
+.header-nav-links
+{
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	gap: 15px;
+	white-space: nowrap;
 }
 
 #login .google-sign-in-link
@@ -851,7 +885,7 @@ iframe[src*="accounts.google.com/gsi"]
 
 #thumbs.thumbs-animated
 {
-	transition: left 0.75s ease-out;
+	transition: left 0.5s ease-out;
 }
 
 .thumb 
@@ -2113,7 +2147,8 @@ iframe[src*="accounts.google.com/gsi"]
 
 #library-layout .library-empty {
 	position: relative;
-	left: 148px;
+	left: auto;
+	margin: 0 auto;
 	min-height: 480px;
 	padding: 200px 20px 40px;
 	box-sizing: border-box;
@@ -2131,8 +2166,9 @@ iframe[src*="accounts.google.com/gsi"]
 #library-layout {
 	position: absolute;
 	top: 95px;
-	left: 80px;
-	right: 80px;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 974px;
 	height: 620px;
 }
 

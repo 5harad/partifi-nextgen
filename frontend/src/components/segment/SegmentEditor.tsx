@@ -23,6 +23,12 @@ import {
 import { getViewerDimensions, type Orientation } from '../../lib/pageDimensions'
 import {
   getSegmentEditorLayout,
+  isPageInPreviewWindow,
+  lastPageInPreviewWindow,
+  maxPreviewerStart,
+  minimalPreviewStartForPage,
+  nextPreviewerStart,
+  prevPreviewerStart,
   segmentEditorCssVars,
 } from '../../lib/segmentEditorLayout'
 import type { PageSegmentData, RegionState, SegmentDataResponse } from '../../types/segment'
@@ -91,11 +97,20 @@ export function SegmentEditor({ data }: Props) {
     rightMarginPx,
     rotation,
     pageNum,
+    previewerStart,
     pagesData,
   })
   useEffect(() => {
-    stateRef.current = { regions, leftMarginPx, rightMarginPx, rotation, pageNum, pagesData }
-  }, [regions, leftMarginPx, rightMarginPx, rotation, pageNum, pagesData])
+    stateRef.current = {
+      regions,
+      leftMarginPx,
+      rightMarginPx,
+      rotation,
+      pageNum,
+      previewerStart,
+      pagesData,
+    }
+  }, [regions, leftMarginPx, rightMarginPx, rotation, pageNum, previewerStart, pagesData])
 
   useEffect(() => {
     setThumbTransition(false)
@@ -260,7 +275,7 @@ export function SegmentEditor({ data }: Props) {
   }
 
   const changePage = useCallback(
-    async (nextPage: number) => {
+    async (nextPage: number, previewStartOverride?: number) => {
       const {
         pageNum: current,
         regions: currentRegions,
@@ -290,6 +305,14 @@ export function SegmentEditor({ data }: Props) {
           await persistPage(current, pageData, token)
           serverPageDataRef.current = JSON.parse(JSON.stringify(pageData))
         }
+        setPreviewerStart(
+          previewStartOverride ??
+            minimalPreviewStartForPage(
+              nextPage,
+              stateRef.current.previewerStart,
+              data.num_pages,
+            ),
+        )
         applyPageData(nextPage, updatedPages)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Save failed')
@@ -299,6 +322,26 @@ export function SegmentEditor({ data }: Props) {
     },
     [persistPage, data.num_pages, orientation],
   )
+
+  const scrollPreviewerNext = useCallback(() => {
+    const newStart = nextPreviewerStart(previewerStart, data.num_pages)
+    if (newStart === previewerStart) return
+    if (isPageInPreviewWindow(pageNum, newStart)) {
+      setPreviewerStart(newStart)
+      return
+    }
+    void changePage(newStart, newStart)
+  }, [changePage, data.num_pages, pageNum, previewerStart])
+
+  const scrollPreviewerBack = useCallback(() => {
+    const newStart = prevPreviewerStart(previewerStart)
+    if (newStart === previewerStart) return
+    if (isPageInPreviewWindow(pageNum, newStart)) {
+      setPreviewerStart(newStart)
+      return
+    }
+    void changePage(lastPageInPreviewWindow(newStart, data.num_pages), newStart)
+  }, [changePage, data.num_pages, pageNum, previewerStart])
 
   const addRegion = (topPx: number) => {
     const next: RegionState = {
@@ -500,6 +543,8 @@ export function SegmentEditor({ data }: Props) {
   const thumbsOffset = -(previewerStart - 1) * thumbStride
   const canGoPrev = pageNum > 1
   const canGoNext = pageNum < data.num_pages
+  const canScrollPreviewerNext = previewerStart < maxPreviewerStart(data.num_pages)
+  const canScrollPreviewerBack = previewerStart > 1
   const navDisabledStyle = { color: 'gray', cursor: 'default' as const }
 
   return (
@@ -559,15 +604,11 @@ export function SegmentEditor({ data }: Props) {
           </div>
         </div>
 
-        {previewerStart + 6 <= data.num_pages ? (
+        {canScrollPreviewerNext ? (
           <div
             id="previewer-next"
             className="next-button"
-            onClick={() => {
-              const next = previewerStart + 6
-              setPreviewerStart(next)
-              void changePage(next)
-            }}
+            onClick={scrollPreviewerNext}
             role="button"
             tabIndex={0}
           >
@@ -575,15 +616,11 @@ export function SegmentEditor({ data }: Props) {
           </div>
         ) : null}
 
-        {previewerStart - 6 > 0 ? (
+        {canScrollPreviewerBack ? (
           <div
             id="previewer-back"
             className="next-button"
-            onClick={() => {
-              const next = previewerStart - 6
-              setPreviewerStart(next)
-              void changePage(next + 5)
-            }}
+            onClick={scrollPreviewerBack}
             role="button"
             tabIndex={0}
           >
@@ -809,12 +846,7 @@ export function SegmentEditor({ data }: Props) {
                 className="red"
                 onClick={(e) => {
                   e.preventDefault()
-                  if (pageNum <= previewerStart) {
-                    setPreviewerStart((s) => s - 6)
-                    void changePage(pageNum - 1)
-                  } else {
-                    void changePage(pageNum - 1)
-                  }
+                  void changePage(pageNum - 1)
                 }}
               >
                 &laquo; previous
@@ -830,12 +862,7 @@ export function SegmentEditor({ data }: Props) {
                 className="red"
                 onClick={(e) => {
                   e.preventDefault()
-                  if (pageNum >= previewerStart + 5) {
-                    setPreviewerStart((s) => s + 6)
-                    void changePage(pageNum + 1)
-                  } else {
-                    void changePage(pageNum + 1)
-                  }
+                  void changePage(pageNum + 1)
                 }}
               >
                 next &raquo;

@@ -18,8 +18,44 @@ const ROTATION_LABEL_OFFSET = 180
 const ROTATION_SLIDER_OFFSET = 300
 const ROTATION_GROUP_WIDTH = ROTATION_SLIDER_OFFSET + 124 - ROTATION_LABEL_OFFSET
 const PREVIEWER_LEFT = 100
-const THUMBS_PER_PAGE = 6
+export const THUMBS_PER_PAGE = 6
 const PREVIEWER_NEXT_GAP = 15
+
+/** Leftmost thumb index when the last page is flush to the right edge of the previewer. */
+export function maxPreviewerStart(numPages: number): number {
+  return Math.max(1, numPages - THUMBS_PER_PAGE + 1)
+}
+
+/** Minimal carousel shift so `targetPage` is visible (0 if already visible, else ±1). */
+export function minimalPreviewStartForPage(
+  targetPage: number,
+  previewerStart: number,
+  numPages: number,
+): number {
+  if (isPageInPreviewWindow(targetPage, previewerStart)) {
+    return previewerStart
+  }
+  if (targetPage < previewerStart) {
+    return Math.max(1, previewerStart - 1)
+  }
+  return Math.min(previewerStart + 1, maxPreviewerStart(numPages))
+}
+
+export function isPageInPreviewWindow(pageNum: number, previewerStart: number): boolean {
+  return pageNum >= previewerStart && pageNum <= previewerStart + THUMBS_PER_PAGE - 1
+}
+
+export function nextPreviewerStart(previewerStart: number, numPages: number): number {
+  return Math.min(previewerStart + THUMBS_PER_PAGE, maxPreviewerStart(numPages))
+}
+
+export function prevPreviewerStart(previewerStart: number): number {
+  return Math.max(1, previewerStart - THUMBS_PER_PAGE)
+}
+
+export function lastPageInPreviewWindow(previewerStart: number, numPages: number): number {
+  return Math.min(previewerStart + THUMBS_PER_PAGE - 1, numPages)
+}
 
 export type SegmentEditorLayout = {
   panelWidth: number
