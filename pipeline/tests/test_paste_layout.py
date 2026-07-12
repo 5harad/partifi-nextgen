@@ -7,9 +7,9 @@ from pipeline.paste_layout import (
     page_dims_inches,
     paste_content_bottom_in,
     paste_content_height_in,
+    paste_page_chunk_max_px,
     paste_packing_bottom_in,
     paste_packing_top_in,
-    paste_page_chunk_max_px,
     vertical_layout,
 )
 

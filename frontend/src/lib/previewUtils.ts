@@ -76,6 +76,25 @@ export function computeCues(partName: string, partSegments: Record<string, numbe
   return new Set(cueSegs.filter((seg) => !nonCueSegs.includes(seg)))
 }
 
+export function chunkStackHeightPx(
+  segmentIndices: number[],
+  heights: number[],
+  spacingHighresPx: number,
+): number {
+  if (segmentIndices.length === 0) {
+    return 0
+  }
+  let total = 0
+  for (const index of segmentIndices) {
+    total += heights[index]
+  }
+  if (segmentIndices.length > 1) {
+    total += spacingHighresPx * (segmentIndices.length - 1)
+  }
+  return total
+}
+
+/** Auto-pack segments into part pages — mirrors pipeline/cutpaste.page_chunks. */
 export function pageChunks(
   segments: number[],
   heights: number[],
@@ -84,22 +103,32 @@ export function pageChunks(
   orientation: Orientation = 'portrait',
 ): number[][] {
   const pageChunkMax = getDimensions(orientation).pageChunkMax
+  const breakSet = new Set(breaks)
   const chunks: number[][] = []
-  let start = 0
-  let h = 0
+  let current: number[] = []
+
   for (let i = 0; i < segments.length; i++) {
     const segId = segments[i]
-    const segH = heights[segId]
-    if (h + segH > pageChunkMax || breaks.includes(i - 1)) {
-      if (start < i) {
-        chunks.push(segments.slice(start, i))
-      }
-      start = i
-      h = 0
+    if (breakSet.has(i - 1) && current.length > 0) {
+      chunks.push(current)
+      current = []
     }
-    h += segH + spacingHighresPx
+
+    const candidate = [...current, segId]
+    if (
+      current.length > 0 &&
+      chunkStackHeightPx(candidate, heights, spacingHighresPx) > pageChunkMax
+    ) {
+      chunks.push(current)
+      current = [segId]
+    } else {
+      current = candidate
+    }
   }
-  chunks.push(segments.slice(start))
+
+  if (current.length > 0) {
+    chunks.push(current)
+  }
   return chunks
 }
 

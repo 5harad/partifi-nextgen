@@ -1,4 +1,4 @@
-from pipeline.cutpaste import build_part_segment_map, page_chunks
+from pipeline.cutpaste import build_part_segment_map, chunk_stack_height_px, page_chunks
 from pipeline.paste_layout import paste_page_chunk_max_px
 
 
@@ -89,3 +89,12 @@ def test_page_chunks_exact_fit_stays_on_one_page() -> None:
     heights = [1400.0, max_px - 1400.0 - spacing]
     chunks = page_chunks([0, 1], heights, spacing=spacing, orientation="portrait")
     assert chunks == [[0, 1]]
+
+
+def test_page_chunks_never_exceed_paste_max() -> None:
+    heights = [900.0, 850.0, 800.0, 750.0, 700.0]
+    spacing = 30.0
+    max_px = paste_page_chunk_max_px("portrait")
+    chunks = page_chunks(list(range(len(heights))), heights, spacing=spacing)
+    for chunk in chunks:
+        assert chunk_stack_height_px(chunk, heights, spacing) <= max_px + 1e-6

@@ -172,11 +172,16 @@ def _add_images(
                 im = src
 
             w, h = [d / RESOLUTION * inch for d in im.size]
+            available_pt = y_in - min_y_in
+            if h > available_pt:
+                if available_pt <= 0:
+                    raise RuntimeError(
+                        "Part page layout overflow: segment image extends into the footer band"
+                    )
+                scale = available_pt / h
+                w *= scale
+                h = available_pt
             y_in -= h
-            if y_in < min_y_in:
-                raise RuntimeError(
-                    "Part page layout overflow: segment image extends into the footer band"
-                )
             doc.drawImage(ImageReader(im), x_in, y_in, width=w, height=h)
 
             label = image.get("label") or ""

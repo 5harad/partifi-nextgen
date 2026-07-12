@@ -16,6 +16,20 @@ def prct2pixel(
     return _prct2pixel(p, dim, orientation)
 
 
+def chunk_stack_height_px(
+    segment_indices: list[int],
+    heights: list[float],
+    spacing_px: float,
+) -> float:
+    """Pixel height of stacked segments plus inter-segment spacing (300 dpi)."""
+    if not segment_indices:
+        return 0.0
+    total = sum(heights[i] for i in segment_indices)
+    if len(segment_indices) > 1:
+        total += spacing_px * (len(segment_indices) - 1)
+    return total
+
+
 def page_chunks(
     segments: list[int],
     heights: list[float],
@@ -24,20 +38,25 @@ def page_chunks(
     *,
     orientation: Orientation = "portrait",
 ) -> list[list[int]]:
-    breaks = breaks or []
-    page_chunk_max = paste_page_chunk_max_px(orientation)
+    breaks_set = set(breaks or [])
+    max_h = paste_page_chunk_max_px(orientation)
     chunks: list[list[int]] = []
-    start = 0
-    h = 0.0
+    current: list[int] = []
+
     for i, seg_id in enumerate(segments):
-        seg_h = heights[seg_id]
-        if h + seg_h > page_chunk_max or (i - 1) in breaks:
-            if start < i:
-                chunks.append(segments[start:i])
-            start = i
-            h = 0.0
-        h += seg_h + spacing
-    chunks.append(segments[start:])
+        if i - 1 in breaks_set and current:
+            chunks.append(current)
+            current = []
+
+        candidate = current + [seg_id]
+        if current and chunk_stack_height_px(candidate, heights, spacing) > max_h:
+            chunks.append(current)
+            current = [seg_id]
+        else:
+            current = candidate
+
+    if current:
+        chunks.append(current)
     return chunks
 
 
