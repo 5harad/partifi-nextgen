@@ -124,11 +124,25 @@ def compute_cues(part_name: str, part_segments: dict[str, list[int]]) -> set[int
     return set(cue_segs) - set(non_cue_segs)
 
 
+def preview_left_margin_px(
+    max_width_px: float,
+    orientation: Orientation = "portrait",
+    pagesize: str = "letter",
+) -> int:
+    """Preview-pane pixels for paste left_margin — mirrors paste_segments.create_part."""
+    from pipeline.paste_layout import RESOLUTION, page_dims_inches
+
+    page_w, _ = page_dims_inches(pagesize, orientation)
+    dims = get_dimensions(orientation)
+    left_in = max(0, (page_w - max_width_px / RESOLUTION) / 2)
+    return round(left_in / page_w * dims.preview_pane_width)
+
+
 def preview_left_margin(
     widths_pct: list[float],
     orientation: Orientation = "portrait",
 ) -> int:
     if not widths_pct:
         return 0
-    pane_width = get_dimensions(orientation).preview_pane_width
-    return round((1 - max(widths_pct) / 100.0) / 2 * pane_width)
+    max_width_px = max(prct2pixel(w, "width", orientation=orientation) for w in widths_pct)
+    return preview_left_margin_px(max_width_px, orientation)

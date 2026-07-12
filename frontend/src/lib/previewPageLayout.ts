@@ -9,6 +9,12 @@ const HEADER_FONT_PT = 11
 const LOGO_PT = 24
 const TEXT_INDENT_PT = 28
 const PT_PER_IN = 72
+/** Mirrors pipeline/paste_layout.py RESOLUTION and paste_segments label geometry. */
+const PASTE_RESOLUTION = 300
+const PASTE_LABEL_OFFSET_IN = 0.25
+const PASTE_LABEL_BOX_WIDTH_IN = 0.2
+const PASTE_LABEL_BOX_HEIGHT_IN = 0.5
+const PASTE_LABEL_FONT_PT = 11
 
 const PAGE_SIZES_IN: Record<'letter' | 'a4', [number, number]> = {
   letter: [8.5, 11],
@@ -127,6 +133,47 @@ export function getPreviewPageLayout(orientation: Orientation): PreviewPageLayou
     ),
     fontSize,
     pageNumberBottom: scaleIn(bottomMargin, pageWidthIn, previewPaneWidth),
+  }
+}
+
+/** Horizontal inset for segment images — mirrors paste_segments.create_part left_margin. */
+export function pasteLeftMarginPx(
+  maxSegmentWidthPx: number,
+  orientation: Orientation,
+  pagesize: 'letter' | 'a4' = 'letter',
+): number {
+  const dims = getDimensions(orientation)
+  const [pageWidthIn] = pageDimsInches(pagesize, orientation)
+  const leftMarginIn = Math.max(0, (pageWidthIn - maxSegmentWidthPx / PASTE_RESOLUTION) / 2)
+  return scaleIn(leftMarginIn, pageWidthIn, dims.previewPaneWidth)
+}
+
+export type SegmentLabelLayout = {
+  left: number
+  top: number
+  width: number
+  height: number
+  fontSize: number
+}
+
+/** Rehearsal-label box — mirrors paste_segments._add_images rect + rotated text. */
+export function segmentLabelLayout(
+  segmentHeightPx: number,
+  imageLeftPx: number,
+  orientation: Orientation,
+): SegmentLabelLayout {
+  const dims = getDimensions(orientation)
+  const [pageWidthIn] = pageDimsInches('letter', orientation)
+  const labelOffset = scaleIn(PASTE_LABEL_OFFSET_IN, pageWidthIn, dims.previewPaneWidth)
+  const boxW = scaleIn(PASTE_LABEL_BOX_WIDTH_IN, pageWidthIn, dims.previewPaneWidth)
+  const boxH = scaleIn(PASTE_LABEL_BOX_HEIGHT_IN, pageWidthIn, dims.previewPaneWidth)
+  const fontSize = scalePt(PASTE_LABEL_FONT_PT, pageWidthIn, dims.previewPaneWidth)
+  return {
+    left: imageLeftPx - labelOffset,
+    top: Math.round((segmentHeightPx - boxH) / 2),
+    width: boxW,
+    height: boxH,
+    fontSize,
   }
 }
 

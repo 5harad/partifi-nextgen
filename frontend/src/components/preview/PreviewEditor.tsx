@@ -21,7 +21,12 @@ import {
   uniqueSorted,
 } from '../../lib/previewUtils'
 import { getPreviewPageStride, getPageBreakMarkerWidth } from '../../lib/pageDimensions'
-import { getPreviewPageLayout, previewPageCssVars } from '../../lib/previewPageLayout'
+import {
+  getPreviewPageLayout,
+  pasteLeftMarginPx,
+  previewPageCssVars,
+  segmentLabelLayout,
+} from '../../lib/previewPageLayout'
 import { previewHeaderFontFamily } from '../../lib/previewHeaderFont'
 import { TransitionError } from '../TransitionError'
 import { TransitionWait } from '../TransitionWait'
@@ -128,6 +133,18 @@ export function PreviewEditor({ privateId }: Props) {
     () => (part ? computeCues(part, partSegments) : new Set<number>()),
     [part, partSegments],
   )
+
+  const partLeftMargin = useMemo(() => {
+    if (!data || !part) return 0
+    const segList = partSegments[part]
+    if (!segList?.length) return 0
+    const orientation = data.orientation ?? 'portrait'
+    let maxWidth = 0
+    for (const segId of segList) {
+      maxWidth = Math.max(maxWidth, data.segment_widths[segId] ?? 0)
+    }
+    return pasteLeftMarginPx(maxWidth, orientation)
+  }, [data, part, partSegments])
 
   const layout = useMemo(() => {
     if (!data || !part || !partSegments[part]) return { chunks: [] as number[][], numPages: 1 }
@@ -429,19 +446,34 @@ export function PreviewEditor({ privateId }: Props) {
                             onMouseLeave={() => setHoverSeg(null)}
                             role="presentation"
                           >
-                            {data.segment_labels[segId] && (
-                              <div
-                                className="rotate"
-                                style={{ width: lrH - 2, top: lrH / 2 }}
-                              >
-                                {data.segment_labels[segId]}
-                              </div>
-                            )}
+                            {data.segment_labels[segId] && (() => {
+                              const labelBox = segmentLabelLayout(
+                                lrH,
+                                partLeftMargin,
+                                orientation,
+                              )
+                              return (
+                                <div
+                                  className="segment-label-box"
+                                  style={{
+                                    left: labelBox.left,
+                                    top: labelBox.top,
+                                    width: labelBox.width,
+                                    height: labelBox.height,
+                                    fontSize: labelBox.fontSize,
+                                  }}
+                                >
+                                  <span className="segment-label-text">
+                                    {data.segment_labels[segId]}
+                                  </span>
+                                </div>
+                              )
+                            })()}
                             <img
                               src={data.segment_urls[String(segId)]}
                               width={lrW}
                               height={lrH}
-                              style={{ left: data.left_margin }}
+                              style={{ left: partLeftMargin }}
                               alt=""
                             />
                           </div>

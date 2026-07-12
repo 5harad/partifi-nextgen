@@ -1,6 +1,7 @@
 """Tests for page dimension helpers."""
 
-from pipeline.cutpaste import preview_left_margin
+from pipeline.cutpaste import preview_left_margin, preview_left_margin_px
+from pipeline.paste_layout import RESOLUTION, page_dims_inches
 from pipeline.page_dimensions import LANDSCAPE, PORTRAIT, get_dimensions, prct2pixel
 
 
@@ -41,3 +42,13 @@ def test_page_chunk_max_and_preview_pane() -> None:
 def test_preview_left_margin_scales_with_orientation() -> None:
     assert preview_left_margin([80.0], orientation="portrait") == 37
     assert preview_left_margin([80.0], orientation="landscape") == 47
+
+
+def test_preview_left_margin_px_matches_paste_formula() -> None:
+    max_width_px = 2295
+    for orientation in ("portrait", "landscape"):
+        page_w, _ = page_dims_inches("letter", orientation)
+        dims = get_dimensions(orientation)
+        left_in = max(0, (page_w - max_width_px / RESOLUTION) / 2)
+        expected = round(left_in / page_w * dims.preview_pane_width)
+        assert preview_left_margin_px(max_width_px, orientation=orientation) == expected
