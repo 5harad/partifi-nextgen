@@ -23,6 +23,18 @@ def layout_orientation(base_orientation: Orientation, rotation_degrees: int) -> 
     return base
 
 
+def orientation_override_for_rotation(
+    base_orientation: Orientation | str | None,
+    rotation_degrees: int,
+) -> Orientation | None:
+    """Persist an override only when the partset is actually rotated."""
+    rotation_degrees = normalize_rotation_degrees(rotation_degrees)
+    if rotation_degrees == 0:
+        return None
+    base: Orientation = "landscape" if base_orientation == "landscape" else "portrait"
+    return layout_orientation(base, rotation_degrees)
+
+
 def effective_partset_orientation(
     *,
     score_orientation: Orientation | str | None,

@@ -23,6 +23,7 @@ from pipeline.partset_orientation import (
     effective_partset_orientation,
     layout_orientation,
     normalize_rotation_degrees,
+    orientation_override_for_rotation,
     partset_uses_custom_pages,
 )
 
@@ -184,7 +185,10 @@ def start_reorient(db: Session, partset: Partset, rotation_degrees: int) -> str:
 
     score_orientation = score.orientation if score.orientation else "portrait"
     partset.rotation_degrees = rotation_degrees
-    partset.orientation_override = layout_orientation(score_orientation, rotation_degrees)  # type: ignore[arg-type]
+    partset.orientation_override = orientation_override_for_rotation(  # type: ignore[assignment]
+        score_orientation,
+        rotation_degrees,
+    )
 
     job_id = enqueue_job(
         "reorient_partset",

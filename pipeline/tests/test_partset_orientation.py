@@ -8,6 +8,7 @@ from pipeline.partset_orientation import (
     effective_partset_orientation,
     layout_orientation,
     normalize_rotation_degrees,
+    orientation_override_for_rotation,
     partset_uses_custom_pages,
 )
 
@@ -28,6 +29,14 @@ def test_normalize_rotation_degrees_accepts_cardinals() -> None:
 def test_normalize_rotation_degrees_rejects_invalid() -> None:
     with pytest.raises(ValueError):
         normalize_rotation_degrees(45)
+
+
+def test_orientation_override_for_rotation_clears_at_zero() -> None:
+    assert orientation_override_for_rotation("portrait", 0) is None
+    assert orientation_override_for_rotation("landscape", 0) is None
+    assert orientation_override_for_rotation("portrait", 90) == "landscape"
+    assert orientation_override_for_rotation("portrait", 180) == "portrait"
+    assert orientation_override_for_rotation("landscape", 90) == "portrait"
 
 
 def test_effective_orientation_prefers_override() -> None:

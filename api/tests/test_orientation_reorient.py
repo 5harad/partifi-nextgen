@@ -158,6 +158,25 @@ def test_start_reorient_persists_target_rotation() -> None:
     db.commit.assert_called_once()
 
 
+def test_start_reorient_clears_override_when_rotation_is_zero() -> None:
+    partset = _completed_partset()
+    partset.orientation_override = "landscape"
+    score = Score(id="score01", orientation="portrait")
+    db = MagicMock()
+    db.get.return_value = score
+    db.query.return_value.filter.return_value.delete.return_value = 0
+
+    with (
+        patch("app.services.partset_pages.get_local_cache"),
+        patch("app.services.partset_pages.try_acquire_import_lock", return_value=True),
+        patch("app.services.partset_pages.enqueue_job", return_value="job-0"),
+    ):
+        start_reorient(db, partset, 0)
+
+    assert partset.rotation_degrees == 0
+    assert partset.orientation_override is None
+
+
 def test_ensure_page_images_status_not_ready_when_only_lowres_cached() -> None:
     partset = _completed_partset()
     score = Score(id="score01", orientation="portrait")

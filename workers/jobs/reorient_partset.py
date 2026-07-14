@@ -15,6 +15,7 @@ from local_cache import ensure_lowres_files, get_local_cache
 from pipeline.partset_orientation import (
     layout_orientation,
     normalize_rotation_degrees,
+    orientation_override_for_rotation,
     partset_uses_custom_pages,
 )
 from pipeline.partset_page_render import render_oriented_page
@@ -185,7 +186,11 @@ def run_reorient_partset(
         db_conn.execute(
             "UPDATE partsets SET orientation_override = :orientation, rotation_degrees = :rotation "
             "WHERE id = :id",
-            {"orientation": effective, "rotation": rotation_degrees, "id": partset_id},
+            {
+                "orientation": orientation_override_for_rotation(gs_orientation, rotation_degrees),
+                "rotation": rotation_degrees,
+                "id": partset_id,
+            },
         )
 
         db_conn.execute(
