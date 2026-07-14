@@ -1,16 +1,111 @@
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 
 const CONTACT = 'support@partifi.org'
 
 const VIDEOS = [
-  { title: 'Step I. Importing the Score', src: 'https://fast.wistia.com/embed/iframe/lb47zbh0cv?controlsVisibleOnLoad=true&endVideoBehavior=reset&version=v1&videoHeight=374&videoWidth=640', height: 374 },
-  { title: 'Step II. Labeling the Segments', src: 'https://fast.wistia.com/embed/iframe/kxv41f7lg6?controlsVisibleOnLoad=true&endVideoBehavior=reset&version=v1&videoHeight=372&videoWidth=640', height: 372 },
-  { title: 'Step III. Previewing the Parts', src: 'https://fast.wistia.com/embed/iframe/dq5h55u26e?controlsVisibleOnLoad=true&endVideoBehavior=reset&version=v1&videoHeight=373&videoWidth=640', height: 373 },
-  { title: 'Step IV. Downloading & Sharing the Parts', src: 'https://fast.wistia.com/embed/iframe/cf2gnfjek2?controlsVisibleOnLoad=true&endVideoBehavior=reset&version=v1&videoHeight=374&videoWidth=640', height: 374 },
-]
+  { title: 'Step I. Importing the Score', youtubeId: 'xjlul_YnXDo' },
+  { title: 'Step II. Labeling the Segments', youtubeId: 'mroIUb88dt4' },
+  { title: 'Step III. Previewing the Parts', youtubeId: 'L1gXaM53iug' },
+  { title: 'Step IV. Downloading & Sharing the Parts', youtubeId: 'YNhQjJlMhjk' },
+] as const
+
+const YT_IFRAME_API = 'https://www.youtube.com/iframe_api'
+
+declare global {
+  interface Window {
+    YT?: {
+      Player: new (
+        elementId: string,
+        config: {
+          videoId: string
+          width?: number | string
+          height?: number | string
+          host?: string
+          playerVars?: Record<string, string | number>
+          events?: {
+            onStateChange?: (event: { data: number; target: YTPlayer }) => void
+          }
+        },
+      ) => YTPlayer
+      PlayerState: { PLAYING: number }
+    }
+    onYouTubeIframeAPIReady?: () => void
+  }
+}
+
+type YTPlayer = {
+  pauseVideo: () => void
+  destroy: () => void
+}
+
+function loadYouTubeApi(): Promise<void> {
+  if (window.YT?.Player) return Promise.resolve()
+
+  return new Promise((resolve) => {
+    const previous = window.onYouTubeIframeAPIReady
+    window.onYouTubeIframeAPIReady = () => {
+      previous?.()
+      resolve()
+    }
+
+    if (!document.querySelector(`script[src="${YT_IFRAME_API}"]`)) {
+      const script = document.createElement('script')
+      script.src = YT_IFRAME_API
+      script.async = true
+      document.body.appendChild(script)
+    }
+  })
+}
 
 export function HowToPage() {
+  const playersRef = useRef<YTPlayer[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+
+    void loadYouTubeApi().then(() => {
+      if (cancelled || !window.YT) return
+
+      playersRef.current = VIDEOS.map((video, index) => {
+        const player = new window.YT!.Player(`howto-yt-${index}`, {
+          videoId: video.youtubeId,
+          width: 640,
+          height: 360,
+          host: 'https://www.youtube-nocookie.com',
+          playerVars: {
+            rel: 0,
+            modestbranding: 1,
+            playsinline: 1,
+            iv_load_policy: 3,
+          },
+          events: {
+            onStateChange: (event) => {
+              if (event.data !== window.YT!.PlayerState.PLAYING) return
+              for (const other of playersRef.current) {
+                if (other !== event.target) other.pauseVideo()
+              }
+            },
+          },
+        })
+        return player
+      })
+    })
+
+    return () => {
+      cancelled = true
+      for (const player of playersRef.current) {
+        try {
+          player.destroy()
+        } catch {
+          // Player may already be gone on unmount.
+        }
+      }
+      playersRef.current = []
+    }
+  }, [])
+
   return (
     <Layout>
       <div id="main">
@@ -37,19 +132,12 @@ export function HowToPage() {
             and we would be happy to help.
           </div>
 
-          {VIDEOS.map((video) => (
-            <div key={video.title}>
+          {VIDEOS.map((video, index) => (
+            <div key={video.youtubeId}>
               <div className="vid-title">{video.title}</div>
-              <iframe
-                className="vid-iframe"
-                src={video.src}
-                title={video.title}
-                allow="fullscreen"
-                frameBorder={0}
-                scrolling="no"
-                width={640}
-                height={video.height}
-              />
+              <div className="vid-iframe">
+                <div id={`howto-yt-${index}`} />
+              </div>
             </div>
           ))}
         </div>
