@@ -440,6 +440,24 @@ ORDER BY p.paste_complete DESC
 LIMIT 10;
 "
 
+section "Landscape / rotated partsets (last 24h, with parts)"
+mysql_query_table "
+SELECT
+  p.create_ts,
+  p.id AS partset_id,
+  IF(CHAR_LENGTH(p.title) > 40, CONCAT(LEFT(p.title, 37), '...'), p.title) AS title,
+  s.orientation AS score_orientation,
+  p.rotation_degrees,
+  p.orientation_override,
+  (SELECT COUNT(*) FROM parts pt WHERE pt.partset_id = p.id) AS num_parts
+FROM partsets p
+JOIN scores s ON s.id = p.score_id
+WHERE p.create_ts >= NOW() - INTERVAL 24 HOUR
+  AND (s.orientation = 'landscape' OR IFNULL(p.rotation_degrees, 0) != 0)
+  AND EXISTS (SELECT 1 FROM parts pt WHERE pt.partset_id = p.id)
+ORDER BY p.create_ts DESC;
+"
+
 section "Cache (/data/partifi)"
 CACHE_DU="$(awk 'NR == 1 {print $1}' "$TMPDIR/cache_du" 2>/dev/null || echo "?")"
 CACHE_KB="$(cat "$TMPDIR/cache_kb" 2>/dev/null || echo "")"
