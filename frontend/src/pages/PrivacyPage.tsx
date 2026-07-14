@@ -27,8 +27,8 @@ export function PrivacyPage() {
             <p>
               When you upload a score or create a partset, we store the files and metadata needed to run
               the service (for example, title, composer, and part tags you enter). If you sign in with
-              Google, we receive your Google account ID, name, and email address from Google and use them
-              to identify your account and show your library.
+              Google, we store your Google account ID and name and use them to identify your account and
+              show your library.
             </p>
 
             <p className="bold">Automatically collected information</p>
