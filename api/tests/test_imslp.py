@@ -59,3 +59,20 @@ def test_parse_imslp_page_html_extracts_metadata() -> None:
     assert data["composer"] == "Johann Sebastian Bach"
     assert "Breitkopf" in data["publisher"]
     assert data["file_type"] == "PDF"
+
+
+def test_parse_imslp_page_html_keeps_unicode() -> None:
+    html = """
+    <html><head>
+    <title>Symphony No.2, Op.4 (Dvořák, Antonín)</title>
+    </head><body>
+    >#44532<
+    Publisher Info.:</dt><dd><p class="we_edition_entry">N. Šimrock, 1888</p>
+    Copyright:</dt><dd><p class="we_edition_entry">Public Domain</p>
+    <a href="/wiki/IMSLP:File_formats" title="IMSLP:File formats">PDF</a>
+    </body></html>
+    """
+    data = parse_imslp_page_html(html, "44532")
+    assert data["title"] == "Symphony No.2, Op.4"
+    assert data["composer"] == "Antonín Dvořák"
+    assert "Šimrock" in data["publisher"]

@@ -56,8 +56,7 @@ def _fail_lookup(row: ImslpInfo | None) -> None:
 
 def _normalize_text(text: str) -> str:
     text = html.unescape(text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text.encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _abs_imslp_url(url: str) -> str:
