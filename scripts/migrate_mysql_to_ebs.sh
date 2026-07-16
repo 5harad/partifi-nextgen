@@ -169,12 +169,13 @@ preflight() {
   fi
 
   SOURCE="$(docker volume inspect "$MYSQL_VOLUME" --format '{{.Mountpoint}}')"
-  if [[ ! -d "$SOURCE" ]]; then
+  # Docker volume mountpoints under /var/lib/docker are root-only.
+  if ! sudo test -d "$SOURCE"; then
     echo "Source datadir missing: $SOURCE" >&2
     exit 1
   fi
 
-  if [[ ! -d "$TARGET" ]]; then
+  if ! sudo test -d "$TARGET"; then
     echo "Target mount missing: $TARGET" >&2
     exit 1
   fi
