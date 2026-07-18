@@ -87,12 +87,19 @@ def test_ensure_score_pdf_repairs_via_imslp_refetch(tmp_path: Path) -> None:
     score_id = "abc12"
     workdir = tmp_path / "work"
     workdir.mkdir()
-    cached = tmp_path / "cached.pdf"
-    cached.write_bytes(b"%PDF-bad")
+    cached_path = tmp_path / "cache" / "score.pdf"
+    cached_path.parent.mkdir()
+    cached_path.write_bytes(b"%PDF-bad")
     repaired = workdir / "score.pdf"
 
+    def _ensure(_score_id: str) -> Path:
+        if not cached_path.is_file():
+            cached_path.write_bytes(b"%PDF-still-bad-from-s3")
+        return cached_path
+
     cache = MagicMock()
-    cache.ensure_score_pdf.return_value = cached
+    cache.ensure_score_pdf.side_effect = _ensure
+    cache.score_pdf_path.return_value = cached_path
 
     with (
         patch.object(import_pipeline, "get_local_cache", return_value=cache),
@@ -110,17 +117,94 @@ def test_ensure_score_pdf_repairs_via_imslp_refetch(tmp_path: Path) -> None:
         path = import_pipeline._ensure_score_pdf(score_id, workdir)
 
     assert path == repaired
+    assert cache.ensure_score_pdf.call_count == 2
+    cache.score_pdf_path.assert_called_once_with(score_id)
     repair.assert_called_once_with(score_id, workdir / "score.pdf", workdir)
+
+
+def test_ensure_score_pdf_recovers_after_s3_reload(tmp_path: Path) -> None:
+    score_id = "abc12"
+    workdir = tmp_path / "work"
+    workdir.mkdir()
+    cached_path = tmp_path / "cache" / "score.pdf"
+    cached_path.parent.mkdir()
+    cached_path.write_bytes(b"%PDF-bad")
+
+    def _ensure(_score_id: str) -> Path:
+        if not cached_path.is_file():
+            cached_path.write_bytes(b"%PDF-good-from-s3")
+        return cached_path
+
+    cache = MagicMock()
+    cache.ensure_score_pdf.side_effect = _ensure
+    cache.score_pdf_path.return_value = cached_path
+
+    with (
+        patch.object(import_pipeline, "get_local_cache", return_value=cache),
+        patch.object(
+            import_pipeline,
+            "ensure_valid_score_pdf",
+            side_effect=[ValueError("cache bad"), None],
+        ),
+        patch.object(import_pipeline, "repair_corrupt_score_pdf") as repair,
+    ):
+        path = import_pipeline._ensure_score_pdf(score_id, workdir)
+
+    assert path == workdir / "score.pdf"
+    assert cache.ensure_score_pdf.call_count == 2
+    repair.assert_not_called()
+
+
+def test_ensure_score_pdf_preserves_too_large_error(tmp_path: Path) -> None:
+    score_id = "abc12"
+    workdir = tmp_path / "work"
+    workdir.mkdir()
+    cached_path = tmp_path / "cache" / "score.pdf"
+    cached_path.parent.mkdir()
+    cached_path.write_bytes(b"%PDF-bad")
+
+    def _ensure(_score_id: str) -> Path:
+        if not cached_path.is_file():
+            cached_path.write_bytes(b"%PDF-still-bad")
+        return cached_path
+
+    cache = MagicMock()
+    cache.ensure_score_pdf.side_effect = _ensure
+    cache.score_pdf_path.return_value = cached_path
+
+    with (
+        patch.object(import_pipeline, "get_local_cache", return_value=cache),
+        patch.object(
+            import_pipeline,
+            "ensure_valid_score_pdf",
+            side_effect=ValueError("corrupt"),
+        ),
+        patch.object(
+            import_pipeline,
+            "repair_corrupt_score_pdf",
+            side_effect=import_pipeline.ScoreTooLargeError(99_000_000),
+        ),
+        pytest.raises(import_pipeline.ScoreTooLargeError),
+    ):
+        import_pipeline._ensure_score_pdf(score_id, workdir)
 
 
 def test_ensure_score_pdf_no_imslp_repair_surfaces_corrupt(tmp_path: Path) -> None:
     score_id = "abc12"
     workdir = tmp_path / "work"
     workdir.mkdir()
-    cached = tmp_path / "cached.pdf"
-    cached.write_bytes(b"%PDF-bad")
+    cached_path = tmp_path / "cache" / "score.pdf"
+    cached_path.parent.mkdir()
+    cached_path.write_bytes(b"%PDF-bad")
+
+    def _ensure(_score_id: str) -> Path:
+        if not cached_path.is_file():
+            cached_path.write_bytes(b"%PDF-still-bad")
+        return cached_path
+
     cache = MagicMock()
-    cache.ensure_score_pdf.return_value = cached
+    cache.ensure_score_pdf.side_effect = _ensure
+    cache.score_pdf_path.return_value = cached_path
 
     with (
         patch.object(import_pipeline, "get_local_cache", return_value=cache),

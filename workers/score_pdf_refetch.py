@@ -65,10 +65,12 @@ def replace_score_pdf_from_imslp(
     orientation = infer_orientation_from_pdf(dest)
 
     pdf_bytes = dest.read_bytes()
+    file_size = len(pdf_bytes)
     file_hash = hashlib.sha1(pdf_bytes).hexdigest()
     logger.info(
-        "Downloaded %s bytes, sha1=%s, orientation=%s",
+        "Downloaded %s bytes (archived size %s after validate), sha1=%s, orientation=%s",
         size,
+        file_size,
         file_hash,
         orientation,
     )
@@ -96,7 +98,7 @@ def replace_score_pdf_from_imslp(
         {
             "id": score_id,
             "imslp_id": resolved_imslp,
-            "file_size": size,
+            "file_size": file_size,
             "file_hash": file_hash,
             "orientation": orientation,
         },

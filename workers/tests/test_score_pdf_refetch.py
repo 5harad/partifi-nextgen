@@ -23,16 +23,20 @@ def test_replace_uploads_when_hash_differs(tmp_path: Path) -> None:
     dest = tmp_path / "score.pdf"
     workdir = tmp_path / "work"
     workdir.mkdir()
+    body = b"%PDF-new-bytes-after-normalize"
 
     def _download(_imslp_id, path, **_kwargs):
-        path.write_bytes(b"%PDF-new-bytes")
+        path.write_bytes(b"%PDF-raw-download-different-len!!!!")
         return path.stat().st_size
+
+    def _normalize(path, _workdir):
+        path.write_bytes(body)
 
     cache = MagicMock()
     with (
         patch("score_pdf_refetch._fetch_score", return_value=_score_row()),
         patch("score_pdf_refetch.download_imslp_pdf", side_effect=_download),
-        patch("score_pdf_refetch.ensure_valid_score_pdf"),
+        patch("score_pdf_refetch.ensure_valid_score_pdf", side_effect=_normalize),
         patch("score_pdf_refetch.infer_orientation_from_pdf", return_value="landscape"),
         patch("score_pdf_refetch.upload_file") as upload,
         patch("score_pdf_refetch.db_conn.execute") as execute,
@@ -43,6 +47,7 @@ def test_replace_uploads_when_hash_differs(tmp_path: Path) -> None:
 
     upload.assert_called_once()
     execute.assert_called_once()
+    assert execute.call_args.args[1]["file_size"] == len(body)
     invalidate.assert_called_once_with("abc12")
     cache.invalidate_score.assert_called_once_with("abc12")
 

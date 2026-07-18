@@ -20,6 +20,7 @@ from score_cache import (
     invalidate_score_analysis,
     score_analysis_complete,
 )
+from score_limits import ScoreTooLargeError
 from score_pdf_refetch import repair_corrupt_score_pdf
 
 from import_lock import release_import_lock
@@ -67,18 +68,43 @@ def _score_pages_available(score_id: str) -> bool:
     return get_local_cache().score_has_pages(score_id)
 
 
-def _ensure_score_pdf(score_id: str, workdir: Path) -> Path:
-    pdf_path = workdir / "score.pdf"
+def _copy_cached_score_pdf(score_id: str, pdf_path: Path) -> None:
     cached = get_local_cache().ensure_score_pdf(score_id)
     shutil.copy2(cached, pdf_path)
+
+
+def _ensure_score_pdf(score_id: str, workdir: Path) -> Path:
+    pdf_path = workdir / "score.pdf"
+    cache = get_local_cache()
+
+    _copy_cached_score_pdf(score_id, pdf_path)
     try:
         ensure_valid_score_pdf(pdf_path, workdir)
         return pdf_path
     except ValueError:
-        try:
-            return repair_corrupt_score_pdf(score_id, pdf_path, workdir)
-        except ValueError as repair_exc:
-            raise ValueError(PDF_CORRUPT_MESSAGE) from repair_exc
+        logger.warning(
+            "Cached PDF for score %s failed validation; reloading from S3",
+            score_id,
+        )
+
+    # Drop the local PDF so ensure_score_pdf fetches from S3 again.
+    cache.score_pdf_path(score_id).unlink(missing_ok=True)
+    _copy_cached_score_pdf(score_id, pdf_path)
+    try:
+        ensure_valid_score_pdf(pdf_path, workdir)
+        return pdf_path
+    except ValueError:
+        logger.warning(
+            "S3 PDF for score %s failed validation; attempting IMSLP refetch",
+            score_id,
+        )
+
+    try:
+        return repair_corrupt_score_pdf(score_id, pdf_path, workdir)
+    except ScoreTooLargeError:
+        raise
+    except ValueError as repair_exc:
+        raise ValueError(PDF_CORRUPT_MESSAGE) from repair_exc
 
 
 def _run_convert(
