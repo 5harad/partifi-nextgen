@@ -466,9 +466,11 @@ iframe[src*="accounts.google.com/gsi"]
 
 #file-select 
 {
-	display: inline-block;
-	position: relative;
-	left: 22px;
+	position: absolute;
+	right: -20px;
+	top: 50%;
+	transform: translateY(calc(-50% + 3px));
+	left: auto;
 	padding: 7px 20px 7px 20px;
 	background: #D8D5C2;
 	font-family: 'IM Fell Great Primer', serif;
@@ -477,6 +479,7 @@ iframe[src*="accounts.google.com/gsi"]
 	border-radius:6px;
 	box-shadow: 0px 1px 1px black;
 	cursor: pointer;
+	box-sizing: border-box;
 }
 
 /* Invisible hit/visual layer over score → import; same box for both. */
@@ -525,16 +528,12 @@ iframe[src*="accounts.google.com/gsi"]
 
 #filename 
 {
-	display: inline-block;
-	margin-left:16px;
-	width:328px;
-	background: transparent;
-	border: 0px;
-	border-bottom: 2px dotted #686868;
-	padding-bottom: 7px;
 	font-family: 'IM Fell Great Primer', serif;
-	font-size: 20px;
-	color: #E00000;
+	padding-bottom: 7px;
+	top: 3px;
+	/* Keep the real .score-input dotted border (correct look + vertical align).
+	   Clip the right side so Select file sits in clear space; layout width stays 450px. */
+	clip-path: inset(0 110px 0 0);
 }
 
 #imslp_id

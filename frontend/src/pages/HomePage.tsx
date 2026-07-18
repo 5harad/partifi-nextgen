@@ -350,7 +350,14 @@ export function HomePage() {
             </div>
             <div id="score-field" className="score-input-label">
               score<span className="asterisk">*</span>
-              <input type="text" name="filename" id="filename" readOnly value={filename} />
+              <input
+                type="text"
+                name="filename"
+                id="filename"
+                className="score-input"
+                readOnly
+                value={filename}
+              />
               <div id="file-select" onClick={openFilePicker} role="button" tabIndex={0}>
                 Select file
               </div>
@@ -360,7 +367,7 @@ export function HomePage() {
                 id="file-elem"
                 name="score"
                 accept="application/pdf,.pdf"
-                style={{ visibility: 'hidden' }}
+                style={{ display: 'none' }}
                 onChange={(e) => handleFileChange(e.target.files?.[0])}
               />
             </div>
