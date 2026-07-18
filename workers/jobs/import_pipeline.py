@@ -13,12 +13,14 @@ from pdf2png import convert_score
 from pdf_validate_repair import ensure_valid_score_pdf
 from pipeline.orientation_probe import infer_orientation_from_pdf
 from pipeline.page_dimensions import Orientation
+from pipeline.pdf_validate import PDF_CORRUPT_MESSAGE
 from score_cache import (
     copy_partset_segs_to_score,
     copy_score_segs_to_partset,
     invalidate_score_analysis,
     score_analysis_complete,
 )
+from score_pdf_refetch import repair_corrupt_score_pdf
 
 from import_lock import release_import_lock
 from jobs.errors import mark_partset_error
@@ -69,8 +71,14 @@ def _ensure_score_pdf(score_id: str, workdir: Path) -> Path:
     pdf_path = workdir / "score.pdf"
     cached = get_local_cache().ensure_score_pdf(score_id)
     shutil.copy2(cached, pdf_path)
-    ensure_valid_score_pdf(pdf_path, workdir)
-    return pdf_path
+    try:
+        ensure_valid_score_pdf(pdf_path, workdir)
+        return pdf_path
+    except ValueError:
+        try:
+            return repair_corrupt_score_pdf(score_id, pdf_path, workdir)
+        except ValueError as repair_exc:
+            raise ValueError(PDF_CORRUPT_MESSAGE) from repair_exc
 
 
 def _run_convert(

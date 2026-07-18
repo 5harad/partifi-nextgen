@@ -22,12 +22,10 @@ from pathlib import Path
 
 import db_conn
 from imslp_client import download_imslp_pdf
-from local_cache import get_local_cache
 from pdf_validate_repair import ensure_valid_score_pdf
 from pipeline.orientation_probe import infer_orientation_from_pdf
-from pipeline.pdf_validate import validate_downloaded_pdf
-from s3_storage import score_pdf_s3_key, upload_file
-from score_cache import invalidate_score_analysis
+from s3_storage import score_pdf_s3_key
+from score_pdf_refetch import replace_score_pdf_from_imslp
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("partifi.refetch_score_pdf")
@@ -61,29 +59,25 @@ def refetch_score_pdf(
     pdf_path = workdir / "score.pdf"
 
     try:
-        logger.info(
-            "Downloading IMSLP %s for score %s (was %s bytes, hash=%s)",
-            resolved_imslp,
-            score_id,
-            row.file_size,
-            row.file_hash,
-        )
-        size = download_imslp_pdf(resolved_imslp, pdf_path)
-        ensure_valid_score_pdf(pdf_path, workdir)
-        validate_downloaded_pdf(pdf_path)
-        orientation = infer_orientation_from_pdf(pdf_path)
-
-        pdf_bytes = pdf_path.read_bytes()
-        file_hash = hashlib.sha1(pdf_bytes).hexdigest()
-        logger.info(
-            "Downloaded %s bytes, sha1=%s, orientation=%s, %%EOF=%s",
-            size,
-            file_hash,
-            orientation,
-            b"%%EOF" in pdf_bytes,
-        )
-
         if dry_run:
+            logger.info(
+                "Downloading IMSLP %s for score %s (was %s bytes, hash=%s)",
+                resolved_imslp,
+                score_id,
+                row.file_size,
+                row.file_hash,
+            )
+            size = download_imslp_pdf(resolved_imslp, pdf_path)
+            ensure_valid_score_pdf(pdf_path, workdir)
+            orientation = infer_orientation_from_pdf(pdf_path)
+            file_hash = hashlib.sha1(pdf_path.read_bytes()).hexdigest()
+            logger.info(
+                "Downloaded %s bytes, sha1=%s, orientation=%s, %%EOF=%s",
+                size,
+                file_hash,
+                orientation,
+                b"%%EOF" in pdf_path.read_bytes(),
+            )
             logger.info(
                 "Dry run: would upload to %s, set orientation=%s, and reset convert/analysis",
                 score_pdf_s3_key(score_id),
@@ -91,37 +85,15 @@ def refetch_score_pdf(
             )
             return
 
-        upload_file(pdf_path, score_pdf_s3_key(score_id), "application/pdf")
-        db_conn.execute(
-            """
-            UPDATE scores SET
-                imslp_id = :imslp_id,
-                file_size = :file_size,
-                file_hash = :file_hash,
-                s3 = 1,
-                convert_start = NULL,
-                convert_complete = NULL,
-                num_pages = NULL,
-                orientation = :orientation,
-                analysis_start = NULL,
-                analysis_complete = NULL
-            WHERE id = :id
-            """,
-            {
-                "id": score_id,
-                "imslp_id": resolved_imslp,
-                "file_size": size,
-                "file_hash": file_hash,
-                "orientation": orientation,
-            },
+        replace_score_pdf_from_imslp(
+            score_id,
+            pdf_path,
+            workdir,
+            imslp_id=resolved_imslp,
+            force_replace=True,
         )
-        invalidate_score_analysis(score_id)
-        get_local_cache().invalidate_score(score_id)
         logger.info(
-            "Replaced %s on S3 (orientation=%s); invalidated local cache and score analysis. "
             "Re-import any active partsets on score %s.",
-            score_pdf_s3_key(score_id),
-            orientation,
             score_id,
         )
     finally:
