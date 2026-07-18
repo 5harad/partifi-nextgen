@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import glob
+import hashlib
 import logging
 import shutil
 from pathlib import Path
@@ -38,6 +39,16 @@ def _fetch_score_import_state(score_id: str):
     )
 
 
+def _fetch_score_file_hash(score_id: str) -> str | None:
+    row = db_conn.fetchone(
+        "SELECT file_hash FROM scores WHERE id = :id",
+        {"id": score_id},
+    )
+    if not row or not row.file_hash:
+        return None
+    return str(row.file_hash)
+
+
 def _mark_convert_complete(partset_id: str, score_id: str, num_pages: int | None = None) -> None:
     db_conn.execute(
         "UPDATE partsets SET status = 'convert', convert_start = NOW(), "
@@ -68,28 +79,51 @@ def _score_pages_available(score_id: str) -> bool:
     return get_local_cache().score_has_pages(score_id)
 
 
-def _copy_cached_score_pdf(score_id: str, pdf_path: Path) -> None:
-    cached = get_local_cache().ensure_score_pdf(score_id)
-    shutil.copy2(cached, pdf_path)
+def _sha1_file(path: Path) -> str:
+    return hashlib.sha1(path.read_bytes()).hexdigest()
+
+
+def _refetch_from_imslp(score_id: str, pdf_path: Path, workdir: Path) -> Path:
+    try:
+        return repair_corrupt_score_pdf(score_id, pdf_path, workdir)
+    except ScoreTooLargeError:
+        raise
+    except ValueError as repair_exc:
+        raise ValueError(PDF_CORRUPT_MESSAGE) from repair_exc
 
 
 def _ensure_score_pdf(score_id: str, workdir: Path) -> Path:
+    """Load score PDF from cache/S3; refetch from IMSLP only when the archive is bad."""
     pdf_path = workdir / "score.pdf"
     cache = get_local_cache()
 
-    _copy_cached_score_pdf(score_id, pdf_path)
+    cached = cache.ensure_score_pdf(score_id)
+    shutil.copy2(cached, pdf_path)
+    # Hash archive bytes before ensure_valid_score_pdf may Ghostscript-rewrite pdf_path.
+    local_hash = _sha1_file(pdf_path)
     try:
         ensure_valid_score_pdf(pdf_path, workdir)
         return pdf_path
     except ValueError:
+        pass
+
+    db_hash = _fetch_score_file_hash(score_id)
+    if db_hash and local_hash == db_hash:
         logger.warning(
-            "Cached PDF for score %s failed validation; reloading from S3",
+            "Archived PDF for score %s failed validation (matches DB hash); "
+            "attempting IMSLP refetch",
             score_id,
         )
+        return _refetch_from_imslp(score_id, pdf_path, workdir)
 
-    # Drop the local PDF so ensure_score_pdf fetches from S3 again.
+    logger.warning(
+        "Cached PDF for score %s failed validation and differs from DB hash; "
+        "reloading from S3",
+        score_id,
+    )
     cache.score_pdf_path(score_id).unlink(missing_ok=True)
-    _copy_cached_score_pdf(score_id, pdf_path)
+    cached = cache.ensure_score_pdf(score_id)
+    shutil.copy2(cached, pdf_path)
     try:
         ensure_valid_score_pdf(pdf_path, workdir)
         return pdf_path
@@ -98,13 +132,7 @@ def _ensure_score_pdf(score_id: str, workdir: Path) -> Path:
             "S3 PDF for score %s failed validation; attempting IMSLP refetch",
             score_id,
         )
-
-    try:
-        return repair_corrupt_score_pdf(score_id, pdf_path, workdir)
-    except ScoreTooLargeError:
-        raise
-    except ValueError as repair_exc:
-        raise ValueError(PDF_CORRUPT_MESSAGE) from repair_exc
+        return _refetch_from_imslp(score_id, pdf_path, workdir)
 
 
 def _run_convert(

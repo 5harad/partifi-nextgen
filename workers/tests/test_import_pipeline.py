@@ -84,25 +84,24 @@ def test_run_import_pipeline_orientation_mismatch_invalidates_and_reconverts() -
 
 
 def test_ensure_score_pdf_repairs_via_imslp_refetch(tmp_path: Path) -> None:
+    import hashlib
+
     score_id = "abc12"
     workdir = tmp_path / "work"
     workdir.mkdir()
+    body = b"%PDF-bad-archive"
     cached_path = tmp_path / "cache" / "score.pdf"
     cached_path.parent.mkdir()
-    cached_path.write_bytes(b"%PDF-bad")
+    cached_path.write_bytes(body)
     repaired = workdir / "score.pdf"
-
-    def _ensure(_score_id: str) -> Path:
-        if not cached_path.is_file():
-            cached_path.write_bytes(b"%PDF-still-bad-from-s3")
-        return cached_path
+    db_hash = hashlib.sha1(body).hexdigest()
 
     cache = MagicMock()
-    cache.ensure_score_pdf.side_effect = _ensure
-    cache.score_pdf_path.return_value = cached_path
+    cache.ensure_score_pdf.return_value = cached_path
 
     with (
         patch.object(import_pipeline, "get_local_cache", return_value=cache),
+        patch.object(import_pipeline, "_fetch_score_file_hash", return_value=db_hash),
         patch.object(
             import_pipeline,
             "ensure_valid_score_pdf",
@@ -117,8 +116,8 @@ def test_ensure_score_pdf_repairs_via_imslp_refetch(tmp_path: Path) -> None:
         path = import_pipeline._ensure_score_pdf(score_id, workdir)
 
     assert path == repaired
-    assert cache.ensure_score_pdf.call_count == 2
-    cache.score_pdf_path.assert_called_once_with(score_id)
+    cache.ensure_score_pdf.assert_called_once_with(score_id)
+    cache.score_pdf_path.assert_not_called()
     repair.assert_called_once_with(score_id, workdir / "score.pdf", workdir)
 
 
@@ -128,7 +127,7 @@ def test_ensure_score_pdf_recovers_after_s3_reload(tmp_path: Path) -> None:
     workdir.mkdir()
     cached_path = tmp_path / "cache" / "score.pdf"
     cached_path.parent.mkdir()
-    cached_path.write_bytes(b"%PDF-bad")
+    cached_path.write_bytes(b"%PDF-stale-cache")
 
     def _ensure(_score_id: str) -> Path:
         if not cached_path.is_file():
@@ -141,6 +140,7 @@ def test_ensure_score_pdf_recovers_after_s3_reload(tmp_path: Path) -> None:
 
     with (
         patch.object(import_pipeline, "get_local_cache", return_value=cache),
+        patch.object(import_pipeline, "_fetch_score_file_hash", return_value="db-hash-other"),
         patch.object(
             import_pipeline,
             "ensure_valid_score_pdf",
@@ -156,24 +156,26 @@ def test_ensure_score_pdf_recovers_after_s3_reload(tmp_path: Path) -> None:
 
 
 def test_ensure_score_pdf_preserves_too_large_error(tmp_path: Path) -> None:
+    import hashlib
+
     score_id = "abc12"
     workdir = tmp_path / "work"
     workdir.mkdir()
+    body = b"%PDF-bad"
     cached_path = tmp_path / "cache" / "score.pdf"
     cached_path.parent.mkdir()
-    cached_path.write_bytes(b"%PDF-bad")
-
-    def _ensure(_score_id: str) -> Path:
-        if not cached_path.is_file():
-            cached_path.write_bytes(b"%PDF-still-bad")
-        return cached_path
+    cached_path.write_bytes(body)
 
     cache = MagicMock()
-    cache.ensure_score_pdf.side_effect = _ensure
-    cache.score_pdf_path.return_value = cached_path
+    cache.ensure_score_pdf.return_value = cached_path
 
     with (
         patch.object(import_pipeline, "get_local_cache", return_value=cache),
+        patch.object(
+            import_pipeline,
+            "_fetch_score_file_hash",
+            return_value=hashlib.sha1(body).hexdigest(),
+        ),
         patch.object(
             import_pipeline,
             "ensure_valid_score_pdf",
@@ -190,24 +192,26 @@ def test_ensure_score_pdf_preserves_too_large_error(tmp_path: Path) -> None:
 
 
 def test_ensure_score_pdf_no_imslp_repair_surfaces_corrupt(tmp_path: Path) -> None:
+    import hashlib
+
     score_id = "abc12"
     workdir = tmp_path / "work"
     workdir.mkdir()
+    body = b"%PDF-bad"
     cached_path = tmp_path / "cache" / "score.pdf"
     cached_path.parent.mkdir()
-    cached_path.write_bytes(b"%PDF-bad")
-
-    def _ensure(_score_id: str) -> Path:
-        if not cached_path.is_file():
-            cached_path.write_bytes(b"%PDF-still-bad")
-        return cached_path
+    cached_path.write_bytes(body)
 
     cache = MagicMock()
-    cache.ensure_score_pdf.side_effect = _ensure
-    cache.score_pdf_path.return_value = cached_path
+    cache.ensure_score_pdf.return_value = cached_path
 
     with (
         patch.object(import_pipeline, "get_local_cache", return_value=cache),
+        patch.object(
+            import_pipeline,
+            "_fetch_score_file_hash",
+            return_value=hashlib.sha1(body).hexdigest(),
+        ),
         patch.object(
             import_pipeline,
             "ensure_valid_score_pdf",
