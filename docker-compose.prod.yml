@@ -100,7 +100,8 @@ services:
       MYSQL_USER: ${MYSQL_USER:-partifi}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
-      - mysql_data:/var/lib/mysql
+      # Dedicated EBS (or host path) for MySQL; see scripts/migrate_mysql_to_ebs.sh
+      - /mnt/mysql-ebs:/var/lib/mysql
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
       - ./docker/mysql/prod.cnf:/etc/mysql/conf.d/99-prod.cnf:ro
     healthcheck:
@@ -129,7 +130,6 @@ services:
     <<: *worker-service
 
 volumes:
-  mysql_data:
   worker_tmp:
   partifi_cache:
   caddy_data:
