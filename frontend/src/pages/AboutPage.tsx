@@ -2,6 +2,7 @@ import { Layout } from '../components/Layout'
 
 const CONTACT = 'support@partifi.org'
 const SOURCE_REPO_URL = 'https://github.com/5harad/partifi-nextgen'
+const KOFI_URL = 'https://ko-fi.com/partifi'
 
 export function AboutPage() {
   return (
@@ -26,10 +27,18 @@ export function AboutPage() {
             </p>
 
             <p>
-              Partifi is made for musicians by musicians. By freely offering this part-making tool, and by
-              maintaining a publicly accessible library of user-contributed scores, we seek to support and
-              encourage the study and performance of early music. To date, Partifi has been used to create
-              over 2 million parts!
+              Partifi is made for musicians by musicians, and it has been used to create over 2 million
+              parts! Partifi is completely free and open for everyone to use. But it&apos;s not free to
+              run and maintain. If you&apos;d like to support the project, please consider{' '}
+              <a
+                href={KOFI_URL}
+                className="red"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                making a donation
+              </a>
+              .
             </p>
 
             <p>

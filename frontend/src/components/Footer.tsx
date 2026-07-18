@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 
 const CONTACT_EMAIL = 'support@partifi.org'
-const SOURCE_REPO_URL = 'https://github.com/5harad/partifi-nextgen'
+const KOFI_URL = 'https://ko-fi.com/partifi'
 const SHARE_MAILTO = `mailto:?subject=${encodeURIComponent('Partifi')}&body=${encodeURIComponent(
   'A free and automated tool for creating parts from music scores: https://partifi.org\n',
 )}`
@@ -35,8 +35,8 @@ export function Footer() {
             &nbsp;|&nbsp; <a href={`mailto:${CONTACT_EMAIL}`} className="contact">Contact</a>{' '}
             &nbsp;|&nbsp; <Link to="/privacy">Privacy</Link> &nbsp;|&nbsp; <Link to="/terms">Terms</Link>{' '}
             &nbsp;|&nbsp;{' '}
-            <a href={SOURCE_REPO_URL} rel="noopener noreferrer">
-              Source
+            <a href={KOFI_URL} target="_blank" rel="noopener noreferrer">
+              Support
             </a>
           </div>
         </div>

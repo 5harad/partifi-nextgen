@@ -1,16 +1,27 @@
+import type { ReactNode } from 'react'
 import { Layout } from '../components/Layout'
 
 const CONTACT = 'support@partifi.org'
+const KOFI_URL = 'https://ko-fi.com/partifi'
 
 type FaqItem = {
   question: string
-  answer: string
+  answer: ReactNode
 }
 
 const FAQ_ITEMS: FaqItem[] = [
   {
     question: 'Is this service really free?',
-    answer: 'Yes! Partifi is completely free and open to everyone.',
+    answer: (
+      <>
+        Yes! Partifi is completely free and open for everyone to use. But it&apos;s not free to run
+        and maintain. If you&apos;d like to support the project, please consider{' '}
+        <a href={KOFI_URL} className="red" target="_blank" rel="noopener noreferrer">
+          making a donation
+        </a>
+        .
+      </>
+    ),
   },
   {
     question: 'Can I partifi a landscape score?',
@@ -44,6 +55,13 @@ const FAQ_ITEMS: FaqItem[] = [
   },
 ]
 
+function FaqAnswer({ answer }: { answer: ReactNode }) {
+  if (typeof answer === 'string') {
+    return answer.split('\n\n').map((paragraph) => <p key={paragraph}>{paragraph}</p>)
+  }
+  return <p>{answer}</p>
+}
+
 export function FaqPage() {
   return (
     <Layout>
@@ -63,9 +81,7 @@ export function FaqPage() {
                 <p className="faq-question">
                   {index + 1}. {item.question}
                 </p>
-                {item.answer.split('\n\n').map((paragraph) => (
-                  <p key={paragraph}>{paragraph}</p>
-                ))}
+                <FaqAnswer answer={item.answer} />
               </div>
             ))}
 
