@@ -5,6 +5,7 @@ import pytest
 from pipeline.pdf_validate import (
     MIN_PDF_BYTES,
     PDF_CORRUPT_MESSAGE,
+    TAIL_SCAN_BYTES,
     validate_downloaded_pdf,
     validate_pdf_bytes,
 )
@@ -57,6 +58,18 @@ def test_validate_pdf_bytes_rejects_non_pdf() -> None:
 
 def test_validate_pdf_bytes_rejects_missing_eof() -> None:
     data = b"%PDF-1.4\n" + b"x" * MIN_PDF_BYTES
+    with pytest.raises(ValueError, match=PDF_CORRUPT_MESSAGE):
+        validate_pdf_bytes(data)
+
+
+def test_validate_pdf_bytes_rejects_early_eof_only() -> None:
+    """Linearized PDFs put %%EOF near the start; a truncated body must still fail."""
+    early = (
+        b"%PDF-1.6\n"
+        b"startxref\n0\n"
+        b"%%EOF\n"
+    )
+    data = early + b"x" * (TAIL_SCAN_BYTES + MIN_PDF_BYTES)
     with pytest.raises(ValueError, match=PDF_CORRUPT_MESSAGE):
         validate_pdf_bytes(data)
 

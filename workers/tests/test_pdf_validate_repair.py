@@ -26,7 +26,8 @@ def test_ensure_valid_score_pdf_accepts_valid_file(tmp_path: Path) -> None:
     workdir.mkdir()
     pdf_path.write_bytes(_valid_pdf_bytes())
 
-    ensure_valid_score_pdf(pdf_path, workdir)
+    with patch("pdf_validate_repair.assert_pdf_has_pages", return_value=1):
+        ensure_valid_score_pdf(pdf_path, workdir)
 
 
 def test_ensure_valid_score_pdf_normalizes_when_repair_succeeds(tmp_path: Path) -> None:
@@ -38,9 +39,11 @@ def test_ensure_valid_score_pdf_normalizes_when_repair_succeeds(tmp_path: Path) 
     normalized = workdir / "score_normalized.pdf"
     normalized.write_bytes(_valid_pdf_bytes())
 
-    with patch("pdf_validate_repair.validate_downloaded_pdf") as validate, patch(
-        "pdf_validate_repair.normalize_pdf_for_convert"
-    ) as normalize:
+    with (
+        patch("pdf_validate_repair.validate_downloaded_pdf") as validate,
+        patch("pdf_validate_repair.assert_pdf_has_pages", return_value=1),
+        patch("pdf_validate_repair.normalize_pdf_for_convert") as normalize,
+    ):
         validate.side_effect = [ValueError(PDF_CORRUPT_MESSAGE), None]
         ensure_valid_score_pdf(pdf_path, workdir)
 
@@ -54,7 +57,10 @@ def test_ensure_valid_score_pdf_rejects_when_normalize_fails(tmp_path: Path) -> 
     pdf_path.write_bytes(b"%PDF-1.4\n" + b"x" * 1024)
 
     with (
-        patch("pdf_validate_repair.validate_downloaded_pdf", side_effect=ValueError(PDF_CORRUPT_MESSAGE)),
+        patch(
+            "pdf_validate_repair.validate_downloaded_pdf",
+            side_effect=ValueError(PDF_CORRUPT_MESSAGE),
+        ),
         patch(
             "pdf_validate_repair.normalize_pdf_for_convert",
             side_effect=subprocess.CalledProcessError(1, "gs"),
@@ -62,3 +68,23 @@ def test_ensure_valid_score_pdf_rejects_when_normalize_fails(tmp_path: Path) -> 
     ):
         with pytest.raises(ValueError, match=PDF_CORRUPT_MESSAGE):
             ensure_valid_score_pdf(pdf_path, workdir)
+
+
+def test_ensure_valid_score_pdf_repairs_when_pdfinfo_fails(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "score.pdf"
+    workdir = tmp_path / "work"
+    workdir.mkdir()
+    pdf_path.write_bytes(_valid_pdf_bytes())
+    normalized = workdir / "score_normalized.pdf"
+    normalized.write_bytes(_valid_pdf_bytes())
+
+    with (
+        patch("pdf_validate_repair.validate_downloaded_pdf"),
+        patch("pdf_validate_repair.assert_pdf_has_pages") as pages,
+        patch("pdf_validate_repair.normalize_pdf_for_convert") as normalize,
+    ):
+        pages.side_effect = [ValueError(PDF_CORRUPT_MESSAGE), 3]
+        ensure_valid_score_pdf(pdf_path, workdir)
+
+    normalize.assert_called_once()
+    assert pdf_path.read_bytes() == _valid_pdf_bytes()

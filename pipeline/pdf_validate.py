@@ -11,12 +11,28 @@ FULL_READ_MAX_BYTES = 10_000_000
 PDF_CORRUPT_MESSAGE = "This score PDF is corrupt or incomplete."
 
 
+def _final_eof_offset(data: bytes) -> int | None:
+    """Return the start offset of the last %%EOF, if any."""
+    pos = data.rfind(b"%%EOF")
+    return None if pos < 0 else pos
+
+
 def _pdf_structure_ok(data: bytes) -> bool:
-    if b"%%EOF" not in data:
+    """Require the final %%EOF near the end (not an early linearized marker only)."""
+    eof_pos = _final_eof_offset(data)
+    if eof_pos is None:
         return False
-    if b"startxref" in data.lower():
+    # Truncated linearized PDFs often keep an early %%EOF while the real trailer is missing.
+    if len(data) - eof_pos > TAIL_SCAN_BYTES:
+        return False
+
+    trailer_window = data[max(0, eof_pos - TAIL_SCAN_BYTES) :]
+    if b"startxref" in trailer_window.lower():
         return True
-    return b"/xref" in data[-TAIL_SCAN_BYTES:] if len(data) > TAIL_SCAN_BYTES else b"/xref" in data
+    if b"/xref" in trailer_window.lower():
+        return True
+    # Final %%EOF is present; allow startxref elsewhere (rare trailer layouts).
+    return b"startxref" in data.lower()
 
 
 def validate_pdf_bytes(data: bytes, *, min_bytes: int = MIN_PDF_BYTES) -> None:
