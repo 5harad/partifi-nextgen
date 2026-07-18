@@ -38,3 +38,15 @@ def test_assert_pdf_has_pages_rejects_pdfinfo_failure(tmp_path: Path) -> None:
         run.return_value.stderr = "Syntax Error"
         with pytest.raises(ValueError, match=PDF_CORRUPT_MESSAGE):
             assert_pdf_has_pages(path)
+
+
+def test_assert_pdf_has_pages_rejects_missing_binary(tmp_path: Path) -> None:
+    path = tmp_path / "score.pdf"
+    path.write_bytes(b"%PDF")
+
+    with patch(
+        "pipeline.pdfinfo_pages.subprocess.run",
+        side_effect=FileNotFoundError("pdfinfo"),
+    ):
+        with pytest.raises(ValueError, match=PDF_CORRUPT_MESSAGE):
+            assert_pdf_has_pages(path)

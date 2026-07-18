@@ -46,6 +46,10 @@ def test_validate_pdf_bytes_accepts_structured_pdf() -> None:
     validate_pdf_bytes(_valid_pdf_bytes())
 
 
+def test_validate_pdf_bytes_accepts_trailing_nul_padding() -> None:
+    validate_pdf_bytes(_valid_pdf_bytes() + b"\x00" * 8_000)
+
+
 def test_validate_pdf_bytes_rejects_small_file() -> None:
     with pytest.raises(ValueError, match="too small"):
         validate_pdf_bytes(b"%PDF")
@@ -69,7 +73,20 @@ def test_validate_pdf_bytes_rejects_early_eof_only() -> None:
         b"startxref\n0\n"
         b"%%EOF\n"
     )
-    data = early + b"x" * (TAIL_SCAN_BYTES + MIN_PDF_BYTES)
+    # Real truncated downloads continue with objects after the early trailer.
+    data = early + b"1 0 obj\n<<>>\nendobj\nstream\n" + b"x" * MIN_PDF_BYTES
+    with pytest.raises(ValueError, match=PDF_CORRUPT_MESSAGE):
+        validate_pdf_bytes(data)
+
+
+def test_validate_pdf_bytes_rejects_startxref_only_in_header() -> None:
+    """A near-end %%EOF without a local startxref must not reuse an early one."""
+    data = (
+        b"%PDF-1.6\n"
+        b"startxref\n0\n"
+        + b"x" * (TAIL_SCAN_BYTES + MIN_PDF_BYTES)
+        + b"%%EOF\n"
+    )
     with pytest.raises(ValueError, match=PDF_CORRUPT_MESSAGE):
         validate_pdf_bytes(data)
 

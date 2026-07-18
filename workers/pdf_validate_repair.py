@@ -33,6 +33,6 @@ def ensure_valid_score_pdf(path: Path, workdir: Path) -> None:
             repair_path=str(repair_input),
         )
         _validate_score_pdf(normalized)
-    except (ValueError, subprocess.CalledProcessError):
+    except (ValueError, subprocess.CalledProcessError, OSError):
         raise ValueError(PDF_CORRUPT_MESSAGE) from first_error
     shutil.move(str(normalized), str(path))

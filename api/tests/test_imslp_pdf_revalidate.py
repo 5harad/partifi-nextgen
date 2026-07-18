@@ -4,7 +4,11 @@ from unittest.mock import MagicMock, patch
 from app.models import Score
 from app.services.imslp_pdf import ingest_imslp_pdf_bytes
 
-VALID_PDF = b"%PDF-1.4\n" + b"x" * 2000 + b"\n%%EOF\nstartxref\n0"
+VALID_PDF = (
+    b"%PDF-1.4\n"
+    + b"x" * 2000
+    + b"\nstartxref\n0\n%%EOF\n"
+)
 FILE_HASH = hashlib.sha1(VALID_PDF).hexdigest()
 
 

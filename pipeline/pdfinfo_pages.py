@@ -13,12 +13,16 @@ _PAGES_RE = re.compile(r"Pages:\s+(\d+)", re.IGNORECASE)
 
 def assert_pdf_has_pages(pdf_path: Path, *, min_pages: int = 1) -> int:
     """Raise PDF_CORRUPT_MESSAGE when pdfinfo fails or reports too few pages."""
-    result = subprocess.run(
-        ["pdfinfo", str(pdf_path)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["pdfinfo", str(pdf_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=60,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        raise ValueError(PDF_CORRUPT_MESSAGE) from exc
     if result.returncode != 0:
         raise ValueError(PDF_CORRUPT_MESSAGE)
 
