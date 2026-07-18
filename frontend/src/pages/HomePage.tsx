@@ -33,9 +33,12 @@ export function HomePage() {
   const [imslpPublisher, setImslpPublisher] = useState('')
   const [imslpCopyright, setImslpCopyright] = useState<CopyrightValue | ''>('')
   const [imslpLookupPending, setImslpLookupPending] = useState(false)
+  const [pdfDropActive, setPdfDropActive] = useState(false)
   const lookupGenRef = useRef(0)
   const suppressNextLookupRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
+  const pdfDropZoneRef = useRef<HTMLDivElement>(null)
+  const pdfDropActiveRef = useRef(false)
 
   const MIN_IMSLP_ID_LENGTH = 4
 
@@ -61,6 +64,74 @@ export function HomePage() {
     setSelectedFile(file)
     setFilename(file.name)
   }
+
+  const setPdfDropActiveBoth = (active: boolean) => {
+    pdfDropActiveRef.current = active
+    setPdfDropActive(active)
+  }
+
+  const pointInPdfDropZone = (clientX: number, clientY: number) => {
+    const zone = pdfDropZoneRef.current
+    if (!zone) return false
+    const rect = zone.getBoundingClientRect()
+    return (
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
+    )
+  }
+
+  // Hit-test the same rectangle as the overlay (zone is visual-only; pointer-events: none).
+  useEffect(() => {
+    setPdfDropActiveBoth(false)
+
+    const hasFiles = (dt: DataTransfer | null) => {
+      if (!dt) return false
+      // On drop, some browsers expose files but leave types empty — check both.
+      if (dt.files?.length) return true
+      return [...dt.types].includes('Files')
+    }
+
+    const onDragOver = (e: DragEvent) => {
+      if (!hasFiles(e.dataTransfer)) return
+      // Must cancel dragover on the page or the browser will navigate on drop.
+      // Keep dropEffect 'copy' (not 'none') — 'none' made in-zone drops feel laggy.
+      e.preventDefault()
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+      if (importMode !== 'pdf') {
+        if (pdfDropActiveRef.current) setPdfDropActiveBoth(false)
+        return
+      }
+      const inside = pointInPdfDropZone(e.clientX, e.clientY)
+      if (inside !== pdfDropActiveRef.current) {
+        setPdfDropActiveBoth(inside)
+      }
+    }
+
+    const onDrop = (e: DragEvent) => {
+      if (!hasFiles(e.dataTransfer)) return
+      e.preventDefault()
+      setPdfDropActiveBoth(false)
+      if (importMode !== 'pdf') return
+      if (!pointInPdfDropZone(e.clientX, e.clientY)) return
+      const file = e.dataTransfer?.files?.[0]
+      void handleFileChange(file)
+    }
+
+    const onDragEnd = () => setPdfDropActiveBoth(false)
+
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('drop', onDrop)
+    window.addEventListener('dragend', onDragEnd)
+    return () => {
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('drop', onDrop)
+      window.removeEventListener('dragend', onDragEnd)
+    }
+    // handleFileChange is stable enough for this effect; zone ref is read live.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importMode])
 
   const lookupImslp = useCallback(async (rawId: string) => {
     const normalized = normalizeImslpIdInput(rawId)
@@ -266,6 +337,17 @@ export function HomePage() {
 
         {importMode === 'pdf' ? (
           <form id="pdf-form" onSubmit={handlePdfSubmit}>
+            <div
+              ref={pdfDropZoneRef}
+              id="pdf-drop-zone"
+              className={pdfDropActive ? 'pdf-drop-active' : undefined}
+              aria-hidden={!pdfDropActive}
+            >
+              <div className="pdf-drop-overlay-card">
+                <img src="/images/pdf.gif" alt="" width={28} height={28} />
+                <span>Drop PDF here</span>
+              </div>
+            </div>
             <div id="score-field" className="score-input-label">
               score<span className="asterisk">*</span>
               <input type="text" name="filename" id="filename" readOnly value={filename} />

@@ -479,6 +479,50 @@ iframe[src*="accounts.google.com/gsi"]
 	cursor: pointer;
 }
 
+/* Invisible hit/visual layer over score → import; same box for both. */
+#pdf-drop-zone
+{
+	position: absolute;
+	left: 273px;
+	top: 235px;
+	width: 647px;
+	height: 346px;
+	z-index: 25;
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	pointer-events: none;
+	background: transparent;
+}
+
+#pdf-drop-zone.pdf-drop-active
+{
+	background: rgba(40, 38, 32, 0.4);
+}
+
+#pdf-drop-zone .pdf-drop-overlay-card
+{
+	display: none;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	padding: 18px 28px;
+	border-radius: 10px;
+	background: rgba(232, 228, 208, 0.94);
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+	font-family: 'IM Fell Great Primer', serif;
+	font-size: 28px;
+	line-height: 1.1;
+	color: #3a3930;
+	pointer-events: none;
+}
+
+#pdf-drop-zone.pdf-drop-active .pdf-drop-overlay-card
+{
+	display: flex;
+}
+
 #filename 
 {
 	display: inline-block;
