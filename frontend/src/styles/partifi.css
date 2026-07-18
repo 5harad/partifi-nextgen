@@ -368,6 +368,8 @@ iframe[src*="accounts.google.com/gsi"]
 	top:-5px;
 	left:20px;
 	width:450px;
+	/* Homemade Apple swashes: inputs clip ink in padding; text-indent keeps room in the content box. */
+	text-indent: 10px;
 	background: transparent;
 	border: 0px;
 	border-bottom: 2px dotted #686868;
@@ -531,6 +533,7 @@ iframe[src*="accounts.google.com/gsi"]
 	font-family: 'IM Fell Great Primer', serif;
 	padding-bottom: 7px;
 	top: 3px;
+	text-indent: 0;
 	/* Keep the real .score-input dotted border (correct look + vertical align).
 	   Clip the right side so Select file sits in clear space; layout width stays 450px. */
 	clip-path: inset(0 110px 0 0);
