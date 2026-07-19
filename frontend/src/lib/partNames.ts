@@ -1,7 +1,11 @@
-export function displayPartName(value: string): string {
+function displaySinglePartName(value: string): string {
   const first = value[0]
   if (!first || !/^\p{Script=Latin}$/u.test(first) || first !== first.toLowerCase()) {
     return value
   }
   return first.toUpperCase() + value.slice(first.length)
+}
+
+export function displayPartName(value: string): string {
+  return value.split(' + ').map(displaySinglePartName).join(' + ')
 }
