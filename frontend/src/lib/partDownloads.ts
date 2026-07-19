@@ -7,17 +7,46 @@ export type PartDownloadItem = {
   a4_url: string
 }
 
+export type PartDownloadFormat = 'letter' | 'a4'
+
+export type PartgenDownloadTarget = {
+  tag: string
+  format: PartDownloadFormat
+}
+
 export type PartsPageLocationState = {
   pendingPartDownload?: string
 }
 
-export function partDownloadFilename(partsetId: string, fileName: string, format: 'letter' | 'a4') {
-  return format === 'letter' ? `${partsetId}_${fileName}` : `${partsetId}_a4_${fileName}`
+export function partDownloadFilename(fileName: string, format: PartDownloadFormat) {
+  if (format === 'letter') return fileName
+  const stem = fileName.endsWith('.pdf') ? fileName.slice(0, -4) : fileName
+  return `${stem}-a4.pdf`
 }
 
-export function partgenPath(accessId: string, downloadUrl?: string, returnTo?: string) {
+export function partDownloadUrl(
+  parts: PartDownloadItem[],
+  target: PartgenDownloadTarget,
+): string | null {
+  const part = parts.find((candidate) => candidate.tag === target.tag)
+  if (!part) return null
+  return target.format === 'a4' ? part.a4_url : part.letter_url
+}
+
+export function parsePartDownloadFormat(value: string | null): PartDownloadFormat | null {
+  return value === 'letter' || value === 'a4' ? value : null
+}
+
+export function partgenPath(
+  accessId: string,
+  target?: PartgenDownloadTarget,
+  returnTo?: string,
+) {
   const params = new URLSearchParams()
-  if (downloadUrl) params.set('download', downloadUrl)
+  if (target) {
+    params.set('part', target.tag)
+    params.set('format', target.format)
+  }
   if (returnTo) params.set('return', returnTo)
   const query = params.toString()
   return query ? `/${accessId}/partgen?${query}` : `/${accessId}/partgen`
@@ -26,10 +55,10 @@ export function partgenPath(accessId: string, downloadUrl?: string, returnTo?: s
 export function navigateToPartgen(
   navigate: NavigateFunction,
   accessId: string,
-  downloadUrl?: string,
+  target?: PartgenDownloadTarget,
   returnTo?: string,
 ) {
-  navigate(partgenPath(accessId, downloadUrl, returnTo))
+  navigate(partgenPath(accessId, target, returnTo))
 }
 
 export function partgenReturnPath(searchParams: URLSearchParams, accessId: string): string {

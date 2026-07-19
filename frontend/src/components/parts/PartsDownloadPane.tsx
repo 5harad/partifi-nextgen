@@ -292,7 +292,6 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
           scoreDownloadName={`${data.partset_id}_score.pdf`}
         />
         <PartDownloadLinks
-          partsetId={data.partset_id}
           parts={data.parts}
           partsReady={data.parts_ready}
           partgenAccessId={accessId}

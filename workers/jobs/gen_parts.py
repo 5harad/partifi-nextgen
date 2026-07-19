@@ -14,12 +14,12 @@ for root in (APP_ROOT, REPO_ROOT):
     if root_str not in sys.path:
         sys.path.insert(0, root_str)
 
-from db_conn import execute, fetchall, fetchone
+from db_conn import execute, fetchall, fetchone, finalize_part_generation
 from config import get_settings
 from jobs.errors import mark_partset_error
 from pipeline.cut_segments import cut_segment_tasks, read_segment_png_heights, default_pool_size
 from pipeline.page_dimensions import Orientation
-from pipeline.part_filenames import resolve_part_filename
+from pipeline.part_filenames import canonical_part_filename
 from pipeline.cutpaste import (
     apply_combined_parts,
     build_part_segment_map,
@@ -254,6 +254,16 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
     breaks = _fetch_breaks(partset_id)
     spacings = _fetch_spacings(partset_id)
     part_rows = _fetch_part_files(partset_id)
+    part_snapshot = {
+        (str(row["tag"]), bool(row["combined"]))
+        for row in part_rows
+    }
+    file_names = {
+        str(row["tag"]): canonical_part_filename(partset_id, str(row["tag"]))
+        for row in part_rows
+    }
+    if len(set(file_names.values())) != len(file_names):
+        raise RuntimeError(f"Canonical part filename collision for {partset_id}")
 
     execute(
         "UPDATE partsets SET status = 'paste', paste_start = NOW(), paste_progress = 0 WHERE id = :id",
@@ -285,17 +295,7 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
             pages.append(page_segs)
 
         part_name = tag
-        file_name = resolve_part_filename(
-            part_row["file_name"] or "",
-            tag,
-            combined=part_row["combined"],
-        )
-        if file_name != (part_row["file_name"] or ""):
-            execute(
-                "UPDATE parts SET file_name = :file_name "
-                "WHERE partset_id = :partset_id AND tag = :tag",
-                {"file_name": file_name, "partset_id": partset_id, "tag": tag},
-            )
+        file_name = file_names[tag]
         for pagesize, prefix in (("letter", ""), ("a4", "a4_")):
             outfile = outdir / f"{partset_id}_{prefix}{file_name}"
             paste_jobs.append(
@@ -316,6 +316,10 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
     paste_inc = 100.0 / num_paste
     if part_rows and not paste_jobs:
         raise RuntimeError(f"No part PDFs to generate for {partset_id}")
+    generated_tags = {str(job["part_name"]) for job in paste_jobs}
+    if generated_tags != set(file_names):
+        missing_tags = sorted(set(file_names) - generated_tags)
+        raise RuntimeError(f"No segments found for parts in {partset_id}: {missing_tags}")
 
     expected_names = [job["outfile"].name for job in paste_jobs]
     create_parts(
@@ -335,11 +339,16 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
         logger.error(msg)
         raise RuntimeError(msg)
 
-    execute(
-        "UPDATE partsets SET paste_complete = NOW(), parts_ready = 1, mod_ts = NOW(), "
-        "error = NULL, error_message = NULL, error_ts = NULL, last_job_id = NULL "
-        "WHERE id = :id",
-        {"id": partset_id},
-    )
+    if not finalize_part_generation(
+        partset_id,
+        snapshot=part_snapshot,
+        file_names=file_names,
+    ):
+        cache.invalidate_parts(partset_id)
+        logger.warning(
+            "Discarded stale part generation for %s because labels changed",
+            partset_id,
+        )
+        return
 
     logger.info("Part generation complete for %s", partset_id)

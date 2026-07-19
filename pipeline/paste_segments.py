@@ -15,6 +15,7 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
 from pipeline.page_dimensions import Orientation
+from pipeline.part_names import display_part_name
 from pipeline.paste_layout import (
     RESOLUTION,
     page_dims_inches,
@@ -216,6 +217,7 @@ def create_part(
     pagesize: str = "letter",
     orientation: Orientation = "portrait",
 ) -> None:
+    displayed_part_name = display_part_name(part_name)
     page_w, page_h = page_dims_inches(pagesize, orientation)
     bottom_margin, top_margin = vertical_layout(page_h, orientation)
     packing_top_in = paste_packing_top_in(pagesize, orientation)
@@ -229,7 +231,7 @@ def create_part(
     left_margin = max(0, (page_w - max_width / RESOLUTION) / 2)
 
     part = canvas.Canvas(str(outfile), pagesize=_reportlab_pagesize(pagesize, orientation))
-    part.setTitle(_pdf_document_title(part_name, composer, title))
+    part.setTitle(_pdf_document_title(displayed_part_name, composer, title))
     if subject := _pdf_document_subject(composer, title):
         part.setSubject(subject)
     if composer:
@@ -245,7 +247,7 @@ def create_part(
             bottom_margin,
             title,
             composer,
-            part_name,
+            displayed_part_name,
             partset_id,
             ndx + 1,
         )

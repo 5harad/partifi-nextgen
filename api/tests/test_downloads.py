@@ -1,5 +1,6 @@
 from app.models import Partset
 from app.services.downloads import (
+    browser_part_filename,
     part_file_name_from_download_filename,
     part_file_url,
     partgen_redirect_url,
@@ -56,8 +57,8 @@ def test_part_file_urls_encode_plus() -> None:
 
 def test_partgen_redirect_url() -> None:
     assert (
-        partgen_redirect_url("pub01", "/api/v1/access/pub01/part-file/pub01_flute.pdf")
-        == "/pub01/partgen?download=%2Fapi%2Fv1%2Faccess%2Fpub01%2Fpart-file%2Fpub01_flute.pdf"
+        partgen_redirect_url("pub01", "violin + cello", "a4")
+        == "/pub01/partgen?part=violin+%2B+cello&format=a4"
     )
 
 
@@ -85,3 +86,18 @@ def test_part_file_name_from_download_filename_hyphenated_partset_id() -> None:
         "flute.pdf",
         True,
     )
+
+
+def test_browser_part_filename_removes_internal_prefix_and_marks_a4() -> None:
+    assert (
+        browser_part_filename("pub01", "pub01_violin-abc123.pdf")
+        == "violin-abc123.pdf"
+    )
+    assert (
+        browser_part_filename("pub01", "pub01_a4_violin-abc123.pdf")
+        == "violin-abc123-a4.pdf"
+    )
+
+
+def test_browser_part_filename_rejects_unrelated_name() -> None:
+    assert browser_part_filename("pub01", "other_violin.pdf") is None

@@ -82,6 +82,7 @@ from app.services.preview import (
     start_part_generation,
 )
 from app.services.downloads import (
+    browser_part_filename,
     record_part_download,
     resolve_part_cache_filename,
     safe_cached_part_path,
@@ -153,7 +154,12 @@ def _serve_cached_part(
             )
         raise HTTPException(status_code=404, detail="Part file not found")
     record_part_download(db, partset, filename, user_id=user_id)
-    return FileResponse(path, media_type="application/pdf", filename=filename)
+    download_filename = browser_part_filename(partset.id, filename)
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=download_filename or filename,
+    )
 
 
 def _serve_score_pdf(score_id: str) -> FileResponse:

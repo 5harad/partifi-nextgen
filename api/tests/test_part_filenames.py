@@ -1,11 +1,42 @@
 import pytest
 from pipeline.part_filenames import (
     MAX_COMBINED_PARTS,
+    canonical_part_filename,
     combined_tag_to_filename,
     part_tag_to_filename,
     resolve_part_filename,
     validate_combined_tag,
 )
+
+
+def test_canonical_part_filename_transliterates_cyrillic() -> None:
+    assert canonical_part_filename("zafrq-jmday", "глас").startswith("glas-")
+    assert canonical_part_filename("zafrq-jmday", "китара").startswith("kitara-")
+
+
+def test_canonical_part_filename_is_stable_and_partset_scoped() -> None:
+    first = canonical_part_filename("partset-a", "violin")
+    assert first == canonical_part_filename("partset-a", "violin")
+    assert first != canonical_part_filename("partset-b", "violin")
+
+
+def test_canonical_part_filename_distinguishes_same_transliteration() -> None:
+    assert canonical_part_filename("partset-a", "Violín") != canonical_part_filename(
+        "partset-a", "Violin"
+    )
+
+
+def test_canonical_part_filename_sanitizes_and_limits_stem() -> None:
+    filename = canonical_part_filename("partset-a", "../ Alto / " + "x" * 200)
+    stem, digest_and_ext = filename.rsplit("-", 1)
+    assert not stem.startswith(".")
+    assert len(stem) <= 80
+    assert len(digest_and_ext.removesuffix(".pdf")) == 12
+    assert filename.endswith(".pdf")
+
+
+def test_canonical_part_filename_falls_back_when_transliteration_is_empty() -> None:
+    assert canonical_part_filename("partset-a", "\u200b").startswith("part-")
 
 
 def test_combined_tag_to_filename_is_short_and_stable() -> None:

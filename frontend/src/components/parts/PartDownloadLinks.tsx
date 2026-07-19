@@ -3,11 +3,12 @@ import { ensurePartsByAccessId } from '../../lib/api'
 import {
   navigateToPartgen,
   partDownloadFilename,
+  partgenPath,
+  type PartDownloadFormat,
   type PartDownloadItem,
 } from '../../lib/partDownloads'
 
 type Props = {
-  partsetId: string
   parts: PartDownloadItem[]
   partsReady: boolean
   /** Public or private id used for partgen routes and ensure-parts API. */
@@ -19,7 +20,6 @@ type Props = {
 }
 
 export function PartDownloadLinks({
-  partsetId,
   parts,
   partsReady,
   partgenAccessId,
@@ -30,7 +30,8 @@ export function PartDownloadLinks({
 
   const handlePartClick = async (
     e: React.MouseEvent<HTMLAnchorElement>,
-    url: string,
+    tag: string,
+    format: PartDownloadFormat,
   ) => {
     e.preventDefault()
 
@@ -43,7 +44,7 @@ export function PartDownloadLinks({
       }
     }
 
-    navigateToPartgen(navigate, partgenAccessId, url, returnTo)
+    navigateToPartgen(navigate, partgenAccessId, { tag, format }, returnTo)
   }
 
   if (parts.length === 0) {
@@ -57,18 +58,26 @@ export function PartDownloadLinks({
           {part.tag}:{' '}
           <a
             className="red"
-            href={part.letter_url}
-            download={partDownloadFilename(partsetId, part.file_name, 'letter')}
-            onClick={partsReady ? undefined : (e) => void handlePartClick(e, part.letter_url)}
+            href={
+              partsReady
+                ? part.letter_url
+                : partgenPath(partgenAccessId, { tag: part.tag, format: 'letter' }, returnTo)
+            }
+            download={partsReady ? partDownloadFilename(part.file_name, 'letter') : undefined}
+            onClick={partsReady ? undefined : (e) => void handlePartClick(e, part.tag, 'letter')}
           >
             letter
           </a>
           {' | '}
           <a
             className="red"
-            href={part.a4_url}
-            download={partDownloadFilename(partsetId, part.file_name, 'a4')}
-            onClick={partsReady ? undefined : (e) => void handlePartClick(e, part.a4_url)}
+            href={
+              partsReady
+                ? part.a4_url
+                : partgenPath(partgenAccessId, { tag: part.tag, format: 'a4' }, returnTo)
+            }
+            download={partsReady ? partDownloadFilename(part.file_name, 'a4') : undefined}
+            onClick={partsReady ? undefined : (e) => void handlePartClick(e, part.tag, 'a4')}
           >
             a4
           </a>

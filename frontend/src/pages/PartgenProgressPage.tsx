@@ -3,10 +3,15 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   getCsrfToken,
   getPartgenStatusByAccessId,
+  getPartsByAccessId,
   ensurePartsByAccessId,
   retryPartsetPipelineByAccessId,
 } from '../lib/api'
-import { partgenReturnPath } from '../lib/partDownloads'
+import {
+  partDownloadUrl,
+  parsePartDownloadFormat,
+  partgenReturnPath,
+} from '../lib/partDownloads'
 import { pipelineErrorMessage, LOCK_BUSY_MESSAGE, POLLING_FAILED_MESSAGE } from '../lib/pipelineErrors'
 import { useNoIndex } from '../lib/useNoIndex'
 import { TransitionError, TransitionErrorButton } from '../components/TransitionError'
@@ -22,13 +27,19 @@ export function PartgenProgressPage() {
   const pollRef = useRef<(() => void) | null>(null)
   const ensuredRef = useRef(false)
   const previewError = import.meta.env.DEV ? searchParams.get('previewError') : null
-  const pendingDownloadUrl = searchParams.get('download')
+  const pendingPartTag = searchParams.get('part')
+  const pendingPartFormat = parsePartDownloadFormat(searchParams.get('format'))
+  const hasPendingDownloadParams = searchParams.has('part') || searchParams.has('format')
   const returnPath = accessId ? partgenReturnPath(searchParams, accessId) : '/'
   const backLabel = returnPath.startsWith('/library') ? 'Back to library' : 'Back to download'
 
   useEffect(() => {
     if (previewError) {
       setErrorMessage(pipelineErrorMessage(previewError))
+      return
+    }
+    if (hasPendingDownloadParams && (!pendingPartTag || !pendingPartFormat)) {
+      setErrorMessage('Invalid part download request.')
       return
     }
 
@@ -59,7 +70,17 @@ export function PartgenProgressPage() {
         failedAttempts = 0
 
         if (data.is_complete) {
-          if (pendingDownloadUrl) {
+          if (pendingPartTag && pendingPartFormat) {
+            const fresh = await getPartsByAccessId(accessId)
+            if (cancelled) return
+            const pendingDownloadUrl = partDownloadUrl(fresh.parts, {
+              tag: pendingPartTag,
+              format: pendingPartFormat,
+            })
+            if (!pendingDownloadUrl) {
+              setErrorMessage('The requested part is no longer available.')
+              return
+            }
             navigate(returnPath, { state: { pendingPartDownload: pendingDownloadUrl } })
           } else {
             navigate(returnPath)
@@ -92,7 +113,15 @@ export function PartgenProgressPage() {
       cancelled = true
       window.clearTimeout(timeoutId)
     }
-  }, [accessId, navigate, previewError, pendingDownloadUrl, returnPath])
+  }, [
+    accessId,
+    hasPendingDownloadParams,
+    navigate,
+    pendingPartFormat,
+    pendingPartTag,
+    previewError,
+    returnPath,
+  ])
 
   const handleRetry = async () => {
     if (previewError) return

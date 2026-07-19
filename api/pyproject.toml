@@ -18,6 +18,7 @@ dependencies = [
     "httpx==0.28.1",
     "google-auth>=2.53.0",
     "requests>=2.34.2",
+    "anyascii>=0.3.3",
 ]
 
 [tool.uv]

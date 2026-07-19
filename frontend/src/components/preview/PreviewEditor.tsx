@@ -8,6 +8,7 @@ import {
   saveLayout,
   startPartGeneration,
 } from '../../lib/api'
+import { displayPartName } from '../../lib/partNames'
 import {
   abbreviate,
   applySliderSnap,
@@ -453,7 +454,7 @@ export function PreviewEditor({ privateId }: Props) {
                       {data.composer ? (
                         <div className="part-page-composer">{data.composer}</div>
                       ) : null}
-                      <div className="part-page-part-name">{part}</div>
+                      <div className="part-page-part-name">{displayPartName(part)}</div>
                       <span className="part-page-partifi-id">
                         partifi.org/{data.partset_id}
                       </span>

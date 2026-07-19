@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -33,9 +33,11 @@ def part_file_url(partset: Partset, filename: str, *, mode: str = "public") -> s
     return f"/api/v1/access/{partset.id}/part-file/{encoded}"
 
 
-def partgen_redirect_url(access_id: str, download_path: str) -> str:
-    """Frontend partgen route that polls until the part PDF is ready."""
-    return f"/{access_id}/partgen?download={quote(download_path, safe='')}"
+def partgen_redirect_url(access_id: str, tag: str, page_size: str) -> str:
+    """Frontend partgen route carrying stable part identity, not a stale URL."""
+    if page_size not in {"letter", "a4"}:
+        raise ValueError("page_size must be letter or a4")
+    return f"/{access_id}/partgen?{urlencode({'part': tag, 'format': page_size})}"
 
 
 def score_pdf_url_for_partset(partset: Partset, *, mode: str = "public") -> str | None:
@@ -55,6 +57,16 @@ def part_file_name_from_download_filename(partset_id: str, filename: str) -> tup
     if remainder.startswith("a4_"):
         return remainder[3:], True
     return remainder, False
+
+
+def browser_part_filename(partset_id: str, filename: str) -> str | None:
+    """Return the friendly downloaded name without the internal partset prefix."""
+    parsed = part_file_name_from_download_filename(partset_id, filename)
+    if not parsed:
+        return None
+    stored_name, is_a4 = parsed
+    stem = stored_name.removesuffix(".pdf") or "part"
+    return f"{stem}-a4.pdf" if is_a4 else f"{stem}.pdf"
 
 
 def _find_part_for_download(db: Session, partset: Partset, stored_name: str) -> Part | None:

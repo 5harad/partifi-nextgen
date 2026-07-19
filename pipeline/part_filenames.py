@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import hashlib
+import re
+
+from anyascii import anyascii
 
 MAX_COMBINED_PARTS = 10
 # Leave room for "{partset_id}_a4_" prefix on temp/cache paths (NAME_MAX = 255).
 MAX_PART_FILENAME_LEN = 200
+MAX_CANONICAL_STEM_LEN = 80
+CANONICAL_HASH_LEN = 12
 
 
 def combined_part_tags(tag: str) -> list[str]:
@@ -24,6 +29,15 @@ def validate_combined_tag(tag: str, *, max_parts: int = MAX_COMBINED_PARTS) -> N
 def _hashed_filename(tag: str, prefix: str) -> str:
     digest = hashlib.sha256(tag.encode()).hexdigest()[:8]
     return f"{prefix}-{digest}.pdf"
+
+
+def canonical_part_filename(partset_id: str, tag: str) -> str:
+    """Return the stable filename minted when a partset's PDFs are generated."""
+    stem = re.sub(r"[^a-z0-9]+", "-", anyascii(tag).lower()).strip("-")
+    stem = stem[:MAX_CANONICAL_STEM_LEN].rstrip("-") or "part"
+    identity = f"{partset_id}\0{tag}".encode("utf-8")
+    digest = hashlib.sha256(identity).hexdigest()[:CANONICAL_HASH_LEN]
+    return f"{stem}-{digest}.pdf"
 
 
 def combined_tag_to_filename(tag: str) -> str:

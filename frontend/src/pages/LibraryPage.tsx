@@ -6,7 +6,13 @@ import { PartDownloadLinks } from '../components/parts/PartDownloadLinks'
 import { PartsetShareLinks } from '../components/parts/PartsetShareLinks'
 import { ScoreSourceLinks } from '../components/parts/ScoreSourceLinks'
 import { useAuth } from '../context/AuthContext'
-import { deletePartset, getCsrfToken, getPartgenStatusByAccessId, updatePartsetMetadata } from '../lib/api'
+import {
+  deletePartset,
+  getCsrfToken,
+  getPartgenStatusByAccessId,
+  getPartsByAccessId,
+  updatePartsetMetadata,
+} from '../lib/api'
 import { fetchLibrary, updateFavorite } from '../lib/authApi'
 import { startPartFileDownload, type PartsPageLocationState } from '../lib/partDownloads'
 import { useNoIndex } from '../lib/useNoIndex'
@@ -131,7 +137,6 @@ function LibraryItemPane({
         <div className="download-title">Download</div>
         <ScoreSourceLinks scorePdfUrl={item.score_pdf_url} imslpId={item.imslp_id} />
         <PartDownloadLinks
-          partsetId={item.partset_id}
           parts={item.parts}
           partsReady={item.parts_ready}
           partgenAccessId={partgenAccessId}
@@ -294,9 +299,13 @@ export function LibraryPage() {
         const status = await getPartgenStatusByAccessId(accessId)
         if (cancelled) return
         if (status.is_complete) {
+          const fresh = await getPartsByAccessId(accessId)
+          if (cancelled) return
           setItems((prev) =>
             prev.map((entry) =>
-              entry.partset_id === item.partset_id ? { ...entry, parts_ready: true } : entry,
+              entry.partset_id === item.partset_id
+                ? { ...entry, parts_ready: fresh.parts_ready, parts: fresh.parts }
+                : entry,
             ),
           )
           finish()
