@@ -37,12 +37,12 @@ const FAQ_ITEMS: FaqItem[] = [
     question:
       'How do I save a partially finished score so that I can resume working on it another time?',
     answer:
-      'Your work on the score is automatically saved every time you make a change. To return to it, just bookmark the URL. Alternatively, the score will be added to your Partifi library automatically if you are logged in to the site.',
+      'Your work on the score is automatically saved every time you make a change. To return to it, just bookmark the URL. Alternatively, the score will be added to your personal library automatically if you are logged in to the site.',
   },
   {
     question: 'How do I log in to Partifi?',
     answer:
-      'You can log in with your Google account. But you don\u2019t need to log in to use most of Partifi \u2014 import, edit, preview, and download parts all work without an account. Logging in is only required for the Partifi library, which saves your scores so you can return to them later. If you don\u2019t have a Google account, bookmark the link to each score on your computer and use that to open it again.',
+      'You can log in with your Google account. But you don\u2019t need to log in to use most of Partifi \u2014 import, edit, preview, and download parts all work without an account. Logging in is only required for your personal library, which saves your scores so you can return to them later. If you don\u2019t have a Google account, bookmark the link to each score on your computer and use that to open it again.',
   },
   {
     question: 'Does Partifi make scores from parts?',

@@ -192,14 +192,14 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
 
   const toggleFavorite = useCallback(async () => {
     if (!user) {
-      window.alert('You must be logged in to add a score to your library.')
+      window.alert('You must be logged in to add a score to your personal library.')
       return
     }
     try {
       const next = await updateFavorite(accessId, favorite ? 'remove' : 'add')
       setFavorite(next)
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : 'Failed to update library')
+      window.alert(err instanceof Error ? err.message : 'Failed to update your personal library')
     }
   }, [user, accessId, favorite])
 
@@ -227,7 +227,7 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
             <>
               {isOwner && ' | '}
               <a href="#" className="red" id="library-link" onClick={(e) => { e.preventDefault(); void toggleFavorite() }}>
-                {favorite ? 'remove from library' : 'add to library'}
+                {favorite ? 'remove from my library' : 'add to my library'}
               </a>
             </>
           )}
@@ -240,10 +240,10 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
               <GoogleSignInLink onLogin={loginWithGoogleCode} className="red">
                 Sign in
               </GoogleSignInLink>
-              {' '}to save this score to your library and return later to edit the parts.
+              {' '}to save this score to your personal library and return later to edit the parts.
             </>
           ) : (
-            'Sign in to save this score to your library and return later to edit the parts.'
+            'Sign in to save this score to your personal library and return later to edit the parts.'
           )}
         </p>
       )}

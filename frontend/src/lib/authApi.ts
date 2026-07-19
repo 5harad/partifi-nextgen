@@ -50,11 +50,11 @@ export async function logout(): Promise<void> {
 export async function fetchLibrary(): Promise<LibraryResponse> {
   const res = await authFetch('/api/v1/library')
   if (res.status === 401) {
-    throw new Error('You must be logged in to view your library.')
+    throw new Error('You must be logged in to view your personal library.')
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || 'Failed to load library')
+    throw new Error(err.detail || 'Failed to load your personal library')
   }
   return res.json()
 }
@@ -80,11 +80,11 @@ export async function updateFavorite(
     body: JSON.stringify({ action }),
   })
   if (res.status === 401) {
-    throw new Error('You must be logged in to save scores to your library.')
+    throw new Error('You must be logged in to save scores to your personal library.')
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || 'Failed to update library')
+    throw new Error(err.detail || 'Failed to update your personal library')
   }
   const data = await res.json()
   return Boolean(data.favorite)

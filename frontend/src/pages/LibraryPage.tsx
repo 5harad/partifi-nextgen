@@ -76,12 +76,12 @@ function LibraryItemPane({
   }
 
   const handleRemove = async () => {
-    if (!window.confirm('Are you sure you want to remove this score from your library?')) return
+    if (!window.confirm('Are you sure you want to remove this score from your personal library?')) return
     try {
       await updateFavorite(item.partset_id, 'remove')
       onRemove()
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : 'Failed to remove from library')
+      window.alert(err instanceof Error ? err.message : 'Failed to remove from your personal library')
     }
   }
 
@@ -100,13 +100,13 @@ function LibraryItemPane({
       </a>
       {' | '}
       <a href="#" className="red" onClick={(e) => { e.preventDefault(); void handleRemove() }}>
-        remove from library
+        remove from my library
       </a>
     </div>
   ) : !item.admin ? (
     <div className="download-menu">
       <a href="#" className="red" onClick={(e) => { e.preventDefault(); void handleRemove() }}>
-        remove from library
+        remove from my library
       </a>
     </div>
   ) : null
@@ -244,7 +244,7 @@ export function LibraryPage() {
     } catch (err) {
       setItems([])
       setSelectedId(null)
-      setError(err instanceof Error ? err.message : 'Failed to load library')
+      setError(err instanceof Error ? err.message : 'Failed to load your personal library')
     } finally {
       setLoading(false)
     }
@@ -261,7 +261,7 @@ export function LibraryPage() {
     if (authLoading) return
     if (!user) {
       setLoading(false)
-      setError('You must be logged in to view your library.')
+      setError('You must be logged in to view your personal library.')
       return
     }
     void loadLibrary()
@@ -331,7 +331,7 @@ export function LibraryPage() {
 
   const emptyMessage =
     error ??
-    (loading ? 'Loading…' : 'You do not have any parts saved to your library.')
+    (loading ? 'Loading…' : 'You do not have any parts saved to My Library.')
 
   return (
     <Layout>

@@ -28,7 +28,7 @@ export function PrivacyPage() {
               When you upload a score or create a partset, we store the files and metadata needed to run
               the service (for example, title, composer, and part tags you enter). If you sign in with
               Google, we store your Google account ID and name and use them to identify your account and
-              show your library.
+              show your personal library.
             </p>
 
             <p className="bold">Automatically collected information</p>
@@ -46,7 +46,7 @@ export function PrivacyPage() {
 
             <p className="bold">How we use information</p>
             <p>
-              We use your information to operate Partifi, process your uploads, maintain your library,
+              We use your information to operate Partifi, process your uploads, maintain your personal library,
               improve the service, and respond to support requests. We do not sell your personal
               information.
             </p>

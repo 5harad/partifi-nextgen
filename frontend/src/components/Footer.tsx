@@ -36,7 +36,7 @@ export function Footer() {
             &nbsp;|&nbsp; <Link to="/privacy">Privacy</Link> &nbsp;|&nbsp; <Link to="/terms">Terms</Link>{' '}
             &nbsp;|&nbsp;{' '}
             <a href={KOFI_URL} target="_blank" rel="noopener noreferrer">
-              Support
+              Donate
             </a>
           </div>
         </div>
