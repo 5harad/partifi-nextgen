@@ -28,6 +28,20 @@ export async function googleLoginWithCode(
   return res.json()
 }
 
+export async function devLogin(): Promise<AuthMeResponse> {
+  const res = await authFetch('/api/v1/auth/dev-login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: '105221836585688977552',
+      name: 'Sharad Goel',
+      given_name: 'Sharad',
+    }),
+  })
+  if (!res.ok) throw new Error('Local development login failed')
+  return res.json()
+}
+
 export async function logout(): Promise<void> {
   const res = await authFetch('/api/v1/auth/logout', { method: 'POST' })
   if (!res.ok) throw new Error('Logout failed')

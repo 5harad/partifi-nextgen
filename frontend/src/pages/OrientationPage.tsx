@@ -193,7 +193,7 @@ export function OrientationPage() {
   const previewLayout = useMemo(() => (data ? buildPreviewLayout(data) : null), [data])
 
   return (
-    <Layout>
+    <Layout showChrome={!reimporting}>
       {loading ? (
         <div id="main" style={{ padding: '40px', textAlign: 'center' }}>
           Loading orientation options…

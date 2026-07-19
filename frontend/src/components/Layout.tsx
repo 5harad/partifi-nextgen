@@ -2,12 +2,17 @@ import type { ReactNode } from 'react'
 import { Footer } from './Footer'
 import { Header } from './Header'
 
-export function Layout({ children }: { children: ReactNode }) {
+type Props = {
+  children: ReactNode
+  showChrome?: boolean
+}
+
+export function Layout({ children, showChrome = true }: Props) {
   return (
     <div className="site-layout">
-      <Header />
+      {showChrome ? <Header /> : null}
       <div className="site-main">{children}</div>
-      <Footer />
+      {showChrome ? <Footer /> : null}
     </div>
   )
 }

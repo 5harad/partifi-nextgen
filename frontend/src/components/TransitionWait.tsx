@@ -1,9 +1,10 @@
 type Props = {
   message: string
   progress?: number
+  indeterminate?: boolean
 }
 
-export function TransitionWait({ message, progress = 0 }: Props) {
+export function TransitionWait({ message, progress = 0, indeterminate = false }: Props) {
   const ribbonWidth = progress * 4 + 20
 
   return (
@@ -17,8 +18,8 @@ export function TransitionWait({ message, progress = 0 }: Props) {
       />
       <div id="transition">
         <div id="transition-text">{message}</div>
-        <div id="progress-bar">
-          <div id="progress-ribbon" style={{ width: ribbonWidth }} />
+        <div id="progress-bar" className={indeterminate ? 'progress-indeterminate' : undefined}>
+          <div id="progress-ribbon" style={indeterminate ? undefined : { width: ribbonWidth }} />
         </div>
       </div>
     </div>

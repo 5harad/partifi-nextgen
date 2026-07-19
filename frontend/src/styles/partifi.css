@@ -786,6 +786,32 @@ iframe[src*="accounts.google.com/gsi"]
 	background-position: right center;
 }
 
+#progress-bar.progress-indeterminate {
+	overflow: hidden;
+	border-radius: 12px;
+}
+
+#progress-bar.progress-indeterminate #progress-ribbon {
+	left: 0;
+	width: 438px;
+	background-image:
+		repeating-linear-gradient(
+			-45deg,
+			rgb(255 92 76 / 34%) 0 9px,
+			rgb(87 0 0 / 20%) 9px 18px
+		),
+		url('/images/progress_ribbon.png');
+	background-position: 0 0, left center;
+	background-size: 26px 26px, 600px 24px;
+	animation: progress-barber-pole 0.7s linear infinite;
+}
+
+@keyframes progress-barber-pole {
+	to {
+		background-position: 26px 0, left center;
+	}
+}
+
 
 /* SEGMENT */
 

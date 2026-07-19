@@ -41,15 +41,16 @@ type Mode = 'spacing' | 'combine'
 
 type Props = {
   privateId: string
+  onPreparingChange?: (preparing: boolean) => void
 }
 
-export function PreviewEditor({ privateId }: Props) {
+export function PreviewEditor({ privateId, onPreparingChange }: Props) {
   const navigate = useNavigate()
   const [data, setData] = useState<PreviewDataResponse | null>(null)
-  const [warmProgress, setWarmProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [cacheError, setCacheError] = useState(false)
   const [retrying, setRetrying] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [mode, setMode] = useState<Mode>('spacing')
   const [part, setPart] = useState<string>('')
   const [pageNum, setPageNum] = useState(1)
@@ -66,6 +67,7 @@ export function PreviewEditor({ privateId }: Props) {
   const partRef = useRef(part)
   const [reloadToken, setReloadToken] = useState(0)
   const [pageTransition, setPageTransition] = useState(false)
+  const saveInFlightRef = useRef(false)
 
   useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {
@@ -73,7 +75,6 @@ export function PreviewEditor({ privateId }: Props) {
       setData(null)
       setError(null)
       setCacheError(false)
-      setWarmProgress(0)
       setReloadToken((token) => token + 1)
     }
     window.addEventListener('pageshow', onPageShow)
@@ -98,7 +99,6 @@ export function PreviewEditor({ privateId }: Props) {
           }
           setCacheError(false)
           setError(null)
-          setWarmProgress(preview.image_progress)
           pollCount += 1
           if (pollCount >= 300) {
             setError(
@@ -135,6 +135,10 @@ export function PreviewEditor({ privateId }: Props) {
       window.clearTimeout(timeoutId)
     }
   }, [privateId, navigate, reloadToken])
+
+  useEffect(() => {
+    onPreparingChange?.(!data && !error)
+  }, [data, error, onPreparingChange])
 
   const allPartNames = useMemo(
     () => (data ? [...data.part_names, ...combinedPartNames] : []),
@@ -254,23 +258,40 @@ export function PreviewEditor({ privateId }: Props) {
   }, [applySliderFromClientY])
 
   const handlePartifi = async () => {
+    if (saveInFlightRef.current) return
+    saveInFlightRef.current = true
     try {
+      setSaving(true)
       const csrf = await getCsrfToken()
       await saveLayout(privateId, { breaks, spacings }, csrf)
       await startPartGeneration(privateId, csrf)
       navigate(`/${privateId}/partgen`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start part generation')
+    } finally {
+      saveInFlightRef.current = false
+      setSaving(false)
     }
   }
 
   const handleEditSegments = async () => {
-    const csrf = await getCsrfToken()
-    await saveLayout(privateId, { breaks, spacings }, csrf)
-    navigate(`/${privateId}/segment`)
+    if (saveInFlightRef.current) return
+    saveInFlightRef.current = true
+    try {
+      setSaving(true)
+      const csrf = await getCsrfToken()
+      await saveLayout(privateId, { breaks, spacings }, csrf)
+      navigate(`/${privateId}/segment`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save preview layout')
+    } finally {
+      saveInFlightRef.current = false
+      setSaving(false)
+    }
   }
 
   const handleCombine = async () => {
+    if (saveInFlightRef.current) return
     const partsToCombine = [...selectedParts]
     if (partsToCombine.length < 2) {
       window.alert('Please select at least two parts to combine.')
@@ -283,43 +304,66 @@ export function PreviewEditor({ privateId }: Props) {
     const combinedName = partsToCombine.join(' + ')
     if (combinedPartNames.includes(combinedName)) return
 
+    saveInFlightRef.current = true
     let merged: number[] = []
     for (const p of partsToCombine) {
       merged = merged.concat(partSegments[p] ?? [])
     }
     merged = uniqueSorted(merged)
 
-    setCombinedPartNames((prev) => [...prev, combinedName])
-    setPartSegments((prev) => ({ ...prev, [combinedName]: merged }))
-    setBreaks((prev) => ({ ...prev, [combinedName]: [] }))
-    setSpacings((prev) => ({ ...prev, [combinedName]: 0.1 }))
-    setSelectedParts(new Set())
-
-    const csrf = await getCsrfToken()
-    await combineParts(privateId, 'add', combinedName, csrf)
+    try {
+      setSaving(true)
+      const csrf = await getCsrfToken()
+      await combineParts(privateId, 'add', combinedName, csrf)
+      setCombinedPartNames((prev) => [...prev, combinedName])
+      setPartSegments((prev) => ({ ...prev, [combinedName]: merged }))
+      setBreaks((prev) => ({ ...prev, [combinedName]: [] }))
+      setSpacings((prev) => ({ ...prev, [combinedName]: 0.1 }))
+      setSelectedParts(new Set())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to combine parts')
+    } finally {
+      saveInFlightRef.current = false
+      setSaving(false)
+    }
   }
 
   const handleRemoveCombined = async (partName: string) => {
-    setCombinedPartNames((prev) => prev.filter((p) => p !== partName))
-    setPartSegments((prev) => {
-      const next = { ...prev }
-      delete next[partName]
-      return next
-    })
-    setBreaks((prev) => {
-      const next = { ...prev }
-      delete next[partName]
-      return next
-    })
-    setSpacings((prev) => {
-      const next = { ...prev }
-      delete next[partName]
-      return next
-    })
-    if (part === partName) setPart(allPartNames[0] ?? '')
+    if (saveInFlightRef.current) return
+    saveInFlightRef.current = true
 
-    const csrf = await getCsrfToken()
-    await combineParts(privateId, 'remove', partName, csrf)
+    try {
+      setSaving(true)
+      const csrf = await getCsrfToken()
+      await combineParts(privateId, 'remove', partName, csrf)
+      setCombinedPartNames((prev) => prev.filter((p) => p !== partName))
+      setPartSegments((prev) => {
+        const next = { ...prev }
+        delete next[partName]
+        return next
+      })
+      setBreaks((prev) => {
+        const next = { ...prev }
+        delete next[partName]
+        return next
+      })
+      setSpacings((prev) => {
+        const next = { ...prev }
+        delete next[partName]
+        return next
+      })
+      if (part === partName) {
+        setPart(
+          [...(data?.part_names ?? []), ...combinedPartNames.filter((name) => name !== partName)][0] ??
+            '',
+        )
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove combined part')
+    } finally {
+      saveInFlightRef.current = false
+      setSaving(false)
+    }
   }
 
   const handleRetryPageCache = async () => {
@@ -330,7 +374,6 @@ export function PreviewEditor({ privateId }: Props) {
       await retryPartsetPageCache(privateId, token)
       setError(null)
       setCacheError(false)
-      setWarmProgress(0)
       setReloadToken((token) => token + 1)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to retry page images'
@@ -359,7 +402,7 @@ export function PreviewEditor({ privateId }: Props) {
     return (
       <TransitionWait
         message="Please wait while we prepare the score"
-        progress={warmProgress}
+        indeterminate
       />
     )
   }
@@ -386,6 +429,7 @@ export function PreviewEditor({ privateId }: Props) {
   const canGoPrev = pageNum > 1
   const canGoNext = pageNum < layout.numPages
   const navDisabledStyle = { color: 'gray', cursor: 'default' as const }
+  const saveDisabledStyle = saving ? { opacity: 0.6, cursor: 'default' as const } : undefined
 
   return (
     <div id="main" className="canvas-page">
@@ -407,7 +451,9 @@ export function PreviewEditor({ privateId }: Props) {
         className={isLandscape ? 'orientation-landscape' : undefined}
         style={previewPaneStyle}
       >
-        <div id="preview-header">STEP 3. &nbsp; Preview the parts</div>
+        <div id="preview-header">
+          STEP 3. &nbsp; Preview the parts{saving ? ' (saving…)' : ''}
+        </div>
         <div
           id="adjust-spacing"
           className={`import-button${mode === 'spacing' ? ' import-button-down' : ''}`}
@@ -654,7 +700,9 @@ export function PreviewEditor({ privateId }: Props) {
                 id="combine-now-button"
                 onClick={handleCombine}
                 role="button"
-                tabIndex={0}
+                tabIndex={saving ? -1 : 0}
+                aria-disabled={saving}
+                style={saveDisabledStyle}
               >
                 Combine
               </div>
@@ -706,6 +754,8 @@ export function PreviewEditor({ privateId }: Props) {
                           data-partname={partName}
                           onClick={() => handleRemoveCombined(partName)}
                           role="presentation"
+                          aria-disabled={saving}
+                          style={saveDisabledStyle}
                         />
                         <span title={partName}>
                           {partName.length > 28 ? abbreviate(partName) : partName}
@@ -724,7 +774,9 @@ export function PreviewEditor({ privateId }: Props) {
           className="banner-button"
           onClick={handlePartifi}
           role="button"
-          tabIndex={0}
+          tabIndex={saving ? -1 : 0}
+          aria-disabled={saving}
+          style={saveDisabledStyle}
         >
           Partifi it &raquo;
         </div>
@@ -733,7 +785,9 @@ export function PreviewEditor({ privateId }: Props) {
           className="banner-button-rev"
           onClick={handleEditSegments}
           role="button"
-          tabIndex={0}
+          tabIndex={saving ? -1 : 0}
+          aria-disabled={saving}
+          style={saveDisabledStyle}
         >
           &laquo; Edit segments
         </div>

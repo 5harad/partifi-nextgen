@@ -109,7 +109,7 @@ export function SegmentPage() {
   }
 
   return (
-    <Layout>
+    <Layout showChrome={!warming}>
       {loading ? (
         <div id="main" style={{ padding: '40px', textAlign: 'center' }}>
           Loading segment editor…

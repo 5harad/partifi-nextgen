@@ -1,7 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { fetchAuthMe, getGoogleClientId, googleLoginWithCode, logout as apiLogout } from '../lib/authApi'
+import {
+  devLogin,
+  fetchAuthMe,
+  getGoogleClientId,
+  googleLoginWithCode,
+  logout as apiLogout,
+} from '../lib/authApi'
 import type { AuthUser } from '../types/auth'
 
 type AuthContextValue = {
@@ -30,7 +36,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     ;(async () => {
       try {
-        const data = await fetchAuthMe()
+        let data = await fetchAuthMe()
+        // Local Vite previews use the populated Sharad account without requiring Google OAuth.
+        if (import.meta.env.DEV && !data.user) {
+          data = await devLogin()
+        }
         if (!cancelled) setUser(data.user)
       } finally {
         if (!cancelled) setLoading(false)
