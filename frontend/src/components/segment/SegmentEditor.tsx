@@ -85,6 +85,7 @@ export function SegmentEditor({ data }: Props) {
 
   const [tagList, setTagList] = useState<string[]>(() => buildTagList(pagesData, data.num_pages))
   const [saving, setSaving] = useState(false)
+  const saveInFlightRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const focusedLabelIdRef = useRef<string | null>(null)
   const focusedTagsIdRef = useRef<string | null>(null)
@@ -276,6 +277,7 @@ export function SegmentEditor({ data }: Props) {
 
   const changePage = useCallback(
     async (nextPage: number, previewStartOverride?: number) => {
+      if (saveInFlightRef.current) return
       const {
         pageNum: current,
         regions: currentRegions,
@@ -298,8 +300,11 @@ export function SegmentEditor({ data }: Props) {
       setPagesData(updatedPages)
       setTagList(buildTagList(updatedPages, data.num_pages))
 
+      let acquiredSaveLock = false
       try {
         if (!pageDataAreEqual(serverPageDataRef.current, pageData)) {
+          saveInFlightRef.current = true
+          acquiredSaveLock = true
           setSaving(true)
           const token = await getCsrfToken()
           await persistPage(current, pageData, token)
@@ -317,13 +322,17 @@ export function SegmentEditor({ data }: Props) {
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Save failed')
       } finally {
-        setSaving(false)
+        if (acquiredSaveLock) {
+          saveInFlightRef.current = false
+          setSaving(false)
+        }
       }
     },
     [persistPage, data.num_pages, orientation],
   )
 
   const scrollPreviewerNext = useCallback(() => {
+    if (saveInFlightRef.current) return
     const newStart = nextPreviewerStart(previewerStart, data.num_pages)
     if (newStart === previewerStart) return
     if (isPageInPreviewWindow(pageNum, newStart)) {
@@ -334,6 +343,7 @@ export function SegmentEditor({ data }: Props) {
   }, [changePage, data.num_pages, pageNum, previewerStart])
 
   const scrollPreviewerBack = useCallback(() => {
+    if (saveInFlightRef.current) return
     const newStart = prevPreviewerStart(previewerStart)
     if (newStart === previewerStart) return
     if (isPageInPreviewWindow(pageNum, newStart)) {
@@ -519,6 +529,7 @@ export function SegmentEditor({ data }: Props) {
   }
 
   const handleContinue = async () => {
+    if (saveInFlightRef.current) return
     const currentPages = { ...pagesData, [currentPageKey]: getCurrentPageData() }
     const allPages = materializeAllPagesWithSuggestions(currentPages, data.num_pages, orientation)
     const hasTag = Object.values(allPages).some((page) =>
@@ -529,6 +540,7 @@ export function SegmentEditor({ data }: Props) {
       return
     }
     try {
+      saveInFlightRef.current = true
       setSaving(true)
       const token = await getCsrfToken()
       await saveAllPageSegments(data.private_id, allPages, token)
@@ -536,13 +548,14 @@ export function SegmentEditor({ data }: Props) {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed')
     } finally {
+      saveInFlightRef.current = false
       setSaving(false)
     }
   }
 
   const thumbsOffset = -(previewerStart - 1) * thumbStride
-  const canGoPrev = pageNum > 1
-  const canGoNext = pageNum < data.num_pages
+  const canGoPrev = !saving && pageNum > 1
+  const canGoNext = !saving && pageNum < data.num_pages
   const canScrollPreviewerNext = previewerStart < maxPreviewerStart(data.num_pages)
   const canScrollPreviewerBack = previewerStart > 1
   const navDisabledStyle = { color: 'gray', cursor: 'default' as const }
@@ -585,10 +598,12 @@ export function SegmentEditor({ data }: Props) {
                   style={{
                     left: (n - 1) * thumbStride,
                     color: active ? '#E00000' : 'black',
+                    cursor: saving ? 'default' : 'pointer',
                   }}
                   onClick={() => void changePage(n)}
                   role="button"
-                  tabIndex={0}
+                  tabIndex={saving ? -1 : 0}
+                  aria-disabled={saving}
                   onKeyDown={(ev) => {
                     if (ev.key === 'Enter' || ev.key === ' ') void changePage(n)
                   }}
@@ -610,7 +625,9 @@ export function SegmentEditor({ data }: Props) {
             className="next-button"
             onClick={scrollPreviewerNext}
             role="button"
-            tabIndex={0}
+            tabIndex={saving ? -1 : 0}
+            aria-disabled={saving}
+            style={saving ? navDisabledStyle : undefined}
           >
             &raquo;
           </div>
@@ -622,7 +639,9 @@ export function SegmentEditor({ data }: Props) {
             className="next-button"
             onClick={scrollPreviewerBack}
             role="button"
-            tabIndex={0}
+            tabIndex={saving ? -1 : 0}
+            aria-disabled={saving}
+            style={saving ? navDisabledStyle : undefined}
           >
             &laquo;
           </div>
@@ -829,7 +848,9 @@ export function SegmentEditor({ data }: Props) {
           className="banner-button"
           onClick={() => void handleContinue()}
           role="button"
-          tabIndex={0}
+          tabIndex={saving ? -1 : 0}
+          aria-disabled={saving}
+          style={saving ? navDisabledStyle : undefined}
         >
           Separate parts &raquo;
         </div>

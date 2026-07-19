@@ -1,4 +1,8 @@
+import time
+from collections.abc import Callable
+
 from sqlalchemy import func, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.models import Page, Part, Partset, Score, Segment
@@ -9,6 +13,8 @@ from app.services.partset_touch import touch_partset_access
 from app.utils.strings import rm_space, tag_to_filename
 
 ScoreImageKind = str
+MAX_DEADLOCK_RETRIES = 2
+DEADLOCK_RETRY_DELAY_SECONDS = 0.05
 
 
 def page_image_cache_version(partset: Partset) -> str:
@@ -231,15 +237,43 @@ def _finalize_segment_save(db: Session, partset_id: str) -> None:
     db.commit()
 
 
+def _is_mysql_deadlock(exc: OperationalError) -> bool:
+    return getattr(exc.orig, "args", (None,))[0] == 1213
+
+
+def _retry_segment_save_on_deadlock(
+    db: Session,
+    partset_id: str,
+    save: Callable[[Partset], None],
+) -> None:
+    for attempt in range(MAX_DEADLOCK_RETRIES + 1):
+        partset = db.get(Partset, partset_id)
+        if not partset:
+            raise ValueError("Partset not found")
+        try:
+            save(partset)
+            return
+        except OperationalError as exc:
+            if not _is_mysql_deadlock(exc):
+                raise
+            db.rollback()
+            if attempt == MAX_DEADLOCK_RETRIES:
+                raise
+            time.sleep(DEADLOCK_RETRY_DELAY_SECONDS * (attempt + 1))
+
+
 def save_page_segments(
     db: Session,
     partset: Partset,
     page: int,
     payload: dict,
 ) -> None:
-    _reset_partset_for_segment_edit(partset)
-    _apply_page_segment_payload(db, partset.id, page, payload)
-    _finalize_segment_save(db, partset.id)
+    def save(current_partset: Partset) -> None:
+        _reset_partset_for_segment_edit(current_partset)
+        _apply_page_segment_payload(db, current_partset.id, page, payload)
+        _finalize_segment_save(db, current_partset.id)
+
+    _retry_segment_save_on_deadlock(db, partset.id, save)
 
 
 def save_all_page_segments(
@@ -256,7 +290,10 @@ def save_all_page_segments(
         if key not in pages:
             raise ValueError(f"Missing segment data for page {page_num}")
 
-    _reset_partset_for_segment_edit(partset)
-    for page_num in range(1, num_pages + 1):
-        _apply_page_segment_payload(db, partset.id, page_num, pages[f"p{page_num}"])
-    _finalize_segment_save(db, partset.id)
+    def save(current_partset: Partset) -> None:
+        _reset_partset_for_segment_edit(current_partset)
+        for page_num in range(1, num_pages + 1):
+            _apply_page_segment_payload(db, current_partset.id, page_num, pages[f"p{page_num}"])
+        _finalize_segment_save(db, current_partset.id)
+
+    _retry_segment_save_on_deadlock(db, partset.id, save)

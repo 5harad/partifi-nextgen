@@ -3,11 +3,20 @@ from unittest.mock import Mock, patch
 
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import Base
 from app.models import Page, Part, Partset, Score, Segment
-from app.services.segments import save_all_page_segments, sync_part_rows_from_tags
+from app.services.segments import (
+    _retry_segment_save_on_deadlock,
+    save_all_page_segments,
+    sync_part_rows_from_tags,
+)
+
+
+class MySqlError(Exception):
+    pass
 
 
 @pytest.fixture
@@ -162,3 +171,62 @@ def test_sync_part_rows_from_tags_is_idempotent(mock_cache: Mock, db: Session) -
         .count()
         == 1
     )
+
+
+def test_segment_save_retries_mysql_deadlock(db: Session) -> None:
+    deadlock = OperationalError(
+        statement=None,
+        params=None,
+        orig=MySqlError(1213, "Deadlock found when trying to get lock"),
+    )
+    save = Mock(side_effect=[deadlock, None])
+
+    with (
+        patch.object(db, "rollback", wraps=db.rollback) as rollback,
+        patch("app.services.segments.time.sleep") as sleep,
+    ):
+        _retry_segment_save_on_deadlock(db, "pub1", save)
+
+    assert save.call_count == 2
+    rollback.assert_called_once()
+    sleep.assert_called_once()
+
+
+def test_segment_save_rolls_back_final_mysql_deadlock(db: Session) -> None:
+    deadlock = OperationalError(
+        statement=None,
+        params=None,
+        orig=MySqlError(1213, "Deadlock found when trying to get lock"),
+    )
+    save = Mock(side_effect=deadlock)
+
+    with (
+        patch.object(db, "rollback", wraps=db.rollback) as rollback,
+        patch("app.services.segments.time.sleep") as sleep,
+        pytest.raises(OperationalError, match="Deadlock found"),
+    ):
+        _retry_segment_save_on_deadlock(db, "pub1", save)
+
+    assert save.call_count == 3
+    assert rollback.call_count == 3
+    assert sleep.call_count == 2
+
+
+def test_segment_save_does_not_retry_other_database_errors(db: Session) -> None:
+    lock_wait_timeout = OperationalError(
+        statement=None,
+        params=None,
+        orig=MySqlError(1205, "Lock wait timeout exceeded"),
+    )
+    save = Mock(side_effect=lock_wait_timeout)
+
+    with (
+        patch.object(db, "rollback", wraps=db.rollback) as rollback,
+        patch("app.services.segments.time.sleep") as sleep,
+        pytest.raises(OperationalError, match="Lock wait timeout"),
+    ):
+        _retry_segment_save_on_deadlock(db, "pub1", save)
+
+    save.assert_called_once()
+    rollback.assert_not_called()
+    sleep.assert_not_called()
