@@ -195,6 +195,7 @@ export function LibraryPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const handledPendingDownloadRef = useRef<string | null>(null)
+  const initialPartsetIdRef = useRef(searchParams.get('partset'))
 
   const removeItem = useCallback((partsetId: string) => {
     setItems((prev) => {
@@ -235,7 +236,7 @@ export function LibraryPage() {
     try {
       const data = await fetchLibrary()
       setItems(data.items)
-      const fromQuery = searchParams.get('partset')
+      const fromQuery = initialPartsetIdRef.current
       const selected =
         fromQuery && data.items.some((item) => item.partset_id === fromQuery)
           ? fromQuery
@@ -248,7 +249,7 @@ export function LibraryPage() {
     } finally {
       setLoading(false)
     }
-  }, [searchParams])
+  }, [])
 
   useEffect(() => {
     const fromQuery = searchParams.get('partset')
