@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import time
 from collections.abc import Callable, Iterator
@@ -13,6 +14,7 @@ from typing import Any, Literal
 
 ScoreKind = Literal["lowres", "highres", "thumbs"]
 SCORE_KINDS: tuple[ScoreKind, ...] = ("lowres", "highres", "thumbs")
+_CANONICAL_PAGE_IMAGE = re.compile(r"page-\d+\.png")
 
 
 class LocalCache:
@@ -65,7 +67,17 @@ class LocalCache:
 
     def score_has_kind(self, score_id: str, kind: ScoreKind) -> bool:
         directory = self.score_kind_dir(score_id, kind)
-        return directory.is_dir() and any(directory.glob("page-*.png"))
+        return bool(self.canonical_page_paths(directory))
+
+    @staticmethod
+    def canonical_page_paths(directory: Path) -> list[Path]:
+        if not directory.is_dir():
+            return []
+        return sorted(
+            path
+            for path in directory.glob("page-*.png")
+            if _CANONICAL_PAGE_IMAGE.fullmatch(path.name)
+        )
 
     def score_has_pages(self, score_id: str) -> bool:
         return self.score_has_kind(score_id, "lowres")
@@ -116,7 +128,7 @@ class LocalCache:
 
     def partset_has_kind(self, partset_id: str, kind: ScoreKind) -> bool:
         directory = self.partset_kind_dir(partset_id, kind)
-        return directory.is_dir() and any(directory.glob("page-*.png"))
+        return bool(self.canonical_page_paths(directory))
 
     def partset_has_pages(self, partset_id: str) -> bool:
         return self.partset_has_kind(partset_id, "lowres")
@@ -175,7 +187,8 @@ class LocalCache:
         if not fp_file.is_file() or fp_file.read_text().strip() != fingerprint:
             return False
         for ndx in range(num_segments):
-            if not self.preview_segment_path(partset_id, ndx).is_file():
+            path = self.preview_segment_path(partset_id, ndx)
+            if not path.is_file():
                 return False
         return True
 

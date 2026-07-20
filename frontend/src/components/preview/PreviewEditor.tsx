@@ -29,6 +29,7 @@ import {
   previewPageCssVars,
   segmentLabelLayout,
 } from '../../lib/previewPageLayout'
+import { useSessionImageCache, type SessionImageRequest } from '../../lib/useSessionImageCache'
 import { previewHeaderFontFamily } from '../../lib/previewHeaderFont'
 import { TransitionError, TransitionErrorButton } from '../TransitionError'
 import { TransitionWait } from '../TransitionWait'
@@ -42,6 +43,39 @@ type Mode = 'spacing' | 'combine'
 type Props = {
   privateId: string
   onPreparingChange?: (preparing: boolean) => void
+}
+
+type LayoutSnapshot = {
+  breaks: Record<string, number[]>
+  spacings: Record<string, number>
+}
+
+function cloneLayoutSnapshot(breaks: Record<string, number[]>, spacings: Record<string, number>): LayoutSnapshot {
+  return {
+    breaks: Object.fromEntries(Object.entries(breaks).map(([part, values]) => [part, [...values]])),
+    spacings: { ...spacings },
+  }
+}
+
+function layoutsAreEqual(
+  breaks: Record<string, number[]>,
+  spacings: Record<string, number>,
+  baseline: LayoutSnapshot,
+): boolean {
+  const breakParts = new Set([...Object.keys(breaks), ...Object.keys(baseline.breaks)])
+  for (const part of breakParts) {
+    const current = [...(breaks[part] ?? [])].sort((a, b) => a - b)
+    const saved = [...(baseline.breaks[part] ?? [])].sort((a, b) => a - b)
+    if (current.length !== saved.length || current.some((value, index) => value !== saved[index])) {
+      return false
+    }
+  }
+
+  const spacingParts = new Set([...Object.keys(spacings), ...Object.keys(baseline.spacings)])
+  for (const part of spacingParts) {
+    if ((spacings[part] ?? 0.1) !== (baseline.spacings[part] ?? 0.1)) return false
+  }
+  return true
 }
 
 export function PreviewEditor({ privateId, onPreparingChange }: Props) {
@@ -68,6 +102,7 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
   const [reloadToken, setReloadToken] = useState(0)
   const [pageTransition, setPageTransition] = useState(false)
   const saveInFlightRef = useRef(false)
+  const layoutBaselineRef = useRef<LayoutSnapshot>({ breaks: {}, spacings: {} })
 
   useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {
@@ -113,6 +148,7 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
         setData(preview)
         setBreaks(preview.breaks)
         setSpacings(preview.spacings)
+        layoutBaselineRef.current = cloneLayoutSnapshot(preview.breaks, preview.spacings)
         setPartSegments(preview.part_segments)
         setCombinedPartNames(preview.combined_part_names)
         const all = [...preview.part_names, ...preview.combined_part_names]
@@ -183,6 +219,40 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
   useEffect(() => {
     setPageNum((p) => Math.min(p, layout.numPages))
   }, [layout.numPages])
+
+  const sessionImageRequests = useMemo<SessionImageRequest[]>(() => {
+    if (!data) return []
+
+    const highPrioritySegmentIds: number[] = []
+    const highPrioritySegments = new Set<number>()
+    for (const name of [...data.part_names, ...data.combined_part_names]) {
+      const chunks = pageChunks(
+        data.part_segments[name] ?? [],
+        data.segment_heights,
+        spacingHighres(data.spacings[name] ?? 0.1),
+        data.breaks[name] ?? [],
+        data.orientation ?? 'portrait',
+      )
+      for (const segmentId of chunks.slice(0, 2).flat()) {
+        if (!highPrioritySegments.has(segmentId)) {
+          highPrioritySegments.add(segmentId)
+          highPrioritySegmentIds.push(segmentId)
+        }
+      }
+    }
+
+    const high = highPrioritySegmentIds.flatMap((segmentId) => {
+      const url = data.segment_urls[String(segmentId)]
+      return url ? [{ key: url, url, priority: 'high' as const }] : []
+    })
+    const low = Object.entries(data.segment_urls).flatMap(([segmentId, url]) =>
+      highPrioritySegments.has(Number(segmentId))
+        ? []
+        : [{ key: url, url, priority: 'low' as const }],
+    )
+    return [...high, ...low]
+  }, [data])
+  const sessionImageUrls = useSessionImageCache(sessionImageRequests, data)
 
   useEffect(() => {
     const spacing = spacings[part] ?? 0.1
@@ -263,7 +333,10 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
     try {
       setSaving(true)
       const csrf = await getCsrfToken()
-      await saveLayout(privateId, { breaks, spacings }, csrf)
+      if (!layoutsAreEqual(breaks, spacings, layoutBaselineRef.current)) {
+        await saveLayout(privateId, { breaks, spacings }, csrf)
+        layoutBaselineRef.current = cloneLayoutSnapshot(breaks, spacings)
+      }
       await startPartGeneration(privateId, csrf)
       navigate(`/${privateId}/partgen`)
     } catch (err) {
@@ -279,8 +352,11 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
     saveInFlightRef.current = true
     try {
       setSaving(true)
-      const csrf = await getCsrfToken()
-      await saveLayout(privateId, { breaks, spacings }, csrf)
+      if (!layoutsAreEqual(breaks, spacings, layoutBaselineRef.current)) {
+        const csrf = await getCsrfToken()
+        await saveLayout(privateId, { breaks, spacings }, csrf)
+        layoutBaselineRef.current = cloneLayoutSnapshot(breaks, spacings)
+      }
       navigate(`/${privateId}/segment`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save preview layout')
@@ -319,6 +395,10 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
       setPartSegments((prev) => ({ ...prev, [combinedName]: merged }))
       setBreaks((prev) => ({ ...prev, [combinedName]: [] }))
       setSpacings((prev) => ({ ...prev, [combinedName]: 0.1 }))
+      layoutBaselineRef.current = {
+        breaks: { ...layoutBaselineRef.current.breaks, [combinedName]: [] },
+        spacings: { ...layoutBaselineRef.current.spacings, [combinedName]: 0.1 },
+      }
       setSelectedParts(new Set())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to combine parts')
@@ -352,6 +432,11 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
         delete next[partName]
         return next
       })
+      const nextBreaks = { ...layoutBaselineRef.current.breaks }
+      const nextSpacings = { ...layoutBaselineRef.current.spacings }
+      delete nextBreaks[partName]
+      delete nextSpacings[partName]
+      layoutBaselineRef.current = { breaks: nextBreaks, spacings: nextSpacings }
       if (part === partName) {
         setPart(
           [...(data?.part_names ?? []), ...combinedPartNames.filter((name) => name !== partName)][0] ??
@@ -428,6 +513,9 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
   const partBreaks = breaks[part] ?? []
   const canGoPrev = pageNum > 1
   const canGoNext = pageNum < layout.numPages
+  const visibleChunks = layout.chunks
+    .map((chunk, chunkIdx) => ({ chunk, chunkIdx }))
+    .filter(({ chunkIdx }) => chunkIdx >= pageNum - 1 && chunkIdx <= pageNum)
   const navDisabledStyle = { color: 'gray', cursor: 'default' as const }
   const saveDisabledStyle = saving ? { opacity: 0.6, cursor: 'default' as const } : undefined
 
@@ -449,7 +537,8 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
       <div
         id="preview-pane"
         className={isLandscape ? 'orientation-landscape' : undefined}
-        style={previewPaneStyle}
+        style={{ ...previewPaneStyle, pointerEvents: saving ? 'none' : undefined }}
+        inert={saving}
       >
         <div id="preview-header">
           STEP 3. &nbsp; Preview the parts{saving ? ' (saving…)' : ''}
@@ -481,7 +570,7 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
                 className={pageTransition ? 'part-pages-animated' : undefined}
                 style={{ left: `${-pageStride * (pageNum - 1)}px` }}
               >
-                {layout.chunks.map((chunk, chunkIdx) => (
+                {visibleChunks.map(({ chunk, chunkIdx }) => (
                     <div
                       key={chunkIdx}
                       className="part-page"
@@ -556,13 +645,15 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
                                 </div>
                               )
                             })()}
-                            <img
-                              src={data.segment_urls[String(segId)]}
-                              width={lrW}
-                              height={lrH}
-                              style={{ left: partLeftMargin }}
-                              alt=""
-                            />
+                            {sessionImageUrls[data.segment_urls[String(segId)]] ? (
+                              <img
+                                src={sessionImageUrls[data.segment_urls[String(segId)]]}
+                                width={lrW}
+                                height={lrH}
+                                style={{ left: partLeftMargin }}
+                                alt=""
+                              />
+                            ) : null}
                           </div>
                           {hoverSeg === globalIndex &&
                             !partBreaks.includes(globalIndex) && (

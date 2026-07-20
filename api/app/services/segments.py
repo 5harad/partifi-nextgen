@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 from app.models import Page, Part, Partset, Score, Segment
 from app.services.local_cache import get_local_cache
 from app.services.part_rows import upsert_part_row
-from app.services.partset_pages import effective_orientation, ensure_page_images_status
+from app.services.partset_pages import (
+    effective_orientation,
+    ensure_page_images_status,
+)
 from app.services.partset_touch import touch_partset_access
 from app.utils.strings import rm_space, tag_to_filename
 
@@ -17,25 +20,12 @@ MAX_DEADLOCK_RETRIES = 2
 DEADLOCK_RETRY_DELAY_SECONDS = 0.05
 
 
-def page_image_cache_version(partset: Partset) -> str:
-    rotation = int(partset.rotation_degrees or 0)
-    stamp = partset.convert_complete or partset.analysis_complete
-    if stamp:
-        return f"{rotation}-{int(stamp.timestamp())}"
-    return str(rotation)
-
-
 def page_image_url(
     private_id: str,
     page: int,
     res: ScoreImageKind,
-    *,
-    cache_version: str | None = None,
 ) -> str:
-    url = f"/api/v1/partsets/{private_id}/page-image/{page}.png?res={res}"
-    if cache_version:
-        url += f"&v={cache_version}"
-    return url
+    return f"/api/v1/partsets/{private_id}/page-image/{page}.png?res={res}"
 
 
 def _sync_part_rows_from_tags(db: Session, partset_id: str) -> None:
@@ -152,15 +142,19 @@ def get_segments_data(db: Session, partset: Partset) -> dict:
         raise ValueError("Partset has no score")
     orientation = effective_orientation(partset, score)
     image_status = ensure_page_images_status(db, partset, score)
-    cache_version = page_image_cache_version(partset)
     image_urls: dict[str, dict[str, str]] = {"lowres": {}, "thumbs": {}}
-    for page in range(1, num_pages + 1):
-        image_urls["lowres"][str(page)] = page_image_url(
-            private_id, page, "lowres", cache_version=cache_version
-        )
-        image_urls["thumbs"][str(page)] = page_image_url(
-            private_id, page, "thumbs", cache_version=cache_version
-        )
+    if image_status["images_ready"]:
+        for page in range(1, num_pages + 1):
+            image_urls["lowres"][str(page)] = page_image_url(
+                private_id,
+                page,
+                "lowres",
+            )
+            image_urls["thumbs"][str(page)] = page_image_url(
+                private_id,
+                page,
+                "thumbs",
+            )
 
     return {
         "score_id": partset.score_id,
@@ -285,15 +279,28 @@ def save_all_page_segments(
     if num_pages <= 0:
         raise ValueError("Partset has no pages")
 
-    for page_num in range(1, num_pages + 1):
-        key = f"p{page_num}"
-        if key not in pages:
-            raise ValueError(f"Missing segment data for page {page_num}")
+    page_payloads: list[tuple[int, dict]] = []
+    seen_pages: set[int] = set()
+    for key, payload in pages.items():
+        if not key.startswith("p") or not key[1:].isdigit():
+            raise ValueError(f"Invalid page key: {key}")
+        page_num = int(key[1:])
+        if key != f"p{page_num}":
+            raise ValueError(f"Invalid page key: {key}")
+        if page_num < 1 or page_num > num_pages:
+            raise ValueError(f"Invalid page number: {page_num}")
+        if page_num in seen_pages:
+            raise ValueError(f"Duplicate page number: {page_num}")
+        seen_pages.add(page_num)
+        page_payloads.append((page_num, payload))
+    if not page_payloads:
+        return
+    page_payloads.sort(key=lambda item: item[0])
 
     def save(current_partset: Partset) -> None:
         _reset_partset_for_segment_edit(current_partset)
-        for page_num in range(1, num_pages + 1):
-            _apply_page_segment_payload(db, current_partset.id, page_num, pages[f"p{page_num}"])
+        for page_num, payload in page_payloads:
+            _apply_page_segment_payload(db, current_partset.id, page_num, payload)
         _finalize_segment_save(db, current_partset.id)
 
     _retry_segment_save_on_deadlock(db, partset.id, save)

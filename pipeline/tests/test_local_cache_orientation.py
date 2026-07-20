@@ -35,12 +35,16 @@ def test_copy_pages_tree_overwrites_existing_png(tmp_path) -> None:
     score_id = "abc12"
     pages_dir = tmp_path / "convert"
     lowres_src = pages_dir / "lowres"
+    highres_src = pages_dir / "highres"
     lowres_src.mkdir(parents=True)
+    highres_src.mkdir()
     _write_png(lowres_src / "page-1.png", PORTRAIT.lowres_size)
+    _write_png(highres_src / "page-1.png", PORTRAIT.lowres_size)
 
     cache.copy_pages_tree(score_id, pages_dir)
     dest = cache.score_page_path(score_id, "lowres", 1)
     assert Image.open(dest).size == PORTRAIT.lowres_size
+    assert cache.canonical_page_paths(dest.parent) == [dest]
 
     _write_png(lowres_src / "page-1.png", LANDSCAPE.lowres_size)
     cache.copy_pages_tree(score_id, pages_dir)

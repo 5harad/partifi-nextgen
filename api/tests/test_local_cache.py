@@ -1,4 +1,8 @@
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+
+import pytest
 
 from pipeline.local_cache import LocalCache
 
@@ -8,29 +12,6 @@ def _cache(tmp_path: Path) -> LocalCache:
         dest.write_bytes(f"payload:{key}".encode())
 
     return LocalCache(tmp_path, download=download)
-
-
-def test_preview_fingerprint_follows_segment_geometry() -> None:
-    rows = [
-        {
-            "page": 1,
-            "rotation": 0.0,
-            "left_margin": 0.0,
-            "right_margin": 100.0,
-            "top": 10.0,
-            "bottom": 20.0,
-            "tags": "Flute",
-            "label": "",
-        }
-    ]
-
-    first = LocalCache.preview_fingerprint(rows)
-    second = LocalCache.preview_fingerprint(rows)
-    assert first == second
-
-    rows_changed = [{**rows[0], "top": 15.0}]
-    third = LocalCache.preview_fingerprint(rows_changed)
-    assert third != first
 
 
 def test_install_file_wins_if_dest_already_exists(tmp_path: Path) -> None:
@@ -94,11 +75,10 @@ def test_write_preview_publishes_complete_dir(tmp_path: Path) -> None:
     (segments / "s0.png").write_bytes(b"seg0")
     (segments / "s1.png").write_bytes(b"seg1")
 
-    cache.write_preview("ps1", "fp123", segments)
+    cache.write_preview("ps1", "fingerprint", segments)
     preview = cache.preview_dir("ps1")
 
     assert preview.is_dir()
-    assert (preview / ".fingerprint").read_text() == "fp123"
     assert (preview / "s0.png").read_bytes() == b"seg0"
     assert (preview / "s1.png").read_bytes() == b"seg1"
 
@@ -124,10 +104,50 @@ def test_page_image_url_includes_png_suffix() -> None:
     from app.services.segments import page_image_url
 
     assert page_image_url("priv1", 3, "lowres") == "/api/v1/partsets/priv1/page-image/3.png?res=lowres"
-    assert (
-        page_image_url("priv1", 3, "lowres", cache_version="90-1718208000")
-        == "/api/v1/partsets/priv1/page-image/3.png?res=lowres&v=90-1718208000"
-    )
+
+
+def test_preview_segment_url_includes_png_suffix() -> None:
+    from app.services.preview import preview_segment_url
+
+    assert preview_segment_url("priv1", 3) == "/api/v1/partsets/priv1/preview-segment/3.png"
+
+
+def test_preview_segment_response_is_not_persistently_cached(tmp_path: Path) -> None:
+    from app.routers.v1 import preview_segment_image
+
+    path = tmp_path / "s0.png"
+    path.write_bytes(b"preview")
+    cache = Mock()
+    cache.preview_segment_path.return_value = path
+
+    with (
+        patch(
+            "app.routers.v1.get_partset_by_private_id",
+            return_value=SimpleNamespace(id="partset1"),
+        ),
+        patch("app.routers.v1.get_local_cache", return_value=cache),
+    ):
+        response = preview_segment_image("priv1", 0, db=Mock())
+
+    assert response.headers["cache-control"] == "private, no-store"
+
+
+def test_page_image_response_is_not_persistently_cached(tmp_path: Path) -> None:
+    from app.routers.v1 import _page_image_response
+
+    path = tmp_path / "page-1.png"
+    path.write_bytes(b"page")
+    partset = SimpleNamespace(score_id="score1")
+    db = Mock()
+    db.get.return_value = SimpleNamespace()
+
+    with (
+        patch("app.routers.v1.get_partset_by_private_id", return_value=partset),
+        patch("app.routers.v1.ensure_page_image_path", return_value=path),
+    ):
+        response = _page_image_response("priv1", 1, "lowres", db)
+
+    assert response.headers["cache-control"] == "private, no-store"
 
 
 def test_write_preview_replaces_existing_files(tmp_path: Path) -> None:
@@ -141,7 +161,6 @@ def test_write_preview_replaces_existing_files(tmp_path: Path) -> None:
     segments.mkdir()
     (segments / "s0.png").write_bytes(b"new")
 
-    cache.write_preview("ps1", "new-fp", segments)
+    cache.write_preview("ps1", "fingerprint", segments)
 
     assert (preview / "s0.png").read_bytes() == b"new"
-    assert (preview / ".fingerprint").read_text() == "new-fp"

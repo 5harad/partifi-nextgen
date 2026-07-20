@@ -103,6 +103,63 @@ def test_save_all_page_segments_syncs_part_rows(mock_cache: Mock, db: Session) -
 
 
 @patch("app.services.segments.get_local_cache")
+def test_save_all_page_segments_updates_dirty_subset_atomically(mock_cache: Mock, db: Session) -> None:
+    mock_cache.return_value = Mock()
+    partset = db.get(Partset, "pub1")
+    assert partset is not None
+    db.add(
+        Segment(
+            partset_id="pub1",
+            page=2,
+            top=10,
+            bottom=50,
+            tags="cello",
+        )
+    )
+    db.commit()
+
+    save_all_page_segments(
+        db,
+        partset,
+        {
+            "p1": {
+                "left_margin": 0,
+                "right_margin": 100,
+                "rotation": 0,
+                "segments": [
+                    {
+                        "pos": [10.0, 50.0],
+                        "tags": "violin",
+                        "tag_is_suggestion": False,
+                        "label": "",
+                        "label_is_suggestion": False,
+                    }
+                ],
+            }
+        },
+    )
+
+    db.expire_all()
+    page_two_segments = db.query(Segment).filter(Segment.partset_id == "pub1", Segment.page == 2).all()
+    assert [segment.tags for segment in page_two_segments] == ["cello"]
+    tags = {
+        row.tag
+        for row in db.query(Part).filter(Part.partset_id == "pub1", Part.combined.is_(False)).all()
+    }
+    assert tags == {"violin", "cello"}
+    mock_cache.return_value.invalidate_preview.assert_called_once_with("pub1")
+    mock_cache.return_value.invalidate_parts.assert_called_once_with("pub1")
+
+
+def test_save_all_page_segments_rejects_noncanonical_page_keys(db: Session) -> None:
+    partset = db.get(Partset, "pub1")
+    assert partset is not None
+
+    with pytest.raises(ValueError, match="Invalid page key: p01"):
+        save_all_page_segments(db, partset, {"p1": {}, "p01": {}})
+
+
+@patch("app.services.segments.get_local_cache")
 def test_save_page_segments_collapses_plus_in_tag(mock_cache: Mock, db: Session) -> None:
     # "+" is the reserved combined-part delimiter. A user-typed tag like
     # "git + rhyth" must collapse to a single tag so it yields one real part

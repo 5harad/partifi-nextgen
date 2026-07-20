@@ -31,10 +31,15 @@ import {
   prevPreviewerStart,
   segmentEditorCssVars,
 } from '../../lib/segmentEditorLayout'
+import { useSessionImageCache, type SessionImageRequest } from '../../lib/useSessionImageCache'
 import type { PageSegmentData, RegionState, SegmentDataResponse } from '../../types/segment'
 
 type Props = {
   data: SegmentDataResponse
+}
+
+function clonePageData(page: PageSegmentData): PageSegmentData {
+  return JSON.parse(JSON.stringify(page))
 }
 
 export function SegmentEditor({ data }: Props) {
@@ -80,7 +85,10 @@ export function SegmentEditor({ data }: Props) {
   )
   const [rotation, setRotation] = useState(pagesData.p1?.rotation ?? 0)
   const serverPageDataRef = useRef<PageSegmentData>(
-    JSON.parse(JSON.stringify(pagesData.p1 ?? { left_margin: 0, right_margin: 100, rotation: 0, segments: [] })),
+    clonePageData(pagesData.p1 ?? { left_margin: 0, right_margin: 100, rotation: 0, segments: [] }),
+  )
+  const serverPagesDataRef = useRef<Record<string, PageSegmentData>>(
+    Object.fromEntries(Object.entries(pagesData).map(([key, page]) => [key, clonePageData(page)])),
   )
 
   const [tagList, setTagList] = useState<string[]>(() => buildTagList(pagesData, data.num_pages))
@@ -91,6 +99,22 @@ export function SegmentEditor({ data }: Props) {
   const focusedTagsIdRef = useRef<string | null>(null)
   const tagInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const suppressTagBlurRef = useRef(false)
+  const sessionImageRequests = useMemo<SessionImageRequest[]>(() => {
+    const firstPage = 1
+    const primary: SessionImageRequest[] = []
+    const background: SessionImageRequest[] = []
+    for (let page = 1; page <= data.num_pages; page++) {
+      const lowresUrl = data.image_urls.lowres[String(page)]
+      const thumbUrl = data.image_urls.thumbs[String(page)]
+      const requests = [lowresUrl, thumbUrl].flatMap((url) =>
+        url ? [{ key: url, url, priority: page === firstPage ? 'high' as const : 'low' as const }] : [],
+      )
+      if (page === firstPage) primary.push(...requests)
+      else background.push(...requests)
+    }
+    return [...primary, ...background]
+  }, [data.image_urls, data.num_pages])
+  const sessionImageUrls = useSessionImageCache(sessionImageRequests, data)
 
   const stateRef = useRef({
     regions,
@@ -122,7 +146,7 @@ export function SegmentEditor({ data }: Props) {
   }, [orientation])
 
   const currentPageKey = `p${pageNum}`
-  const pageImageUrl = data.image_urls.lowres[String(pageNum)]
+  const pageImageUrl = sessionImageUrls[data.image_urls.lowres[String(pageNum)]]
   const layouts = useMemo(() => computeRegionLayouts(regions, orientation), [regions, orientation])
 
   const leftMargin = Math.min(leftMarginPx, rightMarginPx)
@@ -257,7 +281,7 @@ export function SegmentEditor({ data }: Props) {
       rotation: 0,
       segments: [],
     }
-    serverPageDataRef.current = JSON.parse(JSON.stringify(pageData))
+    serverPageDataRef.current = clonePageData(serverPagesDataRef.current[key] ?? pageData)
     const rawRegions = regionsFromPageData(pageData, orientation)
     const suggested = applySuggestionsToRegions(
       rawRegions,
@@ -308,7 +332,12 @@ export function SegmentEditor({ data }: Props) {
           setSaving(true)
           const token = await getCsrfToken()
           await persistPage(current, pageData, token)
-          serverPageDataRef.current = JSON.parse(JSON.stringify(pageData))
+          const savedPageData = clonePageData(pageData)
+          serverPageDataRef.current = savedPageData
+          serverPagesDataRef.current = {
+            ...serverPagesDataRef.current,
+            [key]: savedPageData,
+          }
         }
         setPreviewerStart(
           previewStartOverride ??
@@ -542,8 +571,21 @@ export function SegmentEditor({ data }: Props) {
     try {
       saveInFlightRef.current = true
       setSaving(true)
-      const token = await getCsrfToken()
-      await saveAllPageSegments(data.private_id, allPages, token)
+      setPagesData(allPages)
+      setTagList(buildTagList(allPages, data.num_pages))
+      const dirtyPages = Object.entries(allPages).filter(
+        ([key, page]) => !pageDataAreEqual(serverPagesDataRef.current[key], page),
+      )
+      if (dirtyPages.length) {
+        const token = await getCsrfToken()
+        const dirtyPagesByKey = Object.fromEntries(dirtyPages)
+        await saveAllPageSegments(data.private_id, dirtyPagesByKey, token)
+        serverPagesDataRef.current = {
+          ...serverPagesDataRef.current,
+          ...Object.fromEntries(dirtyPages.map(([key, page]) => [key, clonePageData(page)])),
+        }
+        serverPageDataRef.current = clonePageData(allPages[currentPageKey])
+      }
       navigate(`/${data.private_id}/preview`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed')
@@ -579,7 +621,8 @@ export function SegmentEditor({ data }: Props) {
       <div
         id="segment-panel"
         className={isLandscape ? 'orientation-landscape' : undefined}
-        style={segmentCssVars}
+        style={{ ...segmentCssVars, pointerEvents: saving ? 'none' : undefined }}
+        inert={saving}
       >
         <div id="previewer">
           <div
@@ -611,7 +654,12 @@ export function SegmentEditor({ data }: Props) {
                   page {n}
                   <br />
                   <div className="img-frame" style={{ borderColor: active ? '#E00000' : '#D8D8C2' }}>
-                    <img src={data.image_urls.thumbs[String(n)]} alt={`Page ${n}`} />
+                    {sessionImageUrls[data.image_urls.thumbs[String(n)]] ? (
+                      <img
+                        src={sessionImageUrls[data.image_urls.thumbs[String(n)]]}
+                        alt={`Page ${n}`}
+                      />
+                    ) : null}
                   </div>
                 </div>
               )
@@ -670,13 +718,15 @@ export function SegmentEditor({ data }: Props) {
         <div id="labels" />
 
         <div id="viewer">
-          <img
-            src={pageImageUrl}
-            width={viewerWidth}
-            height={viewerHeight}
-            alt={`Score page ${pageNum}`}
-            style={{ transform: `rotate(${-rotation}deg)` }}
-          />
+          {pageImageUrl ? (
+            <img
+              src={pageImageUrl}
+              width={viewerWidth}
+              height={viewerHeight}
+              alt={`Score page ${pageNum}`}
+              style={{ transform: `rotate(${-rotation}deg)` }}
+            />
+          ) : null}
         </div>
 
         <div id="margins">

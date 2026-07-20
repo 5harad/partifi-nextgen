@@ -31,7 +31,11 @@ from app.services.partset_pages import (
     ensure_page_images_status,
 )
 from app.services.part_rows import upsert_part_row
-from app.services.segments import ensure_import_complete, get_partset_by_private_id, sync_part_rows_from_tags
+from app.services.segments import (
+    ensure_import_complete,
+    get_partset_by_private_id,
+    sync_part_rows_from_tags,
+)
 
 APP_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = APP_ROOT.parent
@@ -324,7 +328,6 @@ def get_preview_data(db: Session, partset: Partset) -> dict:
     orientation = effective_orientation(partset, score)
     segment_widths = [prct2pixel(w, "width", orientation=orientation) for w in widths_pct]
     private_id = partset.private_id or ""
-
     segment_urls = {
         str(ndx): preview_segment_url(private_id, ndx)
         for ndx in range(len(segment_rows))

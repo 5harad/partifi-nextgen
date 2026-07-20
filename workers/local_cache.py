@@ -21,16 +21,16 @@ def get_local_cache() -> LocalCache:
 def ensure_lowres_files(score_id: str) -> list[Path]:
     cache = get_local_cache()
     lowres_dir = cache.score_kind_dir(score_id, "lowres")
-    existing = sorted(lowres_dir.glob("page-*.png"))
+    existing = cache.canonical_page_paths(lowres_dir)
     if existing:
         return existing
     from score_page_cache import build_score_page_cache
 
     build_score_page_cache(score_id)
-    return sorted(lowres_dir.glob("page-*.png"))
+    return cache.canonical_page_paths(lowres_dir)
 
 
 def ensure_partset_lowres_files(partset_id: str) -> list[Path]:
     cache = get_local_cache()
     lowres_dir = cache.partset_kind_dir(partset_id, "lowres")
-    return sorted(lowres_dir.glob("page-*.png"))
+    return cache.canonical_page_paths(lowres_dir)

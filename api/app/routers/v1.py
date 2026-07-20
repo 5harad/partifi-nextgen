@@ -189,7 +189,11 @@ def preview_segment_image(
     path = cache.preview_segment_path(partset.id, ndx)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Preview segment not found")
-    return FileResponse(path, media_type="image/png")
+    return FileResponse(
+        path,
+        media_type="image/png",
+        headers={"Cache-Control": "private, no-store"},
+    )
 
 
 @router.get("/partsets/{private_id}/page-image/{page}.png")
@@ -238,7 +242,7 @@ def _page_image_response(
     return FileResponse(
         path,
         media_type="image/png",
-        headers={"Cache-Control": "private, no-cache"},
+        headers={"Cache-Control": "private, no-store"},
     )
 
 
