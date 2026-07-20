@@ -1441,7 +1441,7 @@ iframe[src*="accounts.google.com/gsi"]
 #part-pages
 {
 	width: auto;
-	height: var(--part-page-height, 475px);
+	height: calc(var(--part-page-height, 475px) + 2px);
 	left: 0px;
 	top: 50%;
 	position: absolute;
