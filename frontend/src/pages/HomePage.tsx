@@ -166,6 +166,7 @@ export function HomePage() {
     try {
       const info = await getImslpInfo(normalized, controller.signal)
       if (gen !== lookupGenRef.current) return
+      setImslpId(info.imslp_id)
       setImslpTitle(info.title)
       setImslpComposer(info.composer)
       setImslpPublisher(info.publisher)

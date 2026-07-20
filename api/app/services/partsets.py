@@ -184,11 +184,12 @@ def create_imslp_partset(
         raise ValueError("Invalid IMSLP id")
 
     try:
-        ensure_imslp_info_for_import(db, normalized)
+        imslp_info = ensure_imslp_info_for_import(db, normalized)
     except ImslpLookupError as exc:
         raise ValueError(str(exc)) from exc
     except ImslpLookupUnavailableError as exc:
         raise ValueError(str(exc)) from exc
+    normalized = imslp_info["imslp_id"]
 
     existing_score = db.query(Score).filter(Score.imslp_id == normalized).first()
     if existing_score and existing_score.file_size and existing_score.file_size > MAX_SCORE_BYTES:

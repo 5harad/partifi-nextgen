@@ -68,11 +68,23 @@ def _abs_imslp_url(url: str) -> str:
 
 
 def _edition_snippet(page_html: str, imslp_id: str) -> str:
-    marker = f">#{imslp_id}<"
-    idx = page_html.find(marker)
-    if idx < 0:
+    match = re.search(
+        rf">#0*{re.escape(_imslp_id_number(imslp_id))}<",
+        page_html,
+        re.I,
+    )
+    if not match:
         return page_html[:12000]
-    return page_html[max(0, idx - 100) : idx + 8000]
+    return page_html[max(0, match.start() - 100) : match.end() + 8000]
+
+
+def _imslp_id_number(imslp_id: str) -> str:
+    """Canonical numeric form used only when comparing IMSLP edition IDs."""
+    return imslp_id.lstrip("0") or "0"
+
+
+def _same_imslp_id(left: str, right: str) -> bool:
+    return _imslp_id_number(left) == _imslp_id_number(right)
 
 
 def parse_imslp_page_html(page_html: str, imslp_id: str) -> dict[str, str]:
@@ -135,14 +147,14 @@ def parse_reverse_lookup_location(location: str) -> tuple[str, str] | None:
     return page_url, id_match.group(1)
 
 
-def parse_reverse_lookup_result_pages(page_html: str, imslp_id: str) -> list[str]:
-    """Wiki page URLs when reverse lookup returns a multi-result disambiguation page."""
+def parse_reverse_lookup_result_pages(page_html: str, imslp_id: str) -> list[tuple[str, str]]:
+    """Wiki page URLs and edition IDs from a multi-result reverse lookup."""
     pattern = re.compile(
-        rf'href="(/wiki/[^"#]+)#IMSLP{re.escape(imslp_id)}"',
+        rf'href="(/wiki/[^"#]+)#IMSLP(0*{re.escape(_imslp_id_number(imslp_id))})(?!\d)"',
         re.I,
     )
     seen: set[str] = set()
-    pages: list[str] = []
+    pages: list[tuple[str, str]] = []
     for match in pattern.finditer(page_html):
         path = match.group(1)
         if path.startswith("/wiki/Special:"):
@@ -151,7 +163,7 @@ def parse_reverse_lookup_result_pages(page_html: str, imslp_id: str) -> list[str
         if page_url in seen:
             continue
         seen.add(page_url)
-        pages.append(page_url)
+        pages.append((page_url, match.group(2)))
     return pages
 
 
@@ -165,25 +177,25 @@ def _fetch_imslp_page(
     imslp_id: str,
     *,
     cancel: threading.Event | None = None,
-) -> tuple[str, str] | None:
+) -> tuple[str, str, str] | None:
     _check_cancelled(cancel)
     reverse_url = REVERSE_LOOKUP_URL.format(imslp_id=imslp_id)
     resp = client.get(reverse_url, follow_redirects=False)
     if resp.status_code in (301, 302, 303, 307, 308):
         location = resp.headers.get("location", "")
         parsed = parse_reverse_lookup_location(location)
-        if not parsed or parsed[1] != imslp_id:
+        if not parsed or not _same_imslp_id(parsed[1], imslp_id):
             return None
-        page_url, _ = parsed
+        page_url, resolved_id = parsed
         _check_cancelled(cancel)
         page_resp = client.get(page_url, follow_redirects=True)
         page_resp.raise_for_status()
-        return page_resp.text, location
+        return page_resp.text, location, resolved_id
     if resp.status_code == 200 and resp.text:
         result_pages = parse_reverse_lookup_result_pages(resp.text, imslp_id)
         if not result_pages:
             return None
-        page_url = result_pages[0]
+        page_url, resolved_id = result_pages[0]
         if len(result_pages) > 1:
             logger.info(
                 "IMSLP reverse lookup imslp_id=%s matched %d pages; using %s",
@@ -194,7 +206,7 @@ def _fetch_imslp_page(
         _check_cancelled(cancel)
         page_resp = client.get(page_url, follow_redirects=True)
         page_resp.raise_for_status()
-        return page_resp.text, f"{page_url}#IMSLP{imslp_id}"
+        return page_resp.text, f"{page_url}#IMSLP{resolved_id}", resolved_id
     return None
 
 
@@ -303,8 +315,8 @@ def _lookup_imslp_info_remote_locked(
                 return result
         _fail_lookup(row)
 
-    page_html, imslp_url = fetched
-    parsed = parse_imslp_page_html(page_html, imslp_id)
+    page_html, imslp_url, resolved_id = fetched
+    parsed = parse_imslp_page_html(page_html, resolved_id)
     if not parsed.get("title") and not parsed.get("composer"):
         if row:
             result = _row_to_result(row)
@@ -312,8 +324,8 @@ def _lookup_imslp_info_remote_locked(
                 return result
         _fail_lookup(row)
 
-    _upsert_cache(db, imslp_id, parsed, imslp_url)
-    row = db.get(ImslpInfo, imslp_id)
+    _upsert_cache(db, resolved_id, parsed, imslp_url)
+    row = db.get(ImslpInfo, resolved_id)
     if row:
         result = _row_to_result(row)
         if result:
