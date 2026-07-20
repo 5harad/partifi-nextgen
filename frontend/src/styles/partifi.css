@@ -2114,6 +2114,7 @@ iframe[src*="accounts.google.com/gsi"]
 	border-bottom: 2px dotted gray;
 	margin-top: 20px;
 	padding-bottom: 20px;
+	padding-right: 30px;
 	color: gray;
 	line-height: 30px;
 }
