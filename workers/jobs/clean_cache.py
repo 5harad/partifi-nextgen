@@ -21,6 +21,25 @@ from pipeline.local_cache import LocalCache
 logger = logging.getLogger("partifi.clean_cache")
 
 
+def _invalidate_completed_parts(partset_id: str) -> None:
+    """Clear completed-generation state when its cached PDFs are evicted."""
+    db_conn.execute(
+        """
+        UPDATE partsets
+        SET status = 'analysis',
+            parts_ready = 0,
+            cut_start = NULL,
+            cut_complete = NULL,
+            cut_progress = 0,
+            paste_start = NULL,
+            paste_complete = NULL,
+            paste_progress = 0
+        WHERE id = :id AND parts_ready = 1
+        """,
+        {"id": partset_id},
+    )
+
+
 def _evict_by_ttl(cache: LocalCache, *, category: str, ttl_days: int) -> int:
     cutoff = time.time() - ttl_days * 86400
     base = cache.root / category
@@ -33,11 +52,7 @@ def _evict_by_ttl(cache: LocalCache, *, category: str, ttl_days: int) -> int:
         if path.stat().st_mtime >= cutoff:
             continue
         if category == "parts":
-            partset_id = path.name
-            db_conn.execute(
-                "UPDATE partsets SET parts_ready = 0 WHERE id = :id AND parts_ready = 1",
-                {"id": partset_id},
-            )
+            _invalidate_completed_parts(path.name)
         shutil.rmtree(path, ignore_errors=True)
         removed += 1
         logger.info("Evicted %s cache for %s (TTL %dd)", category, path.name, ttl_days)
@@ -78,10 +93,7 @@ def _evict_to_size_cap(cache: LocalCache, max_bytes: int) -> int:
         if cache.disk_usage_bytes() <= int(max_bytes * 0.9):
             break
         if category == "parts":
-            db_conn.execute(
-                "UPDATE partsets SET parts_ready = 0 WHERE id = :id AND parts_ready = 1",
-                {"id": path.name},
-            )
+            _invalidate_completed_parts(path.name)
         shutil.rmtree(path, ignore_errors=True)
         removed += 1
         logger.info("Evicted %s cache for %s (size cap)", category, path.name)

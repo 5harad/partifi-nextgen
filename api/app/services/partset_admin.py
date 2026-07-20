@@ -31,11 +31,20 @@ def update_partset_metadata(
     composer: str,
     publisher: str,
 ) -> None:
+    was_parts_ready = bool(partset.parts_ready)
     partset.title = title.strip()
     partset.composer = composer.strip()
     partset.publisher = publisher.strip() or None
     partset.mod_ts = datetime.utcnow()
     partset.parts_ready = False
+    if was_parts_ready:
+        partset.status = "analysis"
+        partset.cut_start = None
+        partset.cut_complete = None
+        partset.cut_progress = 0.0
+        partset.paste_start = None
+        partset.paste_complete = None
+        partset.paste_progress = 0.0
     get_local_cache().invalidate_parts(partset.id)
     db.commit()
 
