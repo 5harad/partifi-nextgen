@@ -100,19 +100,26 @@ export function SegmentEditor({ data }: Props) {
   const tagInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const suppressTagBlurRef = useRef(false)
   const sessionImageRequests = useMemo<SessionImageRequest[]>(() => {
-    const firstPage = 1
-    const primary: SessionImageRequest[] = []
-    const background: SessionImageRequest[] = []
+    const firstPage = data.image_urls.lowres['1']
+    const visibleThumbnailCount = Math.min(6, data.num_pages)
+    const primary: SessionImageRequest[] = firstPage
+      ? [{ key: firstPage, url: firstPage, priority: 'high' }]
+      : []
+    const backgroundThumbnails: SessionImageRequest[] = []
+    const backgroundPages: SessionImageRequest[] = []
     for (let page = 1; page <= data.num_pages; page++) {
       const lowresUrl = data.image_urls.lowres[String(page)]
       const thumbUrl = data.image_urls.thumbs[String(page)]
-      const requests = [lowresUrl, thumbUrl].flatMap((url) =>
-        url ? [{ key: url, url, priority: page === firstPage ? 'high' as const : 'low' as const }] : [],
-      )
-      if (page === firstPage) primary.push(...requests)
-      else background.push(...requests)
+      if (thumbUrl) {
+        const priority = page <= visibleThumbnailCount ? 'high' as const : 'low' as const
+        const target = page <= visibleThumbnailCount ? primary : backgroundThumbnails
+        target.push({ key: thumbUrl, url: thumbUrl, priority })
+      }
+      if (page > 1 && lowresUrl) {
+        backgroundPages.push({ key: lowresUrl, url: lowresUrl, priority: 'low' })
+      }
     }
-    return [...primary, ...background]
+    return [...primary, ...backgroundThumbnails, ...backgroundPages]
   }, [data.image_urls, data.num_pages])
   const sessionImageUrls = useSessionImageCache(sessionImageRequests, data)
 

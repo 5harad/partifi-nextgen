@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import Base
 from app.models import Part, Partset, Score
+from app.routers.v1 import generate_parts
 from app.services.preview import start_part_generation
 
 
@@ -129,3 +131,19 @@ def test_start_part_generation_skips_when_paste_in_progress(
     mock_lock.assert_not_called()
     mock_sync.assert_not_called()
     mock_enqueue.assert_not_called()
+
+
+@patch("app.routers.v1.verify_csrf")
+@patch("app.routers.v1.start_part_generation", return_value=None)
+@patch("app.routers.v1.get_partset_by_private_id")
+def test_generate_parts_reports_when_parts_are_already_ready(
+    mock_partset: Mock,
+    _mock_start: Mock,
+    _mock_csrf: Mock,
+) -> None:
+    mock_partset.return_value = SimpleNamespace(parts_ready=True)
+
+    response = generate_parts("priv1", "csrf", db=Mock())
+
+    assert response.job_id is None
+    assert response.parts_ready is True

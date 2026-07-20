@@ -793,7 +793,11 @@ def generate_parts(
         job_id = start_part_generation(db, partset)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return GeneratePartsResponse(status="success", job_id=job_id)
+    return GeneratePartsResponse(
+        status="success",
+        job_id=job_id,
+        parts_ready=bool(partset.parts_ready),
+    )
 
 
 @router.get(

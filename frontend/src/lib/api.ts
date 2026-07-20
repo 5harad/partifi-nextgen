@@ -255,7 +255,7 @@ export async function combineParts(
 export async function startPartGeneration(
   privateId: string,
   csrfToken: string,
-): Promise<void> {
+): Promise<{ job_id: string | null; parts_ready: boolean }> {
   const res = await apiFetch(`/api/v1/partsets/${privateId}/generate`, {
     method: 'POST',
     headers: { 'X-CSRF-Token': csrfToken },
@@ -264,6 +264,7 @@ export async function startPartGeneration(
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail || 'Failed to start part generation')
   }
+  return res.json()
 }
 
 export async function getPartgenStatus(privateId: string): Promise<PartgenProgressResponse> {

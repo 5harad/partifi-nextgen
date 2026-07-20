@@ -37,6 +37,7 @@ import type { PreviewDataResponse } from '../../types/preview'
 
 const SLIDER_RANGE = 46
 const MAX_COMBINE_PARTS = 10
+const PREPARING_INDICATOR_DELAY_MS = 200
 
 type Mode = 'spacing' | 'combine'
 
@@ -82,6 +83,7 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
   const navigate = useNavigate()
   const [data, setData] = useState<PreviewDataResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showPreparingIndicator, setShowPreparingIndicator] = useState(false)
   const [cacheError, setCacheError] = useState(false)
   const [retrying, setRetrying] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -109,6 +111,7 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
       if (!event.persisted) return
       setData(null)
       setError(null)
+      setShowPreparingIndicator(false)
       setCacheError(false)
       setReloadToken((token) => token + 1)
     }
@@ -146,6 +149,7 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
         }
 
         setData(preview)
+        setShowPreparingIndicator(false)
         setBreaks(preview.breaks)
         setSpacings(preview.spacings)
         layoutBaselineRef.current = cloneLayoutSnapshot(preview.breaks, preview.spacings)
@@ -171,6 +175,15 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
       window.clearTimeout(timeoutId)
     }
   }, [privateId, navigate, reloadToken])
+
+  useEffect(() => {
+    if (data || error) return
+    const timeoutId = window.setTimeout(
+      () => setShowPreparingIndicator(true),
+      PREPARING_INDICATOR_DELAY_MS,
+    )
+    return () => window.clearTimeout(timeoutId)
+  }, [data, error])
 
   useEffect(() => {
     onPreparingChange?.(!data && !error)
@@ -337,8 +350,8 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
         await saveLayout(privateId, { breaks, spacings }, csrf)
         layoutBaselineRef.current = cloneLayoutSnapshot(breaks, spacings)
       }
-      await startPartGeneration(privateId, csrf)
-      navigate(`/${privateId}/partgen`)
+      const generation = await startPartGeneration(privateId, csrf)
+      navigate(`/${privateId}/${generation.parts_ready ? 'parts' : 'partgen'}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start part generation')
     } finally {
@@ -484,6 +497,7 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
   }
 
   if (!data) {
+    if (!showPreparingIndicator) return null
     return (
       <TransitionWait
         message="Please wait while we prepare the score"

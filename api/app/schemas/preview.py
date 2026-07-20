@@ -46,6 +46,7 @@ class CombinePartsResponse(BaseModel):
 class GeneratePartsResponse(BaseModel):
     status: str = "success"
     job_id: str | None = None
+    parts_ready: bool = False
 
 
 class PartgenProgressResponse(BaseModel):
