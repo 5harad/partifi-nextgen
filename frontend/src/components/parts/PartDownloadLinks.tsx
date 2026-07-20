@@ -38,8 +38,10 @@ export function PartDownloadLinks({
     if (ensureOnClick) {
       try {
         await ensurePartsByAccessId(partgenAccessId)
-      } catch {
-        window.alert('Could not start part generation. Please try again.')
+      } catch (err) {
+        window.alert(
+          err instanceof Error ? err.message : 'Could not start part generation. Please try again.',
+        )
         return
       }
     }
