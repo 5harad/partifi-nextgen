@@ -3,12 +3,13 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import Base
 from app.models import Part, Partset, Score
-from app.routers.v1 import generate_parts
+from app.routers.v1 import ensure_parts, generate_parts
 from app.services.preview import start_part_generation
 
 
@@ -147,3 +148,17 @@ def test_generate_parts_reports_when_parts_are_already_ready(
 
     assert response.job_id is None
     assert response.parts_ready is True
+
+
+@patch("app.routers.v1.start_part_generation", side_effect=ValueError("No parts tagged for generation"))
+@patch("app.routers.v1.resolve_partset_access")
+def test_ensure_parts_reports_generation_start_errors(
+    mock_resolve: Mock,
+    _mock_start: Mock,
+) -> None:
+    mock_resolve.return_value = (Mock(), "owner")
+
+    with pytest.raises(HTTPException, match="No parts tagged for generation") as exc_info:
+        ensure_parts("access1", db=Mock())
+
+    assert exc_info.value.status_code == 400

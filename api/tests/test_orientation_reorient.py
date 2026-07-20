@@ -1,7 +1,7 @@
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-from app.models import Partset, Score
+from app.models import Part, Partset, Score
 from app.services.partset_pages import (
     ensure_page_images_status,
     orientation_data_payload,
@@ -46,6 +46,7 @@ def test_reset_partset_for_reorient_clears_completion_flags() -> None:
     assert partset.analysis_progress == 0.0
     assert partset.rotation_degrees == 90
     assert partset.orientation_override == "landscape"
+    db.query.assert_any_call(Part)
     cache_mock.return_value.invalidate_partset_pages.assert_called_once_with("pub01")
 
 

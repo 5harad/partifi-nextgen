@@ -838,7 +838,10 @@ def ensure_parts(access_id: str, db: Session = Depends(get_db)) -> GenerateParts
     if not resolved:
         raise HTTPException(status_code=404, detail="Partset not found")
     partset, _mode = resolved
-    job_id = ensure_parts_if_needed(db, partset)
+    try:
+        job_id = start_part_generation(db, partset)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return GeneratePartsResponse(status="success", job_id=job_id)
 
 

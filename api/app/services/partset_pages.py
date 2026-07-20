@@ -7,7 +7,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from app.models import Page, Partset, Score, Segment
+from app.models import Page, Part, Partset, Score, Segment
 from app.services.import_lock import try_acquire_import_lock
 from app.services.partset_cache_status import (
     clear_partset_cache_error,
@@ -143,6 +143,7 @@ def reset_partset_for_reorient(db: Session, partset: Partset) -> None:
     """Clear segment/analysis state so the UI shows reorient in progress immediately."""
     db.query(Segment).filter(Segment.partset_id == partset.id).delete()
     db.query(Page).filter(Page.partset_id == partset.id).delete()
+    db.query(Part).filter(Part.partset_id == partset.id).delete()
 
     now = datetime.utcnow()
     partset.status = "convert"

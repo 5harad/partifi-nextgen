@@ -61,9 +61,16 @@ export function PartgenProgressPage() {
 
         if (!data.is_complete && !data.in_progress && !ensuredRef.current) {
           ensuredRef.current = true
-          void ensurePartsByAccessId(accessId).catch(() => {
-            // Polling will surface errors; ensure is best-effort on entry.
-          })
+          try {
+            await ensurePartsByAccessId(accessId)
+          } catch (err) {
+            if (!cancelled) {
+              setErrorMessage(
+                err instanceof Error ? err.message : 'Could not start part generation.',
+              )
+            }
+            return
+          }
         }
 
         setProgress(data.total_progress)

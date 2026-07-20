@@ -36,6 +36,10 @@ def _reset_partset_for_reorient(partset_id: str) -> None:
         {"partset_id": partset_id},
     )
     db_conn.execute(
+        "DELETE FROM parts WHERE partset_id = :partset_id",
+        {"partset_id": partset_id},
+    )
+    db_conn.execute(
         "UPDATE partsets SET "
         "status = 'convert', convert_start = NOW(), convert_complete = NULL, convert_progress = 0, "
         "analysis_start = NULL, analysis_complete = NULL, analysis_progress = 0, "
