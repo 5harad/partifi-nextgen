@@ -286,7 +286,13 @@ export function LibraryPage() {
       if (cancelled || handledPendingDownloadRef.current === pendingUrl) return
       handledPendingDownloadRef.current = pendingUrl
       startPartFileDownload(pendingUrl)
-      navigate({ pathname: '/library', search: location.search }, { replace: true, state: {} })
+      const nextSearchParams = new URLSearchParams(location.search)
+      nextSearchParams.delete('partset')
+      const nextSearch = nextSearchParams.toString()
+      navigate(
+        { pathname: '/library', search: nextSearch ? `?${nextSearch}` : '' },
+        { replace: true, state: {} },
+      )
     }
 
     if (item.parts_ready) {

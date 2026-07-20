@@ -31,13 +31,15 @@ def update_partset_metadata(
     composer: str,
     publisher: str,
 ) -> None:
-    was_parts_ready = bool(partset.parts_ready)
+    from app.services.preview import _partgen_in_progress
+
+    generation_in_progress = _partgen_in_progress(partset)
     partset.title = title.strip()
     partset.composer = composer.strip()
     partset.publisher = publisher.strip() or None
     partset.mod_ts = datetime.utcnow()
     partset.parts_ready = False
-    if was_parts_ready:
+    if not generation_in_progress:
         partset.status = "analysis"
         partset.cut_start = None
         partset.cut_complete = None
