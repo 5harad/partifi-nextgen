@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { PartsetMetadata, usePartsetMetadata } from '../components/PartsetMetadata'
@@ -196,6 +196,8 @@ export function LibraryPage() {
   const [error, setError] = useState<string | null>(null)
   const handledPendingDownloadRef = useRef<string | null>(null)
   const initialPartsetIdRef = useRef(searchParams.get('partset'))
+  const pendingListScrollPartsetIdRef = useRef(searchParams.get('partset'))
+  const libraryListRef = useRef<HTMLDivElement>(null)
 
   const removeItem = useCallback((partsetId: string) => {
     setItems((prev) => {
@@ -257,6 +259,18 @@ export function LibraryPage() {
       setSelectedId(fromQuery)
     }
   }, [searchParams, items])
+
+  useLayoutEffect(() => {
+    const partsetId = pendingListScrollPartsetIdRef.current
+    if (!partsetId || selectedId !== partsetId) return
+
+    const list = libraryListRef.current
+    const selectedRow = list?.querySelector<HTMLElement>('.library-list-item.selected')
+    if (!list || !selectedRow) return
+
+    list.scrollTop = Math.max(0, selectedRow.offsetTop - (list.clientHeight - selectedRow.offsetHeight) / 2)
+    pendingListScrollPartsetIdRef.current = null
+  }, [items, selectedId])
 
   useEffect(() => {
     if (authLoading) return
@@ -360,7 +374,7 @@ export function LibraryPage() {
             </div>
           ) : (
             <>
-              <div id="library-list">
+              <div id="library-list" ref={libraryListRef}>
                 {items.map((item) => (
                   <LibraryListItem
                     key={item.partset_id}
