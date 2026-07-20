@@ -351,7 +351,7 @@ export function PreviewEditor({ privateId, onPreparingChange }: Props) {
         layoutBaselineRef.current = cloneLayoutSnapshot(breaks, spacings)
       }
       const generation = await startPartGeneration(privateId, csrf)
-      navigate(`/${privateId}/${generation.parts_ready ? 'parts' : 'partgen'}`)
+      navigate(generation.parts_ready ? `/${privateId}` : `/${privateId}/partgen`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start part generation')
     } finally {
