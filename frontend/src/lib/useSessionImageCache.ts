@@ -10,9 +10,12 @@ type PriorityRequestInit = RequestInit & {
   priority?: 'high' | 'low'
 }
 
+const MAX_CONCURRENT_IMAGE_REQUESTS = 16
+
 /**
  * Keeps dynamic images in memory for the lifetime of a mounted editor.
- * Requests always bypass the browser's persistent HTTP cache; consumers render
+ * Requests always bypass the browser's persistent HTTP cache. A bounded queue
+ * leaves browser capacity for the editor's static chrome while consumers render
  * the returned Blob URLs, so changing views never initiates a second request.
  */
 export function useSessionImageCache(
@@ -31,6 +34,7 @@ export function useSessionImageCache(
     let pending: Record<string, string> = {}
     let frame = 0
     let active = true
+    let nextRequest = 0
 
     const publish = () => {
       frame = 0
@@ -66,7 +70,16 @@ export function useSessionImageCache(
       }
     }
 
-    for (const request of requests) void load(request)
+    const loadNext = () => {
+      if (!active) return
+      const request = requests[nextRequest]
+      nextRequest += 1
+      if (!request) return
+      void load(request).finally(loadNext)
+    }
+    for (let ndx = 0; ndx < Math.min(MAX_CONCURRENT_IMAGE_REQUESTS, requests.length); ndx++) {
+      loadNext()
+    }
 
     return () => {
       active = false
