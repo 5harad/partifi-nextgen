@@ -3,12 +3,13 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { TransitionError } from '../components/TransitionError'
 import { PartsDownloadPane } from '../components/parts/PartsDownloadPane'
-import { getPartsByAccessId } from '../lib/api'
+import { getPartgenStatusByAccessId, getPartsByAccessId } from '../lib/api'
 import { isPartsetAccessId } from '../lib/partsetRoutes'
 import { startPartFileDownload, type PartsPageLocationState } from '../lib/partDownloads'
 import type { PartsDataResponse } from '../types/preview'
 
 const PARTSET_NOT_FOUND_MESSAGE = 'Partset not found'
+const PARTS_STATUS_POLL_MS = 10_000
 
 export function PartsPage() {
   const { accessId } = useParams<{ accessId: string }>()
@@ -57,6 +58,40 @@ export function PartsPage() {
     startPartFileDownload(pendingUrl)
     navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: {} })
   }, [data?.parts_ready, location.pathname, location.search, location.state, navigate])
+
+  useEffect(() => {
+    if (!data?.parts_ready || !accessId) return
+
+    let cancelled = false
+    let checking = false
+    const refreshIfStale = async () => {
+      if (cancelled || checking) return
+      checking = true
+      try {
+        const status = await getPartgenStatusByAccessId(accessId)
+        if (status.is_complete || cancelled) return
+        const parts = await getPartsByAccessId(accessId)
+        if (!cancelled) setData(parts)
+      } catch {
+        // Keep the current page usable; the next visible-tab check can retry.
+      } finally {
+        checking = false
+      }
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void refreshIfStale()
+    }
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshIfStale()
+    }, PARTS_STATUS_POLL_MS)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [accessId, data?.parts_ready])
 
   if (error) {
     return (
