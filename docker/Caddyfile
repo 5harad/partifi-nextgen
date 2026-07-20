@@ -21,6 +21,13 @@ partifi.com, www.partifi.com, www.partifi.org {
 		file_server
 	}
 
+	# Stable public artwork can be reused across pages and sessions.
+	handle /images/* {
+		root * /srv
+		header Cache-Control "public, max-age=86400"
+		file_server
+	}
+
 	handle {
 		root * /srv
 		try_files {path} /index.html
