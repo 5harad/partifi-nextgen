@@ -11,6 +11,7 @@ import type { SegmentDataResponse } from '../types/segment'
 
 const IMAGE_POLL_MS = 2000
 const IMAGE_POLL_MAX = 300
+const LOADING_INDICATOR_DELAY_MS = 200
 
 export function SegmentPage() {
   useNoIndex()
@@ -19,6 +20,7 @@ export function SegmentPage() {
   const [data, setData] = useState<SegmentDataResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showLoadingIndicator, setShowLoadingIndicator] = useState(false)
   const [warming, setWarming] = useState(false)
   const [warmProgress, setWarmProgress] = useState(0)
   const [cacheError, setCacheError] = useState(false)
@@ -29,6 +31,9 @@ export function SegmentPage() {
     if (!privateId) return
     let cancelled = false
     let timeoutId: number
+    const loadingIndicatorTimeout = window.setTimeout(() => {
+      if (!cancelled) setShowLoadingIndicator(true)
+    }, LOADING_INDICATOR_DELAY_MS)
     let pollCount = 0
 
     const poll = async () => {
@@ -38,6 +43,8 @@ export function SegmentPage() {
 
         setData(payload)
         setLoading(false)
+        setShowLoadingIndicator(false)
+        window.clearTimeout(loadingIndicatorTimeout)
 
         if (payload.image_cache_error_message) {
           setCacheError(true)
@@ -71,6 +78,8 @@ export function SegmentPage() {
         }
         setError(message)
         setLoading(false)
+        setShowLoadingIndicator(false)
+        window.clearTimeout(loadingIndicatorTimeout)
       }
     }
 
@@ -86,6 +95,7 @@ export function SegmentPage() {
     return () => {
       cancelled = true
       window.clearTimeout(timeoutId)
+      window.clearTimeout(loadingIndicatorTimeout)
     }
   }, [privateId, navigate])
 
@@ -110,7 +120,7 @@ export function SegmentPage() {
 
   return (
     <Layout showChrome={!warming}>
-      {loading ? (
+      {loading && showLoadingIndicator ? (
         <div id="main" style={{ padding: '40px', textAlign: 'center' }}>
           Loading segment editor…
         </div>
