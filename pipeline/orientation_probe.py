@@ -13,7 +13,7 @@ _PAGE_SIZE_RE = re.compile(
     r"Page size:\s+(\d+(?:\.\d+)?)\s+x\s+(\d+(?:\.\d+)?)\s+pts",
     re.IGNORECASE,
 )
-_PAGE_ROT_RE = re.compile(r"Page rot:\s+(\d+)", re.IGNORECASE)
+_PAGE_ROT_RE = re.compile(r"Page rot:\s+(-?\d+)", re.IGNORECASE)
 
 
 def infer_orientation_from_page_size(width_pt: float, height_pt: float) -> Orientation:

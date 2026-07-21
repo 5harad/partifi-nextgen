@@ -21,10 +21,12 @@ from pipeline.orientation_detect import detect_orientation_from_images
 from pipeline.page_dimensions import Orientation, get_dimensions
 from pipeline.page_render import render_page_native_lowres
 from pipeline.parallel import map_in_parallel
+from pipeline.pdf_rotation import pdf_effective_page_size_points
 
 logger = logging.getLogger(__name__)
 
 _PAGE_NUM_RE = re.compile(r"page-?(\d+)")
+_RENDER_DPI = 300
 
 
 def _page_number(path: str) -> int:
@@ -50,6 +52,29 @@ def _detect_orientation_from_burst(tempdir: str) -> Orientation:
     return detection.orientation
 
 
+def _render_dpi_for_page(pdffile: str, orientation: Orientation) -> int:
+    """Keep the intermediate native raster within the canonical high-res bounds."""
+    width_pt, height_pt = pdf_effective_page_size_points(Path(pdffile))
+    target_width, target_height = get_dimensions(orientation).highres_size
+    dpi = int(min(target_width * 72 / width_pt, target_height * 72 / height_pt))
+    return max(1, min(_RENDER_DPI, dpi))
+
+
+def _fit_image_to_canvas(image: Image.Image, size: tuple[int, int]) -> Image.Image:
+    """Scale without distortion and center the page on a white canonical canvas."""
+    width, height = image.size
+    target_width, target_height = size
+    scale = min(target_width / width, target_height / height)
+    resized_size = (max(1, round(width * scale)), max(1, round(height * scale)))
+    resized = image.resize(resized_size, Image.LANCZOS)
+    canvas = Image.new(image.mode, size, 255)
+    canvas.paste(
+        resized,
+        ((target_width - resized_size[0]) // 2, (target_height - resized_size[1]) // 2),
+    )
+    return canvas
+
+
 def pdf2png(
     pdffile: str,
     outdir: str,
@@ -59,9 +84,9 @@ def pdf2png(
     orientation: Orientation = "portrait",
     rotation_degrees: int = 0,
 ) -> None:
-    dims = get_dimensions(orientation)
     outfile = os.path.basename(pdffile).rsplit(".", 1)[0] + ".png"
     highres_file = os.path.join(outdir, "highres", outfile)
+    render_dpi = _render_dpi_for_page(pdffile, orientation)
     gs_cmd = [
         "gs",
         "-q",
@@ -70,8 +95,7 @@ def pdf2png(
         "-sDEVICE=pnggray",
         "-dDOINTERPOLATE",
         "-dUseCropBox",
-        "-dPDFFitPage",
-        f"-g{dims.gs_canvas}",
+        f"-r{render_dpi}",
         f"-sOutputFile={highres_file}",
         pdffile,
     ]
@@ -85,11 +109,13 @@ def pdf2png(
     if os.path.exists(repair_path):
         os.remove(repair_path)
 
-    im = Image.open(highres_file)
+    dims = get_dimensions(orientation)
+    with Image.open(highres_file) as source:
+        im = _fit_image_to_canvas(source, dims.highres_size)
     if rotation_degrees:
         im = im.rotate(rotation_degrees, expand=True, fillcolor=255)
-        im.save(highres_file)
         dims = get_dimensions(layout_orientation(orientation, rotation_degrees))
+    im.save(highres_file)
     lowres_im = im.resize(dims.lowres_size, Image.LANCZOS)
     lowres_file = os.path.join(outdir, "lowres", outfile)
     lowres_im.save(lowres_file)
