@@ -9,6 +9,7 @@ import pytest
 
 from scripts.migrate_pdf_rotation import (
     APPROVED_PARTSET_IDS,
+    APPROVED_ROTATION_SEQUENCES,
     _download_score_pdf,
     main,
 )
@@ -21,6 +22,7 @@ def test_only_viewer_validated_candidates_are_preapproved() -> None:
         "blbfw-frboc",
         "efibz-itxmb",
     }
+    assert APPROVED_ROTATION_SEQUENCES["dsbmc-wmhka"] == (270,) * 12 + (90,) * 2
 
 
 def test_partset_is_required() -> None:
@@ -53,7 +55,7 @@ def test_apply_requires_expected_rotation() -> None:
         [
             "migrate_pdf_rotation.py",
             "--partset",
-            "dsbmc-wmhka",
+            "qbccm-ogcoz",
             "--apply",
             "--viewer-validated",
         ],
@@ -69,7 +71,24 @@ def test_new_candidate_dry_run_does_not_assume_rotation() -> None:
     ):
         main()
 
-    migrate.assert_called_once_with("new-partset", apply=False, expected_rotation=None)
+    migrate.assert_called_once_with("new-partset", apply=False, expected_rotations=None)
+
+
+def test_mixed_rotation_candidate_uses_approved_sequence() -> None:
+    with (
+        patch(
+            "sys.argv",
+            ["migrate_pdf_rotation.py", "--partset", "dsbmc-wmhka", "--apply", "--viewer-validated"],
+        ),
+        patch("scripts.migrate_pdf_rotation._migrate") as migrate,
+    ):
+        main()
+
+    migrate.assert_called_once_with(
+        "dsbmc-wmhka",
+        apply=True,
+        expected_rotations=(270,) * 12 + (90,) * 2,
+    )
 
 
 def test_dry_run_download_uses_scratch_path(tmp_path: Path) -> None:

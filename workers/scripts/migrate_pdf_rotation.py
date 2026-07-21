@@ -5,8 +5,7 @@ Run this only in the worker environment. The default mode is read-only:
     python scripts/migrate_pdf_rotation.py --partset <partset-id>
 
 After reviewing its report and a viewer-oriented preview, an approved
-single-partset candidate may be migrated with --apply, --viewer-validated,
-and the source PDF rotation reported by the dry run.
+single-partset candidate may be migrated with --apply and --viewer-validated.
 """
 
 from __future__ import annotations
@@ -38,6 +37,9 @@ APPROVED_PARTSET_IDS = {
     "qbccm-ogcoz",
     "blbfw-frboc",
     "efibz-itxmb",
+}
+APPROVED_ROTATION_SEQUENCES: dict[str, tuple[int, ...]] = {
+    "dsbmc-wmhka": (270,) * 12 + (90,) * 2,
 }
 
 
@@ -125,7 +127,12 @@ def _apply(row, rendered_pages: Path, score_orientation: str) -> None:
     run_gen_parts(row.id, job_id="pdf-rotation-migration")
 
 
-def _migrate(partset_id: str, *, apply: bool, expected_rotation: int | None) -> None:
+def _migrate(
+    partset_id: str,
+    *,
+    apply: bool,
+    expected_rotations: tuple[int, ...] | None,
+) -> None:
     row = _partset_row(partset_id)
     if not int(row.rotation_degrees or 0):
         raise RuntimeError(f"Partset {partset_id} has no manual rotation to migrate")
@@ -136,12 +143,12 @@ def _migrate(partset_id: str, *, apply: bool, expected_rotation: int | None) -> 
     try:
         score_pdf = _download_score_pdf(row.score_id, workdir)
         rotations = _source_rotations(score_pdf, workdir)
-        if not rotations or len(set(rotations)) != 1:
-            raise RuntimeError(f"Score {row.score_id} does not have uniform PDF rotation metadata: {rotations}")
-        actual_rotation = rotations[0]
-        if expected_rotation is not None and actual_rotation != expected_rotation:
+        if not rotations:
+            raise RuntimeError(f"Score {row.score_id} has no PDF pages")
+        if expected_rotations is not None and tuple(rotations) != expected_rotations:
             raise RuntimeError(
-                f"Score {row.score_id} has /Rotate {actual_rotation}, not expected {expected_rotation}"
+                f"Score {row.score_id} has PDF rotations {rotations}, "
+                f"not expected {list(expected_rotations)}"
             )
 
         orientation = _score_orientation(row.score_id)
@@ -149,7 +156,7 @@ def _migrate(partset_id: str, *, apply: bool, expected_rotation: int | None) -> 
         siblings = _score_sibling_partsets(row.score_id, row.id)
         print(
             f"{partset_id}: private_id={row.private_id} score={row.score_id} "
-            f"rotation={actual_rotation} orientation_override={row.orientation_override} "
+            f"rotations={rotations} orientation_override={row.orientation_override} "
             f"siblings={siblings} apply={apply}"
         )
         if apply:
@@ -188,13 +195,20 @@ def main() -> None:
     if args.apply and not args.viewer_validated:
         parser.error("--apply requires --viewer-validated")
     if args.apply:
+        if len(args.partset) != 1:
+            parser.error("--apply migrates exactly one partset at a time")
         if args.expected_rotation is None:
-            parser.error("--apply requires --expected-rotation")
+            approved_sequence = APPROVED_ROTATION_SEQUENCES.get(args.partset[0])
+            if approved_sequence is None:
+                parser.error("--apply requires --expected-rotation")
         unapproved = [partset_id for partset_id in args.partset if partset_id not in APPROVED_PARTSET_IDS]
         if unapproved:
             parser.error(f"--apply requires approved candidates: {', '.join(unapproved)}")
     for partset_id in args.partset:
-        _migrate(partset_id, apply=args.apply, expected_rotation=args.expected_rotation)
+        expected_rotations = APPROVED_ROTATION_SEQUENCES.get(partset_id)
+        if expected_rotations is None and args.expected_rotation is not None:
+            expected_rotations = (args.expected_rotation,)
+        _migrate(partset_id, apply=args.apply, expected_rotations=expected_rotations)
 
 
 if __name__ == "__main__":
