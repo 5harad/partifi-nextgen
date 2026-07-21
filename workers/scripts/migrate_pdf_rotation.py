@@ -81,7 +81,7 @@ def _render_normalized_score(score_pdf: Path, workdir: Path, orientation: str) -
     return pages_dir
 
 
-def _apply(row, rendered_pages: Path) -> None:
+def _apply(row, rendered_pages: Path, score_orientation: str) -> None:
     cache = get_local_cache()
     cache.invalidate_score_pages(row.score_id)
     cache.copy_pages_tree(row.score_id, rendered_pages)
@@ -92,6 +92,10 @@ def _apply(row, rendered_pages: Path) -> None:
         """
         UPDATE partsets
         SET rotation_degrees = 0,
+            orientation_override = CASE
+                WHEN orientation_override = :score_orientation THEN NULL
+                ELSE orientation_override
+            END,
             parts_ready = 0,
             status = 'analysis',
             cut_start = NULL,
@@ -103,7 +107,7 @@ def _apply(row, rendered_pages: Path) -> None:
             last_job_id = NULL
         WHERE id = :id
         """,
-        {"id": row.id},
+        {"id": row.id, "score_orientation": score_orientation},
     )
     run_gen_parts(row.id, job_id="pdf-rotation-migration")
 
@@ -132,7 +136,7 @@ def _migrate(partset_id: str, *, apply: bool) -> None:
             f"rotations={rotations} orientation_override={row.orientation_override} apply={apply}"
         )
         if apply:
-            _apply(row, rendered_pages)
+            _apply(row, rendered_pages, orientation)
             print(f"{partset_id}: migrated and parts regenerated")
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
