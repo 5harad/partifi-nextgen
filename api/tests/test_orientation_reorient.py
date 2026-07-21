@@ -102,6 +102,7 @@ def test_ensure_page_images_status_enqueues_warm_when_rotated_cache_missing() ->
             "partset_id": "pub01",
             "score_id": "score01",
             "rotation_degrees": 90,
+            "split_two_up": False,
         },
     )
     db.commit.assert_called_once()
@@ -154,9 +155,38 @@ def test_start_reorient_persists_target_rotation() -> None:
             "partset_id": "pub01",
             "score_id": "score01",
             "rotation_degrees": 90,
+            "split_two_up": False,
         },
     )
     db.commit.assert_called_once()
+
+
+def test_start_reorient_split_two_up_requires_landscape_and_persists_layout() -> None:
+    partset = _completed_partset()
+    partset.rotation_degrees = 0
+    score = Score(id="score01", orientation="landscape")
+    db = MagicMock()
+    db.get.return_value = score
+    db.query.return_value.filter.return_value.delete.return_value = 0
+
+    with (
+        patch("app.services.partset_pages.get_local_cache"),
+        patch("app.services.partset_pages.try_acquire_import_lock", return_value=True),
+        patch("app.services.partset_pages.enqueue_job", return_value="job-1") as enqueue_mock,
+    ):
+        start_reorient(db, partset, 0, split_two_up=True)
+
+    assert partset.split_two_up is True
+    assert partset.orientation_override == "portrait"
+    enqueue_mock.assert_called_once_with(
+        "reorient_partset",
+        {
+            "partset_id": "pub01",
+            "score_id": "score01",
+            "rotation_degrees": 0,
+            "split_two_up": True,
+        },
+    )
 
 
 def test_start_reorient_clears_override_when_rotation_is_zero() -> None:

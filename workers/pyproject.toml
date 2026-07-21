@@ -14,6 +14,7 @@ dependencies = [
     "reportlab==4.2.5",
     "httpx==0.28.1",
     "anyascii>=0.3.3",
+    "pymupdf>=1.28.0",
 ]
 
 [tool.uv]

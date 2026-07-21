@@ -8,6 +8,7 @@ export type OrientationDataResponse = {
   private_id: string
   score_orientation: 'portrait' | 'landscape'
   current_rotation_degrees: number
+  current_split_two_up: boolean
   current_orientation: 'portrait' | 'landscape'
   rotation_options: OrientationOption[]
   reimport_in_progress: boolean

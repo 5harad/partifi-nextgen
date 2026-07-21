@@ -20,6 +20,7 @@ from pipeline.partset_orientation import (
 )
 from pipeline.partset_page_render import render_oriented_page
 from score_cache import fetch_score_orientation
+from split_two_up import split_two_up_pdf
 
 import db_conn
 
@@ -106,30 +107,62 @@ def _render_partset_pages(
     return sorted(lowres_files)
 
 
+def _render_split_two_up_pages(
+    *,
+    score_id: str,
+    rotation_degrees: int,
+    pages_dir: Path,
+    partset_id: str | None = None,
+) -> list[str]:
+    """Split a viewer-oriented score PDF, then use the normal raster pipeline."""
+    from pdf2png import par_pdf2png
+
+    cache = get_local_cache()
+    derived_pdf = pages_dir.parent / "split-two-up.pdf"
+    split_two_up_pdf(
+        cache.ensure_score_pdf(score_id),
+        derived_pdf,
+        rotation_degrees=rotation_degrees,
+    )
+    par_pdf2png(
+        str(derived_pdf),
+        str(pages_dir),
+        partset_id,
+        orientation="portrait",
+    )
+    return [str(path) for path in sorted((pages_dir / "lowres").glob("*.png"))]
+
+
 def rebuild_partset_page_cache(
     partset_id: str,
     score_id: str,
     rotation_degrees: int,
     *,
+    split_two_up: bool = False,
     workdir: Path,
     job_id: str | None = None,
 ) -> None:
     """Render rotated score pages into the partset page cache."""
     rotation_degrees = normalize_rotation_degrees(rotation_degrees)
-    if not partset_uses_custom_pages(rotation_degrees):
+    if not (split_two_up or partset_uses_custom_pages(rotation_degrees)):
         return
-    gs_orientation = fetch_score_orientation(score_id)
-    num_pages = _fetch_num_pages(score_id)
     pages_dir = workdir / "pages"
     pages_dir.mkdir(parents=True, exist_ok=True)
-    _render_partset_pages(
-        score_id=score_id,
-        score_orientation=gs_orientation,
-        rotation_degrees=rotation_degrees,
-        pages_dir=pages_dir,
-        num_pages=num_pages,
-        job_id=job_id,
-    )
+    if split_two_up:
+        _render_split_two_up_pages(
+            score_id=score_id,
+            rotation_degrees=rotation_degrees,
+            pages_dir=pages_dir,
+        )
+    else:
+        _render_partset_pages(
+            score_id=score_id,
+            score_orientation=fetch_score_orientation(score_id),
+            rotation_degrees=rotation_degrees,
+            pages_dir=pages_dir,
+            num_pages=_fetch_num_pages(score_id),
+            job_id=job_id,
+        )
     get_local_cache().copy_partset_pages_tree(partset_id, pages_dir)
 
 
@@ -138,11 +171,12 @@ def run_reorient_partset(
     score_id: str,
     rotation_degrees: int,
     *,
+    split_two_up: bool = False,
     job_id: str | None = None,
 ) -> None:
     rotation_degrees = normalize_rotation_degrees(rotation_degrees)
     gs_orientation = fetch_score_orientation(score_id)
-    effective = layout_orientation(gs_orientation, rotation_degrees)
+    effective = "portrait" if split_two_up else layout_orientation(gs_orientation, rotation_degrees)
 
     suffix = job_id or "unknown"
     workdir = Path(f"/tmp/partifi/{partset_id}/reorient-{suffix}")
@@ -157,7 +191,6 @@ def run_reorient_partset(
         cache.invalidate_parts(partset_id)
         cache.invalidate_partset_pages(partset_id)
 
-        num_pages = _fetch_num_pages(score_id)
         pages_dir = workdir / "pages"
         pages_dir.mkdir(parents=True, exist_ok=True)
 
@@ -169,13 +202,21 @@ def run_reorient_partset(
             effective,
         )
 
-        if partset_uses_custom_pages(rotation_degrees):
+        if split_two_up:
+            lowres_files = _render_split_two_up_pages(
+                score_id=score_id,
+                rotation_degrees=rotation_degrees,
+                pages_dir=pages_dir,
+                partset_id=partset_id,
+            )
+            cache.copy_partset_pages_tree(partset_id, pages_dir)
+        elif partset_uses_custom_pages(rotation_degrees):
             lowres_files = _render_partset_pages(
                 score_id=score_id,
                 score_orientation=gs_orientation,
                 rotation_degrees=rotation_degrees,
                 pages_dir=pages_dir,
-                num_pages=num_pages,
+                num_pages=_fetch_num_pages(score_id),
                 partset_id=partset_id,
                 job_id=job_id,
             )
@@ -188,11 +229,15 @@ def run_reorient_partset(
             )
 
         db_conn.execute(
-            "UPDATE partsets SET orientation_override = :orientation, rotation_degrees = :rotation "
+            "UPDATE partsets SET orientation_override = :orientation, rotation_degrees = :rotation, "
+            "split_two_up = :split_two_up "
             "WHERE id = :id",
             {
-                "orientation": orientation_override_for_rotation(gs_orientation, rotation_degrees),
+                "orientation": "portrait"
+                if split_two_up
+                else orientation_override_for_rotation(gs_orientation, rotation_degrees),
                 "rotation": rotation_degrees,
+                "split_two_up": split_two_up,
                 "id": partset_id,
             },
         )

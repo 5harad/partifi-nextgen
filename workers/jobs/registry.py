@@ -33,12 +33,14 @@ JOB_HANDLERS: dict[str, JobHandler] = {
         payload["partset_id"],
         payload["score_id"],
         payload["rotation_degrees"],
+        split_two_up=payload.get("split_two_up", False),
         job_id=payload.get("job_id"),
     ),
     "warm_partset_pages": lambda payload: run_warm_partset_pages(
         payload["partset_id"],
         payload["score_id"],
         payload["rotation_degrees"],
+        split_two_up=payload.get("split_two_up", False),
         job_id=payload.get("job_id"),
     ),
 }

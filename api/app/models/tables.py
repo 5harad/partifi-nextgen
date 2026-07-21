@@ -84,6 +84,7 @@ class Partset(Base):
         Enum("portrait", "landscape", name="partset_orientation_override"), nullable=True
     )
     rotation_degrees: Mapped[int] = mapped_column(Integer, default=0)
+    split_two_up: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class OriginalPage(Base):

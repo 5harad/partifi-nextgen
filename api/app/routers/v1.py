@@ -629,7 +629,12 @@ def reorient_partset(
     if not partset.import_complete:
         raise HTTPException(status_code=400, detail="Import not complete")
     try:
-        job_id = start_reorient(db, partset, body.rotation_degrees)
+        job_id = start_reorient(
+            db,
+            partset,
+            body.rotation_degrees,
+            split_two_up=body.split_two_up,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ReorientResponse(status="started", job_id=job_id)

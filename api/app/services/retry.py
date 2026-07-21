@@ -27,7 +27,10 @@ def partset_needs_reorient(partset: Partset) -> bool:
     """True when a rotated partset still needs convert/analysis (not a fresh import)."""
     if not partset.score_id or not partset.import_complete:
         return False
-    if not partset_uses_custom_pages(int(partset.rotation_degrees or 0)):
+    if not (
+        partset.split_two_up
+        or partset_uses_custom_pages(int(partset.rotation_degrees or 0))
+    ):
         return False
     return not import_pipeline_complete(partset)
 
@@ -87,6 +90,7 @@ def ensure_import_if_needed(db: Session, partset: Partset) -> str | None:
                     "partset_id": partset.id,
                     "score_id": partset.score_id,
                     "rotation_degrees": int(partset.rotation_degrees or 0),
+                    "split_two_up": bool(partset.split_two_up),
                 },
             )
         else:
@@ -127,6 +131,7 @@ def retry_partset_pipeline(db: Session, partset: Partset) -> tuple[str, str | No
                         "partset_id": partset.id,
                         "score_id": partset.score_id,
                         "rotation_degrees": int(partset.rotation_degrees or 0),
+                        "split_two_up": bool(partset.split_two_up),
                     },
                 )
                 db.commit()

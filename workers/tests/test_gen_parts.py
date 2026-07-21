@@ -73,7 +73,7 @@ def test_gen_parts_warms_cache_when_highres_missing(
     ]
     mock_fetchone.side_effect = [
         MagicMock(score_id="abc12", title="T", composer="C"),
-        MagicMock(rotation_degrees=0),
+        MagicMock(rotation_degrees=0, split_two_up=False),
     ]
 
     cache = MagicMock()

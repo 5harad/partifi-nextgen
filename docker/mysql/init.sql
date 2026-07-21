@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS partsets (
     paste_progress FLOAT NOT NULL DEFAULT 0,
     orientation_override ENUM('portrait', 'landscape') NULL,
     rotation_degrees INT NOT NULL DEFAULT 0,
+    split_two_up BOOLEAN NOT NULL DEFAULT 0,
     INDEX idx_partsets_score_id (score_id),
     UNIQUE KEY uq_partsets_private_id (private_id),
     INDEX idx_partsets_last_access (last_access),

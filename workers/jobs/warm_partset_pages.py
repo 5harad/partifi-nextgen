@@ -19,10 +19,11 @@ def run_warm_partset_pages(
     score_id: str,
     rotation_degrees: int,
     *,
+    split_two_up: bool = False,
     job_id: str | None = None,
 ) -> None:
     rotation_degrees = normalize_rotation_degrees(rotation_degrees)
-    if not partset_uses_custom_pages(rotation_degrees):
+    if not (split_two_up or partset_uses_custom_pages(rotation_degrees)):
         return
 
     suffix = job_id or "unknown"
@@ -33,14 +34,16 @@ def run_warm_partset_pages(
 
     try:
         logger.info(
-            "Warming rotated page cache for partset %s (rotation=%s)",
+            "Warming custom page cache for partset %s (rotation=%s split=%s)",
             partset_id,
             rotation_degrees,
+            split_two_up,
         )
         rebuild_partset_page_cache(
             partset_id,
             score_id,
             rotation_degrees,
+            split_two_up=split_two_up,
             workdir=workdir,
             job_id=job_id,
         )

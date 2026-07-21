@@ -49,6 +49,7 @@ export function OrientationPage() {
   const navigate = useNavigate()
   const [data, setData] = useState<OrientationDataResponse | null>(null)
   const [selectedDegrees, setSelectedDegrees] = useState(0)
+  const [splitTwoUpDegrees, setSplitTwoUpDegrees] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -74,6 +75,9 @@ export function OrientationPage() {
         setData(payload)
         if (!payload.reimport_in_progress && !wasReimportingRef.current) {
           setSelectedDegrees(payload.current_rotation_degrees)
+          setSplitTwoUpDegrees(
+            payload.current_split_two_up ? payload.current_rotation_degrees : null,
+          )
         }
         setLoading(false)
         setError(null)
@@ -172,7 +176,12 @@ export function OrientationPage() {
       setSubmitting(true)
       setError(null)
       const token = await getCsrfToken()
-      await reorientPartset(privateId, selectedDegrees, token)
+      await reorientPartset(
+        privateId,
+        selectedDegrees,
+        splitTwoUpDegrees === selectedDegrees,
+        token,
+      )
       wasReimportingRef.current = true
       sawReimportInProgressRef.current = true
       setLoading(false)
@@ -241,22 +250,62 @@ export function OrientationPage() {
                   const selected = option.degrees === selectedDegrees
                   const width = Math.round(option.displayWidth * (previewLayout?.rowScale ?? 1))
                   const height = Math.round(option.displayHeight * (previewLayout?.rowScale ?? 1))
+                  const splitSelected = splitTwoUpDegrees === option.degrees
                   return (
-                    <button
-                      key={option.degrees}
-                      type="button"
-                      className={`orientation-option${selected ? ' orientation-option-selected' : ''}`}
-                      onClick={() => setSelectedDegrees(option.degrees)}
-                      aria-label={`Rotate ${option.degrees} degrees`}
-                      aria-pressed={selected}
-                    >
-                      <img
-                        src={option.preview_url}
-                        alt=""
-                        className="orientation-preview-img"
-                        style={{ width, height }}
-                      />
-                    </button>
+                    <div key={option.degrees}>
+                      <button
+                        type="button"
+                        className={`orientation-option${selected ? ' orientation-option-selected' : ''}`}
+                        onClick={() => setSelectedDegrees(option.degrees)}
+                        aria-label={`Rotate ${option.degrees} degrees`}
+                        aria-pressed={selected}
+                      >
+                        <span style={{ display: 'block', position: 'relative' }}>
+                          <img
+                            src={option.preview_url}
+                            alt=""
+                            className="orientation-preview-img"
+                            style={{ width, height }}
+                          />
+                          {selected && splitSelected && option.orientation === 'landscape' && (
+                            <>
+                              <span
+                                aria-hidden="true"
+                                style={{
+                                  position: 'absolute',
+                                  top: 0,
+                                  bottom: 0,
+                                  left: '50%',
+                                  borderLeft: '2px dashed rgba(70, 54, 34, 0.9)',
+                                }}
+                              />
+                              <span style={{ position: 'absolute', left: '25%', top: 6, transform: 'translateX(-50%)' }}>Page 1</span>
+                              <span style={{ position: 'absolute', left: '75%', top: 6, transform: 'translateX(-50%)' }}>Page 2</span>
+                            </>
+                          )}
+                        </span>
+                      </button>
+                      {option.orientation === 'landscape' && (
+                        <label
+                          style={{
+                            display: 'block',
+                            marginTop: 7,
+                            textAlign: 'center',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected && splitSelected}
+                            disabled={!selected}
+                            onChange={(event) =>
+                              setSplitTwoUpDegrees(event.target.checked ? option.degrees : null)
+                            }
+                          />{' '}
+                          Two columns
+                        </label>
+                      )}
+                    </div>
                   )
                 })}
               </div>

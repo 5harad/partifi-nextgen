@@ -148,6 +148,7 @@ export async function getOrientationData(privateId: string): Promise<Orientation
 export async function reorientPartset(
   privateId: string,
   rotationDegrees: number,
+  splitTwoUp: boolean,
   csrfToken: string,
 ): Promise<{ status: string; job_id: string }> {
   const res = await apiFetch(`/api/v1/partsets/${privateId}/reorient`, {
@@ -156,7 +157,7 @@ export async function reorientPartset(
       'Content-Type': 'application/json',
       'X-CSRF-Token': csrfToken,
     },
-    body: JSON.stringify({ rotation_degrees: rotationDegrees }),
+    body: JSON.stringify({ rotation_degrees: rotationDegrees, split_two_up: splitTwoUp }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))

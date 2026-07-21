@@ -29,6 +29,8 @@ from pipeline.partset_orientation import (
 
 
 def effective_orientation(partset: Partset, score: Score | None) -> str:
+    if partset.split_two_up:
+        return "portrait"
     return effective_partset_orientation(
         score_orientation=score.orientation if score and score.orientation else "portrait",
         orientation_override=partset.orientation_override,
@@ -37,7 +39,9 @@ def effective_orientation(partset: Partset, score: Score | None) -> str:
 
 
 def uses_custom_pages(partset: Partset) -> bool:
-    return partset_uses_custom_pages(int(partset.rotation_degrees or 0))
+    return bool(partset.split_two_up) or partset_uses_custom_pages(
+        int(partset.rotation_degrees or 0)
+    )
 
 
 def ensure_page_image_path(
@@ -80,6 +84,7 @@ def _enqueue_warm_partset_pages(db: Session, partset: Partset) -> bool:
             "partset_id": partset.id,
             "score_id": partset.score_id,
             "rotation_degrees": int(partset.rotation_degrees or 0),
+            "split_two_up": bool(partset.split_two_up),
         },
     )
     db.commit()
@@ -170,7 +175,13 @@ def reset_partset_for_reorient(db: Session, partset: Partset) -> None:
     cache.invalidate_partset_pages(partset.id)
 
 
-def start_reorient(db: Session, partset: Partset, rotation_degrees: int) -> str:
+def start_reorient(
+    db: Session,
+    partset: Partset,
+    rotation_degrees: int,
+    *,
+    split_two_up: bool = False,
+) -> str:
     if not partset.score_id:
         raise ValueError("Partset has no score")
     if not partset.import_complete:
@@ -179,16 +190,23 @@ def start_reorient(db: Session, partset: Partset, rotation_degrees: int) -> str:
     if not score:
         raise ValueError("Partset has no score")
     rotation_degrees = normalize_rotation_degrees(rotation_degrees)
+    score_orientation = score.orientation if score.orientation else "portrait"
+    if split_two_up and layout_orientation(score_orientation, rotation_degrees) != "landscape":
+        raise ValueError("Two-column splitting requires a landscape orientation")
     if not try_acquire_import_lock(partset.id):
         raise ValueError("A reorient is already in progress for this partset")
 
     reset_partset_for_reorient(db, partset)
 
-    score_orientation = score.orientation if score.orientation else "portrait"
     partset.rotation_degrees = rotation_degrees
-    partset.orientation_override = orientation_override_for_rotation(  # type: ignore[assignment]
-        score_orientation,
-        rotation_degrees,
+    partset.split_two_up = split_two_up
+    partset.orientation_override = (
+        "portrait"
+        if split_two_up
+        else orientation_override_for_rotation(  # type: ignore[assignment]
+            score_orientation,
+            rotation_degrees,
+        )
     )
 
     job_id = enqueue_job(
@@ -197,6 +215,7 @@ def start_reorient(db: Session, partset: Partset, rotation_degrees: int) -> str:
             "partset_id": partset.id,
             "score_id": partset.score_id,
             "rotation_degrees": rotation_degrees,
+            "split_two_up": split_two_up,
         },
     )
     db.commit()
@@ -229,6 +248,7 @@ def orientation_data_payload(db: Session, partset: Partset, score: Score) -> dic
         "private_id": partset.private_id or "",
         "score_orientation": score_orientation,
         "current_rotation_degrees": current_degrees,
+        "current_split_two_up": bool(partset.split_two_up),
         "current_orientation": effective_orientation(partset, score),
         "rotation_options": [
             orientation_option_payload(partset.private_id or "", degrees, score_orientation)

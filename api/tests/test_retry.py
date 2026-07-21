@@ -119,6 +119,7 @@ def test_ensure_import_enqueues_reorient_when_rotated_incomplete(
             "partset_id": "pub01",
             "score_id": "score1",
             "rotation_degrees": 90,
+            "split_two_up": False,
         },
     )
     db.commit.assert_called_once()
@@ -162,6 +163,7 @@ def test_retry_reorient_when_rotated_incomplete(_mock_enqueue: patch, _mock_lock
             "partset_id": "pub01",
             "score_id": "score1",
             "rotation_degrees": 270,
+            "split_two_up": False,
         },
     )
 

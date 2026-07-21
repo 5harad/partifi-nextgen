@@ -13,6 +13,7 @@ class OrientationDataResponse(BaseModel):
     private_id: str
     score_orientation: Literal["portrait", "landscape"]
     current_rotation_degrees: int = 0
+    current_split_two_up: bool = False
     current_orientation: Literal["portrait", "landscape"]
     rotation_options: list[OrientationOption]
     reimport_in_progress: bool = False
@@ -23,6 +24,7 @@ class OrientationDataResponse(BaseModel):
 
 class ReorientRequest(BaseModel):
     rotation_degrees: int = Field(ge=0, le=270)
+    split_two_up: bool = False
 
 
 class ReorientResponse(BaseModel):

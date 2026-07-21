@@ -158,8 +158,8 @@ export function SegmentEditor({ data }: Props) {
 
   const leftMargin = Math.min(leftMarginPx, rightMarginPx)
   const rightMargin = Math.max(leftMarginPx, rightMarginPx)
-  const leftGrayWidth = Math.min(leftMarginPx, rightMarginPx) + 7
-  const rightGrayWidth = viewerWidth - 7 - Math.max(leftMarginPx, rightMarginPx)
+  const leftGrayWidth = Math.min(leftMarginPx, rightMarginPx)
+  const rightGrayWidth = viewerWidth - Math.max(leftMarginPx, rightMarginPx)
 
   const sliderHandleLeft = Math.min(99, Math.round(50 + -rotation * 5))
 
@@ -952,7 +952,8 @@ export function SegmentEditor({ data }: Props) {
             </div>
           </div>
           <p id="orientation-hint">
-            Page sideways or upside down?{' '}
+            Sideways, upside down, or double column?
+            <br />
             <Link className="red" to={`/${data.private_id}/orientation`}>
               Fix page orientation
             </Link>

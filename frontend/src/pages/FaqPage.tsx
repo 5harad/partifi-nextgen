@@ -24,9 +24,9 @@ const FAQ_ITEMS: FaqItem[] = [
     ),
   },
   {
-    question: 'Can I partifi a landscape score?',
+    question: 'Can I partifi a landscape or two-column score?',
     answer:
-      'Yes! Partifi supports landscape scores and tries to automatically detect the correct page orientation when you first import a PDF.\n\nBut sometimes a score is landscape in disguise: the PDF is portrait-shaped, but the music is turned sideways on the page. Partifi goes by the page dimensions, so those files import as portrait and won\u2019t look right. If that happens, click on \u201cFix page orientation\u201d in Step 2 (the option is right below the score). Partifi re-analyzes the score in the correct orientation and you should be good to go.',
+      'Yes! Partifi supports landscape scores and tries to automatically detect the correct page orientation when you first import a PDF.\n\nBut sometimes a score is landscape in disguise: the PDF is portrait-shaped, but the music is turned sideways on the page. And some landscape pages contain two side-by-side columns of music. If either happens, click on \u201cFix page orientation\u201d in Step 2 (the option is right below the score). Choose the upright orientation; for a two-column page, select \u201cTwo columns\u201d to split it into left and right portrait pages. Partifi re-analyzes the score after this change, which resets existing segments and generated parts.',
   },
   {
     question: 'Partifi doesn\u2019t seem to be working correctly. What can I do?',

@@ -184,11 +184,12 @@ def _run_gen_parts(partset_id: str, workdir: Path, *, job_id: str | None = None)
     pages_needed = sorted({row["page"] for row in segment_rows})
     cache = get_local_cache()
     rotation_row = fetchone(
-        "SELECT rotation_degrees FROM partsets WHERE id = :id",
+        "SELECT rotation_degrees, split_two_up FROM partsets WHERE id = :id",
         {"id": partset_id},
     )
     rotation_degrees = int(rotation_row.rotation_degrees or 0) if rotation_row else 0
-    uses_partset_pages = partset_uses_custom_pages(rotation_degrees)
+    uses_partset_pages = bool(rotation_row.split_two_up) if rotation_row else False
+    uses_partset_pages = uses_partset_pages or partset_uses_custom_pages(rotation_degrees)
     if uses_partset_pages and not cache.partset_has_kind(partset_id, "highres"):
         raise RuntimeError(
             f"Rotated page images missing from cache for partset {partset_id}; reorient the score"
