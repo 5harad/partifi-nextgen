@@ -8,14 +8,19 @@ from unittest.mock import patch
 import pytest
 
 from scripts.migrate_pdf_rotation import (
-    APPROVED_PARTSET_ROTATIONS,
+    APPROVED_PARTSET_IDS,
     _download_score_pdf,
     main,
 )
 
 
-def test_no_candidates_are_preapproved_after_completed_migrations() -> None:
-    assert APPROVED_PARTSET_ROTATIONS == {}
+def test_only_viewer_validated_candidates_are_preapproved() -> None:
+    assert APPROVED_PARTSET_IDS == {
+        "dsbmc-wmhka",
+        "qbccm-ogcoz",
+        "blbfw-frboc",
+        "efibz-itxmb",
+    }
 
 
 def test_partset_is_required() -> None:
@@ -37,6 +42,21 @@ def test_apply_requires_approved_candidate() -> None:
     with patch(
         "sys.argv",
         ["migrate_pdf_rotation.py", "--partset", "new-partset", "--apply", "--viewer-validated"],
+    ):
+        with pytest.raises(SystemExit, match="2"):
+            main()
+
+
+def test_apply_requires_expected_rotation() -> None:
+    with patch(
+        "sys.argv",
+        [
+            "migrate_pdf_rotation.py",
+            "--partset",
+            "dsbmc-wmhka",
+            "--apply",
+            "--viewer-validated",
+        ],
     ):
         with pytest.raises(SystemExit, match="2"):
             main()

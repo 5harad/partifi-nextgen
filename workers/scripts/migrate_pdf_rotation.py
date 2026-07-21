@@ -5,7 +5,8 @@ Run this only in the worker environment. The default mode is read-only:
     python scripts/migrate_pdf_rotation.py --partset <partset-id>
 
 After reviewing its report and a viewer-oriented preview, an approved
-single-partset candidate may be migrated with --apply and --viewer-validated.
+single-partset candidate may be migrated with --apply, --viewer-validated,
+and the source PDF rotation reported by the dry run.
 """
 
 from __future__ import annotations
@@ -30,10 +31,14 @@ from pdf_repair import burst_score_pages
 from pipeline.pdf_rotation import pdf_rotation_degrees
 from s3_storage import download_file, score_pdf_s3_key
 
-# Add a partset only after its prospective render, stored segment geometry, and
-# score-sharing relationships have been reviewed. Current migration candidates
-# have already completed, so this remains intentionally empty.
-APPROVED_PARTSET_ROTATIONS: dict[str, int] = {}
+# Add a partset only after its prospective render and stored segment geometry
+# have been reviewed. Shared-score groups remain blocked by _migrate.
+APPROVED_PARTSET_IDS = {
+    "dsbmc-wmhka",
+    "qbccm-ogcoz",
+    "blbfw-frboc",
+    "efibz-itxmb",
+}
 
 
 def _partset_row(partset_id: str):
@@ -173,16 +178,23 @@ def main() -> None:
         required=True,
         help="Internal partset ID to inspect or migrate",
     )
+    parser.add_argument(
+        "--expected-rotation",
+        type=int,
+        choices=(0, 90, 180, 270),
+        help="Source PDF /Rotate value reported by a successful dry run; required with --apply",
+    )
     args = parser.parse_args()
     if args.apply and not args.viewer_validated:
         parser.error("--apply requires --viewer-validated")
     if args.apply:
-        unapproved = [partset_id for partset_id in args.partset if partset_id not in APPROVED_PARTSET_ROTATIONS]
+        if args.expected_rotation is None:
+            parser.error("--apply requires --expected-rotation")
+        unapproved = [partset_id for partset_id in args.partset if partset_id not in APPROVED_PARTSET_IDS]
         if unapproved:
             parser.error(f"--apply requires approved candidates: {', '.join(unapproved)}")
     for partset_id in args.partset:
-        expected_rotation = APPROVED_PARTSET_ROTATIONS.get(partset_id)
-        _migrate(partset_id, apply=args.apply, expected_rotation=expected_rotation)
+        _migrate(partset_id, apply=args.apply, expected_rotation=args.expected_rotation)
 
 
 if __name__ == "__main__":
