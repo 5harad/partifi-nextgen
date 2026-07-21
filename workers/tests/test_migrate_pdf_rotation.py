@@ -8,23 +8,48 @@ from unittest.mock import patch
 import pytest
 
 from scripts.migrate_pdf_rotation import (
-    CONFIRMED_PARTSET_ROTATIONS,
+    APPROVED_PARTSET_ROTATIONS,
     _download_score_pdf,
     main,
 )
 
 
-def test_confirmed_candidates_use_internal_partset_ids_and_actual_metadata() -> None:
-    assert CONFIRMED_PARTSET_ROTATIONS == {
-        "jigmi-xqpek": 270,
-        "dliol-bejej": 270,
-    }
+def test_no_candidates_are_preapproved_after_completed_migrations() -> None:
+    assert APPROVED_PARTSET_ROTATIONS == {}
+
+
+def test_partset_is_required() -> None:
+    with patch("sys.argv", ["migrate_pdf_rotation.py"]):
+        with pytest.raises(SystemExit, match="2"):
+            main()
 
 
 def test_apply_requires_viewer_validation() -> None:
-    with patch("sys.argv", ["migrate_pdf_rotation.py", "--apply"]):
+    with patch(
+        "sys.argv",
+        ["migrate_pdf_rotation.py", "--partset", "new-partset", "--apply"],
+    ):
         with pytest.raises(SystemExit, match="2"):
             main()
+
+
+def test_apply_requires_approved_candidate() -> None:
+    with patch(
+        "sys.argv",
+        ["migrate_pdf_rotation.py", "--partset", "new-partset", "--apply", "--viewer-validated"],
+    ):
+        with pytest.raises(SystemExit, match="2"):
+            main()
+
+
+def test_new_candidate_dry_run_does_not_assume_rotation() -> None:
+    with (
+        patch("sys.argv", ["migrate_pdf_rotation.py", "--partset", "new-partset"]),
+        patch("scripts.migrate_pdf_rotation._migrate") as migrate,
+    ):
+        main()
+
+    migrate.assert_called_once_with("new-partset", apply=False, expected_rotation=None)
 
 
 def test_dry_run_download_uses_scratch_path(tmp_path: Path) -> None:

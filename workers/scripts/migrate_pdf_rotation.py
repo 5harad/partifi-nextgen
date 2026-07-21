@@ -2,10 +2,10 @@
 
 Run this only in the worker environment. The default mode is read-only:
 
-    python scripts/migrate_pdf_rotation.py
+    python scripts/migrate_pdf_rotation.py --partset <partset-id>
 
-After reviewing its report and a viewer-oriented preview, pass both --apply
-and --viewer-validated to rebuild the two confirmed partsets.
+After reviewing its report and a viewer-oriented preview, an approved
+single-partset candidate may be migrated with --apply and --viewer-validated.
 """
 
 from __future__ import annotations
@@ -30,10 +30,10 @@ from pdf_repair import burst_score_pages
 from pipeline.pdf_rotation import pdf_rotation_degrees
 from s3_storage import download_file, score_pdf_s3_key
 
-CONFIRMED_PARTSET_ROTATIONS = {
-    "jigmi-xqpek": 270,
-    "dliol-bejej": 270,
-}
+# Add a partset only after its prospective render, stored segment geometry, and
+# score-sharing relationships have been reviewed. Current migration candidates
+# have already completed, so this remains intentionally empty.
+APPROVED_PARTSET_ROTATIONS: dict[str, int] = {}
 
 
 def _partset_row(partset_id: str):
@@ -58,6 +58,14 @@ def _score_orientation(score_id: str) -> str:
     if not row or row.orientation not in ("portrait", "landscape"):
         raise RuntimeError(f"Score {score_id} has no supported orientation")
     return str(row.orientation)
+
+
+def _score_sibling_partsets(score_id: str, partset_id: str) -> list[str]:
+    rows = db_conn.fetchall(
+        "SELECT id FROM partsets WHERE score_id = :score_id AND id != :partset_id",
+        {"score_id": score_id, "partset_id": partset_id},
+    )
+    return [str(row.id) for row in rows]
 
 
 def _download_score_pdf(score_id: str, workdir: Path) -> Path:
@@ -112,11 +120,10 @@ def _apply(row, rendered_pages: Path, score_orientation: str) -> None:
     run_gen_parts(row.id, job_id="pdf-rotation-migration")
 
 
-def _migrate(partset_id: str, *, apply: bool) -> None:
-    expected_rotation = CONFIRMED_PARTSET_ROTATIONS[partset_id]
+def _migrate(partset_id: str, *, apply: bool, expected_rotation: int | None) -> None:
     row = _partset_row(partset_id)
-    if int(row.rotation_degrees or 0) != 180:
-        raise RuntimeError(f"Partset {partset_id} is not a confirmed 180° manual rotation")
+    if not int(row.rotation_degrees or 0):
+        raise RuntimeError(f"Partset {partset_id} has no manual rotation to migrate")
     if row.last_job_id or (not row.parts_ready and row.status in ("cut", "paste")):
         raise RuntimeError(f"Partset {partset_id} has an active generation job")
 
@@ -124,18 +131,28 @@ def _migrate(partset_id: str, *, apply: bool) -> None:
     try:
         score_pdf = _download_score_pdf(row.score_id, workdir)
         rotations = _source_rotations(score_pdf, workdir)
-        if not rotations or any(rotation != expected_rotation for rotation in rotations):
+        if not rotations or len(set(rotations)) != 1:
+            raise RuntimeError(f"Score {row.score_id} does not have uniform PDF rotation metadata: {rotations}")
+        actual_rotation = rotations[0]
+        if expected_rotation is not None and actual_rotation != expected_rotation:
             raise RuntimeError(
-                f"Score {row.score_id} does not have uniform /Rotate {expected_rotation} metadata: {rotations}"
+                f"Score {row.score_id} has /Rotate {actual_rotation}, not expected {expected_rotation}"
             )
 
         orientation = _score_orientation(row.score_id)
         rendered_pages = _render_normalized_score(score_pdf, workdir, orientation)
+        siblings = _score_sibling_partsets(row.score_id, row.id)
         print(
             f"{partset_id}: private_id={row.private_id} score={row.score_id} "
-            f"rotations={rotations} orientation_override={row.orientation_override} apply={apply}"
+            f"rotation={actual_rotation} orientation_override={row.orientation_override} "
+            f"siblings={siblings} apply={apply}"
         )
         if apply:
+            if siblings:
+                raise RuntimeError(
+                    f"Score {row.score_id} is shared with partsets {siblings}; "
+                    "use a score-group migration instead"
+                )
             _apply(row, rendered_pages, orientation)
             print(f"{partset_id}: migrated and parts regenerated")
     finally:
@@ -144,7 +161,7 @@ def _migrate(partset_id: str, *, apply: bool) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Migrate confirmed manual PDF rotations")
-    parser.add_argument("--apply", action="store_true", help="Apply the verified migration")
+    parser.add_argument("--apply", action="store_true", help="Apply an approved verified migration")
     parser.add_argument(
         "--viewer-validated",
         action="store_true",
@@ -153,14 +170,19 @@ def main() -> None:
     parser.add_argument(
         "--partset",
         action="append",
-        choices=CONFIRMED_PARTSET_ROTATIONS,
-        help="Migrate one confirmed partset (defaults to both)",
+        required=True,
+        help="Internal partset ID to inspect or migrate",
     )
     args = parser.parse_args()
     if args.apply and not args.viewer_validated:
         parser.error("--apply requires --viewer-validated")
-    for partset_id in args.partset or CONFIRMED_PARTSET_ROTATIONS:
-        _migrate(partset_id, apply=args.apply)
+    if args.apply:
+        unapproved = [partset_id for partset_id in args.partset if partset_id not in APPROVED_PARTSET_ROTATIONS]
+        if unapproved:
+            parser.error(f"--apply requires approved candidates: {', '.join(unapproved)}")
+    for partset_id in args.partset:
+        expected_rotation = APPROVED_PARTSET_ROTATIONS.get(partset_id)
+        _migrate(partset_id, apply=args.apply, expected_rotation=expected_rotation)
 
 
 if __name__ == "__main__":
