@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -11,6 +12,7 @@ from scripts.migrate_pdf_rotation import (
     APPROVED_PARTSET_IDS,
     APPROVED_ROTATION_SEQUENCES,
     _download_score_pdf,
+    _sibling_is_inert,
     main,
 )
 
@@ -88,6 +90,18 @@ def test_mixed_rotation_candidate_uses_approved_sequence() -> None:
         "dsbmc-wmhka",
         apply=True,
         expected_rotations=(270,) * 12 + (90,) * 2,
+    )
+
+
+def test_inert_sibling_does_not_block_single_partset_migration() -> None:
+    assert _sibling_is_inert(
+        SimpleNamespace(rotation_degrees=0, parts_ready=None, last_job_id=None, status="analysis")
+    )
+    assert not _sibling_is_inert(
+        SimpleNamespace(rotation_degrees=0, parts_ready=True, last_job_id=None, status="analysis")
+    )
+    assert not _sibling_is_inert(
+        SimpleNamespace(rotation_degrees=90, parts_ready=None, last_job_id=None, status="analysis")
     )
 
 

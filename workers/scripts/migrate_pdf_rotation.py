@@ -67,12 +67,25 @@ def _score_orientation(score_id: str) -> str:
     return str(row.orientation)
 
 
-def _score_sibling_partsets(score_id: str, partset_id: str) -> list[str]:
+def _score_sibling_partsets(score_id: str, partset_id: str):
     rows = db_conn.fetchall(
-        "SELECT id FROM partsets WHERE score_id = :score_id AND id != :partset_id",
+        """
+        SELECT id, rotation_degrees, parts_ready, last_job_id, status
+        FROM partsets
+        WHERE score_id = :score_id AND id != :partset_id
+        """,
         {"score_id": score_id, "partset_id": partset_id},
     )
-    return [str(row.id) for row in rows]
+    return rows
+
+
+def _sibling_is_inert(row) -> bool:
+    return (
+        not int(row.rotation_degrees or 0)
+        and not bool(row.parts_ready)
+        and not row.last_job_id
+        and row.status == "analysis"
+    )
 
 
 def _download_score_pdf(score_id: str, workdir: Path) -> Path:
@@ -154,15 +167,17 @@ def _migrate(
         orientation = _score_orientation(row.score_id)
         rendered_pages = _render_normalized_score(score_pdf, workdir, orientation)
         siblings = _score_sibling_partsets(row.score_id, row.id)
+        unsafe_siblings = [str(sibling.id) for sibling in siblings if not _sibling_is_inert(sibling)]
         print(
             f"{partset_id}: private_id={row.private_id} score={row.score_id} "
             f"rotations={rotations} orientation_override={row.orientation_override} "
-            f"siblings={siblings} apply={apply}"
+            f"siblings={[str(sibling.id) for sibling in siblings]} "
+            f"unsafe_siblings={unsafe_siblings} apply={apply}"
         )
         if apply:
-            if siblings:
+            if unsafe_siblings:
                 raise RuntimeError(
-                    f"Score {row.score_id} is shared with partsets {siblings}; "
+                    f"Score {row.score_id} is shared with active partsets {unsafe_siblings}; "
                     "use a score-group migration instead"
                 )
             _apply(row, rendered_pages, orientation)
