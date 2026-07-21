@@ -93,6 +93,31 @@ def test_mixed_rotation_candidate_uses_approved_sequence() -> None:
     )
 
 
+def test_uniform_rotation_candidate_uses_scalar_expectation() -> None:
+    with (
+        patch(
+            "sys.argv",
+            [
+                "migrate_pdf_rotation.py",
+                "--partset",
+                "qbccm-ogcoz",
+                "--apply",
+                "--viewer-validated",
+                "--expected-rotation",
+                "270",
+            ],
+        ),
+        patch("scripts.migrate_pdf_rotation._migrate") as migrate,
+    ):
+        main()
+
+    migrate.assert_called_once_with(
+        "qbccm-ogcoz",
+        apply=True,
+        expected_rotations=270,
+    )
+
+
 def test_inert_sibling_does_not_block_single_partset_migration() -> None:
     assert _sibling_is_inert(
         SimpleNamespace(rotation_degrees=0, parts_ready=None, last_job_id=None, status="analysis")

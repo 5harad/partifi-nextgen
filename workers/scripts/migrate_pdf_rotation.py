@@ -144,7 +144,7 @@ def _migrate(
     partset_id: str,
     *,
     apply: bool,
-    expected_rotations: tuple[int, ...] | None,
+    expected_rotations: int | tuple[int, ...] | None,
 ) -> None:
     row = _partset_row(partset_id)
     if not int(row.rotation_degrees or 0):
@@ -158,7 +158,14 @@ def _migrate(
         rotations = _source_rotations(score_pdf, workdir)
         if not rotations:
             raise RuntimeError(f"Score {row.score_id} has no PDF pages")
-        if expected_rotations is not None and tuple(rotations) != expected_rotations:
+        if isinstance(expected_rotations, int) and any(
+            rotation != expected_rotations for rotation in rotations
+        ):
+            raise RuntimeError(
+                f"Score {row.score_id} has PDF rotations {rotations}, "
+                f"not uniformly {expected_rotations}"
+            )
+        if isinstance(expected_rotations, tuple) and tuple(rotations) != expected_rotations:
             raise RuntimeError(
                 f"Score {row.score_id} has PDF rotations {rotations}, "
                 f"not expected {list(expected_rotations)}"
@@ -222,7 +229,7 @@ def main() -> None:
     for partset_id in args.partset:
         expected_rotations = APPROVED_ROTATION_SEQUENCES.get(partset_id)
         if expected_rotations is None and args.expected_rotation is not None:
-            expected_rotations = (args.expected_rotation,)
+            expected_rotations = args.expected_rotation
         _migrate(partset_id, apply=args.apply, expected_rotations=expected_rotations)
 
 
