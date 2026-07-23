@@ -4,7 +4,8 @@ import { getCsrfToken, saveAllPageSegments, savePageSegments } from '../../lib/a
 import {
   applySuggestionsToRegions,
   buildTagList,
-  nextTagsRegionId,
+  segmentFieldFocusOrder,
+  type SegmentFieldFocus,
 } from '../../lib/segmentTagSuggestions'
 import { TagsInput } from './TagsInput'
 import {
@@ -98,6 +99,7 @@ export function SegmentEditor({ data }: Props) {
   const focusedLabelIdRef = useRef<string | null>(null)
   const focusedTagsIdRef = useRef<string | null>(null)
   const tagInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const labelInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const suppressTagBlurRef = useRef(false)
   const sessionImageRequests = useMemo<SessionImageRequest[]>(() => {
     const firstPage = data.image_urls.lowres['1']
@@ -262,6 +264,33 @@ export function SegmentEditor({ data }: Props) {
     )
     replaceRegions(updated)
   }
+
+  const focusSegmentField = useCallback((target: SegmentFieldFocus) => {
+    const el =
+      target.field === 'tags'
+        ? tagInputRefs.current[target.regionId]
+        : labelInputRefs.current[target.regionId]
+    if (!el) return false
+    el.focus()
+    return true
+  }, [])
+
+  /** Part names top→bottom, then markers top→bottom, then wrap. */
+  const navigateSegmentFields = useCallback(
+    (current: SegmentFieldFocus, shiftKey: boolean) => {
+      const order = segmentFieldFocusOrder(stateRef.current.regions)
+      if (order.length === 0) return false
+      const currentIdx = order.findIndex(
+        (entry) => entry.regionId === current.regionId && entry.field === current.field,
+      )
+      if (currentIdx < 0) return false
+      const nextIdx = shiftKey
+        ? (currentIdx - 1 + order.length) % order.length
+        : (currentIdx + 1) % order.length
+      return focusSegmentField(order[nextIdx])
+    },
+    [focusSegmentField],
+  )
 
   const getCurrentPageData = useCallback(() => {
     return buildPageData(
@@ -488,10 +517,17 @@ export function SegmentEditor({ data }: Props) {
       })
     }
 
+    // slider-top.png is 33px wide and offset on the rule; keep handles from touching.
+    const marginMinGapPx = 34
+
     const updateLeftMargin = (clientX: number) => {
       if (!segmenterRef.current) return
       const rect = segmenterRef.current.getBoundingClientRect()
-      const x = Math.max(0, Math.min(viewerWidth, clientX - rect.left - marginGrabOffsetX))
+      const maxLeft = stateRef.current.rightMarginPx - marginMinGapPx
+      const x = Math.max(
+        0,
+        Math.min(maxLeft, clientX - rect.left - marginGrabOffsetX),
+      )
       setLeftMarginPx(x)
       stateRef.current.leftMarginPx = x
     }
@@ -499,7 +535,11 @@ export function SegmentEditor({ data }: Props) {
     const updateRightMargin = (clientX: number) => {
       if (!segmenterRef.current) return
       const rect = segmenterRef.current.getBoundingClientRect()
-      const x = Math.max(0, Math.min(viewerWidth, clientX - rect.left - marginGrabOffsetX))
+      const minRight = stateRef.current.leftMarginPx + marginMinGapPx
+      const x = Math.max(
+        minRight,
+        Math.min(viewerWidth, clientX - rect.left - marginGrabOffsetX),
+      )
       setRightMarginPx(x)
       stateRef.current.rightMarginPx = x
     }
@@ -652,7 +692,7 @@ export function SegmentEditor({ data }: Props) {
                   }}
                   onClick={() => void changePage(n)}
                   role="button"
-                  tabIndex={saving ? -1 : 0}
+                  tabIndex={-1}
                   aria-disabled={saving}
                   onKeyDown={(ev) => {
                     if (ev.key === 'Enter' || ev.key === ' ') void changePage(n)
@@ -680,7 +720,7 @@ export function SegmentEditor({ data }: Props) {
             className="next-button"
             onClick={scrollPreviewerNext}
             role="button"
-            tabIndex={saving ? -1 : 0}
+            tabIndex={-1}
             aria-disabled={saving}
             style={saving ? navDisabledStyle : undefined}
           >
@@ -694,7 +734,7 @@ export function SegmentEditor({ data }: Props) {
             className="next-button"
             onClick={scrollPreviewerBack}
             role="button"
-            tabIndex={saving ? -1 : 0}
+            tabIndex={-1}
             aria-disabled={saving}
             style={saving ? navDisabledStyle : undefined}
           >
@@ -828,10 +868,9 @@ export function SegmentEditor({ data }: Props) {
                         focusedTagsIdRef.current = null
                       }}
                       onAfterChange={refreshSuggestions}
-                      onTabNext={() => {
-                        const nextId = nextTagsRegionId(stateRef.current.regions, region.id)
-                        if (nextId) tagInputRefs.current[nextId]?.focus()
-                      }}
+                      onTabNavigate={(shiftKey) =>
+                        navigateSegmentFields({ regionId: region.id, field: 'tags' }, shiftKey)
+                      }
                       onClearClick={() => handleTagDelete(region.id)}
                     />
                     <img
@@ -848,6 +887,9 @@ export function SegmentEditor({ data }: Props) {
                       }}
                     />
                     <input
+                      ref={(el) => {
+                        labelInputRefs.current[region.id] = el
+                      }}
                       className={labelClass}
                       maxLength={4}
                       value={region.label}
@@ -872,6 +914,17 @@ export function SegmentEditor({ data }: Props) {
                           patchRegion(region.id, { label: '', labelIsSuggestion: false })
                         }
                         refreshSuggestions()
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Tab') return
+                        if (
+                          navigateSegmentFields(
+                            { regionId: region.id, field: 'label' },
+                            e.shiftKey,
+                          )
+                        ) {
+                          e.preventDefault()
+                        }
                       }}
                       onKeyUp={() => refreshSuggestions()}
                       onClick={(e) => {

@@ -12,7 +12,8 @@ type Props = {
   onAfterChange: () => void
   onFocusStart?: () => void
   onFocusEnd?: () => void
-  onTabNext: () => void
+  /** Return true if Tab was handled (caller should preventDefault). */
+  onTabNavigate: (shiftKey: boolean) => boolean
   inputRef?: (el: HTMLInputElement | null) => void
   suppressBlurRef?: React.RefObject<boolean>
   onClearClick?: () => void
@@ -27,7 +28,7 @@ export function TagsInput({
   onAfterChange,
   onFocusStart,
   onFocusEnd,
-  onTabNext,
+  onTabNavigate,
   inputRef,
   suppressBlurRef,
   onClearClick,
@@ -103,9 +104,11 @@ export function TagsInput({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Tab') {
-      if (!open) {
+      // Always use the segment field order, even if autocomplete is open;
+      // otherwise the browser tabs into the adjacent mark field.
+      setOpen(false)
+      if (onTabNavigate(e.shiftKey)) {
         e.preventDefault()
-        onTabNext()
       }
       return
     }

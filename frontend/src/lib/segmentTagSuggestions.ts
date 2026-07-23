@@ -219,12 +219,26 @@ export function applySuggestionsToRegions(
   })
 }
 
-export function nextTagsRegionId(regions: RegionState[], currentId: string): string | null {
-  const sorted = [...regions].sort((a, b) => a.topPx - b.topPx)
-  const fieldRegions = sorted.slice(0, -1)
-  const currentIdx = fieldRegions.findIndex((r) => r.id === currentId)
-  if (currentIdx < 0 || currentIdx >= fieldRegions.length - 1) return null
-  return fieldRegions[currentIdx + 1].id
+export type SegmentFieldFocus = {
+  regionId: string
+  field: 'tags' | 'label'
+}
+
+/** Fieldable segments top-to-bottom (the bottommost region has no part/label fields). */
+export function fieldableRegionIds(regions: RegionState[]): string[] {
+  return [...regions]
+    .sort((a, b) => a.topPx - b.topPx)
+    .slice(0, -1)
+    .map((region) => region.id)
+}
+
+/** Part names top-to-bottom, then rehearsal/system markers top-to-bottom. */
+export function segmentFieldFocusOrder(regions: RegionState[]): SegmentFieldFocus[] {
+  const ids = fieldableRegionIds(regions)
+  return [
+    ...ids.map((regionId) => ({ regionId, field: 'tags' as const })),
+    ...ids.map((regionId) => ({ regionId, field: 'label' as const })),
+  ]
 }
 
 export function applyTagSelection(current: string, selected: string): string {
