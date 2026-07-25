@@ -477,7 +477,7 @@ Evicting cold **parts** cache sets `parts_ready = 0` for that partset (legacy be
 
 ### Daily summary email (Amazon SES)
 
-Sends a 24h HTML+text digest (users, partsets, downloads, errors) to `SES_TO`.
+Sends a 24h HTML+text digest (users, scores, downloads, errors) to `SES_TO`.
 
 **One-time setup**
 

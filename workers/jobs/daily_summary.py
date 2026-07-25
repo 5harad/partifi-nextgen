@@ -46,14 +46,16 @@ class DailyReport:
     hours: int
     user_total: int
     new_user_names: list[str]
-    partsets_total: int
-    partsets_imslp: int
-    partsets_upload: int
+    scores_imported: int
+    scores_imported_imslp: int
+    scores_imported_upload: int
+    scores_with_parts: int
+    scores_with_parts_imslp: int
+    scores_with_parts_upload: int
     parts_total: int
     parts_imslp: int
     parts_upload: int
-    ready_created: int
-    sample_partsets: list[PartsetLink]
+    sample_scores: list[PartsetLink]
     download_events: int
     download_partsets: int
     top_downloads: list[PartsetLink]
@@ -74,9 +76,16 @@ def public_partset_url(public_id: str) -> str:
     return f"{_public_base_url()}/{public_id}"
 
 
+def _clean_meta(value: str | None) -> str:
+    text = (value or "").strip()
+    if not text or text == "-":
+        return ""
+    return text
+
+
 def _display_name(title: str | None, composer: str | None, public_id: str) -> str:
-    title = (title or "").strip()
-    composer = (composer or "").strip()
+    title = _clean_meta(title)
+    composer = _clean_meta(composer)
     if title and composer:
         return f"{title} — {composer}"
     if title:
@@ -128,9 +137,27 @@ def gather_report(hours: int = 24, log_lines: list[str] | None = None) -> DailyR
         """,
         params,
     )
-    partsets_total = int(created[0] or 0)
-    partsets_imslp = int(created[1] or 0)
-    partsets_upload = int(created[2] or 0)
+    scores_imported = int(created[0] or 0)
+    scores_imported_imslp = int(created[1] or 0)
+    scores_imported_upload = int(created[2] or 0)
+
+    with_parts = db_conn.fetchone(
+        """
+        SELECT
+          COUNT(*),
+          SUM(ps.imslp_id IS NOT NULL),
+          SUM(ps.imslp_id IS NULL)
+        FROM partsets ps
+        WHERE ps.create_ts >= NOW() - INTERVAL :hours HOUR
+          AND EXISTS (
+            SELECT 1 FROM parts p WHERE p.partset_id = ps.id
+          )
+        """,
+        params,
+    )
+    scores_with_parts = int(with_parts[0] or 0)
+    scores_with_parts_imslp = int(with_parts[1] or 0)
+    scores_with_parts_upload = int(with_parts[2] or 0)
 
     parts = db_conn.fetchone(
         """
@@ -148,31 +175,20 @@ def gather_report(hours: int = 24, log_lines: list[str] | None = None) -> DailyR
     parts_imslp = int(parts[1] or 0)
     parts_upload = int(parts[2] or 0)
 
-    ready_created = int(
-        db_conn.fetchone(
-            """
-            SELECT COUNT(*)
-            FROM partsets
-            WHERE create_ts >= NOW() - INTERVAL :hours HOUR
-              AND parts_ready = 1
-            """,
-            params,
-        )[0]
-        or 0
-    )
-
     sample_rows = db_conn.fetchall(
         """
-        SELECT id, title, composer
-        FROM partsets
-        WHERE create_ts >= NOW() - INTERVAL :hours HOUR
-          AND parts_ready = 1
+        SELECT ps.id, ps.title, ps.composer
+        FROM partsets ps
+        WHERE ps.create_ts >= NOW() - INTERVAL :hours HOUR
+          AND EXISTS (
+            SELECT 1 FROM parts p WHERE p.partset_id = ps.id
+          )
         ORDER BY RAND()
         LIMIT :limit
         """,
         {**params, "limit": SAMPLE_LIMIT},
     )
-    sample_partsets = [
+    sample_scores = [
         PartsetLink(public_id=row[0], title=row[1], composer=row[2]) for row in sample_rows
     ]
 
@@ -280,14 +296,16 @@ def gather_report(hours: int = 24, log_lines: list[str] | None = None) -> DailyR
         hours=hours,
         user_total=user_total,
         new_user_names=new_user_names,
-        partsets_total=partsets_total,
-        partsets_imslp=partsets_imslp,
-        partsets_upload=partsets_upload,
+        scores_imported=scores_imported,
+        scores_imported_imslp=scores_imported_imslp,
+        scores_imported_upload=scores_imported_upload,
+        scores_with_parts=scores_with_parts,
+        scores_with_parts_imslp=scores_with_parts_imslp,
+        scores_with_parts_upload=scores_with_parts_upload,
         parts_total=parts_total,
         parts_imslp=parts_imslp,
         parts_upload=parts_upload,
-        ready_created=ready_created,
-        sample_partsets=sample_partsets,
+        sample_scores=sample_scores,
         download_events=download_events,
         download_partsets=download_partsets,
         top_downloads=top_downloads,
@@ -327,7 +345,7 @@ def subject_line(report: DailyReport) -> str:
     err_bit = f"{err_n} error{'s' if err_n != 1 else ''}" if err_n else "no errors"
     return (
         f"Partifi daily: {len(report.new_user_names)} new users, "
-        f"{report.partsets_total} partsets, {err_bit} — {day}"
+        f"{report.scores_imported} scores, {err_bit} — {day}"
     )
 
 
@@ -345,27 +363,33 @@ def render_text(report: DailyReport) -> str:
         lines.append(" · ".join(report.new_user_names))
     lines.append("")
 
-    lines.append("Partsets")
+    lines.append("Scores")
     lines.append(
-        f"{report.partsets_total} created "
-        f"({report.partsets_imslp} IMSLP, {report.partsets_upload} upload) · "
-        f"{report.parts_total} parts "
-        f"({report.parts_imslp} IMSLP, {report.parts_upload} upload)"
+        f"{report.scores_imported} imported "
+        f"({report.scores_imported_imslp} IMSLP, {report.scores_imported_upload} direct upload)"
     )
-    if report.sample_partsets:
+    lines.append(
+        f"{report.scores_with_parts} produced parts "
+        f"({report.scores_with_parts_imslp} IMSLP, {report.scores_with_parts_upload} direct upload)"
+    )
+    lines.append(
+        f"{report.parts_total} parts generated "
+        f"({report.parts_imslp} IMSLP, {report.parts_upload} direct upload)"
+    )
+    if report.sample_scores:
         lines.append(
-            f"Sample ({len(report.sample_partsets)} of {report.ready_created} ready):"
+            f"Random sample ({len(report.sample_scores)} of {report.scores_with_parts} with parts):"
         )
-        for item in report.sample_partsets:
+        for item in report.sample_scores:
             label = _display_name(item.title, item.composer, item.public_id)
             lines.append(f"  - {label}: {public_partset_url(item.public_id)}")
-    elif report.partsets_total:
-        lines.append(f"No ready partsets to sample ({report.ready_created} ready).")
+    elif report.scores_imported:
+        lines.append("No scores with parts to sample.")
     lines.append("")
 
     lines.append("Downloads")
     lines.append(
-        f"{report.download_events} parts downloaded across {report.download_partsets} partsets"
+        f"{report.download_events} parts downloaded across {report.download_partsets} scores"
     )
     if report.top_downloads:
         lines.append("Most downloaded:")
@@ -431,35 +455,40 @@ def render_html(report: DailyReport) -> str:
     else:
         sections.append('<p style="margin:0 0 24px;color:#666;">No new users.</p>')
 
-    sections.append('<h2 style="font-size:16px;margin:0 0 8px;border-bottom:1px solid #e6e6e6;padding-bottom:4px;">Partsets</h2>')
+    sections.append('<h2 style="font-size:16px;margin:0 0 8px;border-bottom:1px solid #e6e6e6;padding-bottom:4px;">Scores</h2>')
     sections.append(
-        f'<p style="margin:0 0 8px;"><strong>{report.partsets_total}</strong> created '
-        f"({report.partsets_imslp} IMSLP, {report.partsets_upload} upload) · "
-        f"<strong>{report.parts_total}</strong> parts "
-        f"({report.parts_imslp} IMSLP, {report.parts_upload} upload)</p>"
+        f'<p style="margin:0 0 4px;"><strong>{report.scores_imported}</strong> imported '
+        f"({report.scores_imported_imslp} IMSLP, {report.scores_imported_upload} direct upload)</p>"
     )
-    if report.sample_partsets:
+    sections.append(
+        f'<p style="margin:0 0 4px;"><strong>{report.scores_with_parts}</strong> produced parts '
+        f"({report.scores_with_parts_imslp} IMSLP, {report.scores_with_parts_upload} direct upload)</p>"
+    )
+    sections.append(
+        f'<p style="margin:0 0 8px;"><strong>{report.parts_total}</strong> parts generated '
+        f"({report.parts_imslp} IMSLP, {report.parts_upload} direct upload)</p>"
+    )
+    if report.sample_scores:
         sections.append(
             f'<p style="margin:0 0 6px;color:#666;font-size:13px;">'
-            f"Random sample ({len(report.sample_partsets)} of {report.ready_created} ready)</p>"
+            f"Random sample ({len(report.sample_scores)} of {report.scores_with_parts} with parts)</p>"
         )
         items = "".join(
             f'<li style="margin:0 0 4px;">{_html_link(item)}</li>'
-            for item in report.sample_partsets
+            for item in report.sample_scores
         )
         sections.append(f'<ul style="margin:0 0 24px;padding-left:18px;">{items}</ul>')
-    elif report.partsets_total:
+    elif report.scores_imported:
         sections.append(
-            f'<p style="margin:0 0 24px;color:#666;">No ready partsets to sample '
-            f"({report.ready_created} ready).</p>"
+            '<p style="margin:0 0 24px;color:#666;">No scores with parts to sample.</p>'
         )
     else:
-        sections.append('<p style="margin:0 0 24px;color:#666;">No partsets created.</p>')
+        sections.append('<p style="margin:0 0 24px;color:#666;">No scores imported.</p>')
 
     sections.append('<h2 style="font-size:16px;margin:0 0 8px;border-bottom:1px solid #e6e6e6;padding-bottom:4px;">Downloads</h2>')
     sections.append(
         f'<p style="margin:0 0 8px;"><strong>{report.download_events}</strong> parts downloaded '
-        f"across <strong>{report.download_partsets}</strong> partsets</p>"
+        f"across <strong>{report.download_partsets}</strong> scores</p>"
     )
     if report.top_downloads:
         sections.append('<p style="margin:0 0 6px;color:#666;font-size:13px;">Most downloaded</p>')
