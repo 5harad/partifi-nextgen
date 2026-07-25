@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     s3_region: str = "us-east-1"
     s3_use_ssl: bool = True
 
+    # Daily summary email (Amazon SES). Empty access keys → EC2 instance role.
+    ses_region: str = ""
+    ses_from: str = ""
+    ses_to: str = ""
+    partifi_public_base_url: str = "https://partifi.org"
+
     partifi_cache_root: str = "/data/partifi"
     partifi_cache_max_gb: float = 25.0
     partifi_cache_preview_ttl_days: int = 7

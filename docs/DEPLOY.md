@@ -475,6 +475,46 @@ Tune retention in `.env`: `PARTIFI_CACHE_MAX_GB`, `PARTIFI_CACHE_*_TTL_DAYS`, `P
 
 Evicting cold **parts** cache sets `parts_ready = 0` for that partset (legacy behavior); the next download regenerates from layout.
 
+### Daily summary email (Amazon SES)
+
+Sends a 24h HTML+text digest (users, partsets, downloads, errors) to `SES_TO`.
+
+**One-time setup**
+
+1. Verify SES identities in **us-east-1** (sandbox: verify both From and To; domain DKIM preferred for `@partifi.org` From later).
+2. Allow `ses:SendEmail` and `ses:SendRawEmail` on the EC2 instance role (e.g. `partifi-ec2-s3`).
+3. Add to host `.env` (see `.env.production.example`):
+
+```bash
+SES_REGION=us-east-1
+SES_FROM=5harad.6oel@gmail.com
+SES_TO=5harad.6oel@gmail.com
+PARTIFI_PUBLIC_BASE_URL=https://partifi.org
+```
+
+4. Rebuild/recreate workers so they pick up the job module and env:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build --force-recreate worker-1 worker-2 worker-3
+```
+
+**Smoke test**
+
+```bash
+chmod +x scripts/daily-summary.sh
+DRY_RUN=1 ./scripts/daily-summary.sh          # print text body
+./scripts/daily-summary.sh                    # send via SES
+```
+
+**Cron** (e.g. 12:00 UTC, after overnight activity):
+
+```bash
+sudo mkdir -p /var/log/partifi
+0 12 * * * cd /home/ubuntu/partifi-nextgen && ./scripts/daily-summary.sh >> /var/log/partifi-daily-summary.log 2>&1
+```
+
+Note: sending From a Gmail address through SES often lands in spam; switch `SES_FROM` to a verified `@partifi.org` address once the domain identity is Verified.
+
 ---
 
 ## Troubleshooting
