@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     # Daily summary email (Amazon SES). Empty access keys → EC2 instance role.
     ses_region: str = ""
     ses_from: str = ""
+    ses_from_name: str = "Partifi"
     ses_to: str = ""
     partifi_public_base_url: str = "https://partifi.org"
 

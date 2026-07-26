@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formataddr
 from pathlib import Path
 
 import boto3
@@ -345,7 +346,7 @@ def subject_line(report: DailyReport) -> str:
     err_bit = f"{err_n} error{'s' if err_n != 1 else ''}" if err_n else "no errors"
     return (
         f"Partifi daily: {len(report.new_user_names)} new users, "
-        f"{report.scores_imported} scores, {err_bit} — {day}"
+        f"{report.scores_with_parts} scores with parts, {err_bit} — {day}"
     )
 
 
@@ -366,15 +367,15 @@ def render_text(report: DailyReport) -> str:
     lines.append("Scores")
     lines.append(
         f"{report.scores_imported} imported "
-        f"({report.scores_imported_imslp} IMSLP, {report.scores_imported_upload} direct upload)"
+        f"({report.scores_imported_imslp} IMSLP, {report.scores_imported_upload} upload)"
     )
     lines.append(
         f"{report.scores_with_parts} produced parts "
-        f"({report.scores_with_parts_imslp} IMSLP, {report.scores_with_parts_upload} direct upload)"
+        f"({report.scores_with_parts_imslp} IMSLP, {report.scores_with_parts_upload} upload)"
     )
     lines.append(
         f"{report.parts_total} parts generated "
-        f"({report.parts_imslp} IMSLP, {report.parts_upload} direct upload)"
+        f"({report.parts_imslp} IMSLP, {report.parts_upload} upload)"
     )
     if report.sample_scores:
         lines.append(
@@ -458,15 +459,15 @@ def render_html(report: DailyReport) -> str:
     sections.append('<h2 style="font-size:16px;margin:0 0 8px;border-bottom:1px solid #e6e6e6;padding-bottom:4px;">Scores</h2>')
     sections.append(
         f'<p style="margin:0 0 4px;"><strong>{report.scores_imported}</strong> imported '
-        f"({report.scores_imported_imslp} IMSLP, {report.scores_imported_upload} direct upload)</p>"
+        f"({report.scores_imported_imslp} IMSLP, {report.scores_imported_upload} upload)</p>"
     )
     sections.append(
         f'<p style="margin:0 0 4px;"><strong>{report.scores_with_parts}</strong> produced parts '
-        f"({report.scores_with_parts_imslp} IMSLP, {report.scores_with_parts_upload} direct upload)</p>"
+        f"({report.scores_with_parts_imslp} IMSLP, {report.scores_with_parts_upload} upload)</p>"
     )
     sections.append(
         f'<p style="margin:0 0 8px;"><strong>{report.parts_total}</strong> parts generated '
-        f"({report.parts_imslp} IMSLP, {report.parts_upload} direct upload)</p>"
+        f"({report.parts_imslp} IMSLP, {report.parts_upload} upload)</p>"
     )
     if report.sample_scores:
         sections.append(
@@ -551,9 +552,11 @@ def send_email(*, subject: str, text_body: str, html_body: str) -> str:
     if not settings.ses_from or not settings.ses_to:
         raise RuntimeError("SES_FROM and SES_TO must be set")
 
+    from_header = formataddr((settings.ses_from_name or "Partifi", settings.ses_from))
+
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = settings.ses_from
+    msg["From"] = from_header
     msg["To"] = settings.ses_to
     msg.attach(MIMEText(text_body, "plain", "utf-8"))
     msg.attach(MIMEText(html_body, "html", "utf-8"))
@@ -565,7 +568,7 @@ def send_email(*, subject: str, text_body: str, html_body: str) -> str:
         aws_secret_access_key=settings.s3_secret_key or None,
     )
     response = client.send_raw_email(
-        Source=settings.ses_from,
+        Source=from_header,
         Destinations=[addr.strip() for addr in settings.ses_to.split(",") if addr.strip()],
         RawMessage={"Data": msg.as_string()},
     )

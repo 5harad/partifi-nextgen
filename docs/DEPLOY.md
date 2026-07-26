@@ -488,6 +488,7 @@ Sends a 24h HTML+text digest (users, scores, downloads, errors) to `SES_TO`.
 ```bash
 SES_REGION=us-east-1
 SES_FROM=5harad.6oel@gmail.com
+SES_FROM_NAME=Partifi
 SES_TO=5harad.6oel@gmail.com
 PARTIFI_PUBLIC_BASE_URL=https://partifi.org
 ```
