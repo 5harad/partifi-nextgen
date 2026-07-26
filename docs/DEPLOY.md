@@ -481,14 +481,14 @@ Sends a 24h HTML+text digest (users, scores, downloads, errors) to `SES_TO`.
 
 **One-time setup**
 
-1. Verify SES identities in **us-east-1** (sandbox: verify both From and To; domain DKIM preferred for `@partifi.org` From later).
+1. Verify the `partifi.org` domain identity in SES **us-east-1** (DKIM). In sandbox, also verify `SES_TO`.
 2. Allow `ses:SendEmail` and `ses:SendRawEmail` on the EC2 instance role (e.g. `partifi-ec2-s3`).
 3. Add to host `.env` (see `.env.production.example`):
 
 ```bash
 SES_REGION=us-east-1
-SES_FROM=5harad.6oel@gmail.com
-SES_FROM_NAME=Partifi
+SES_FROM=noreply@partifi.org
+SES_FROM_NAME=Partifi Alerts
 SES_TO=5harad.6oel@gmail.com
 PARTIFI_PUBLIC_BASE_URL=https://partifi.org
 ```
@@ -514,7 +514,7 @@ sudo mkdir -p /var/log/partifi
 0 12 * * * cd /home/ubuntu/partifi-nextgen && ./scripts/daily-summary.sh >> /var/log/partifi-daily-summary.log 2>&1
 ```
 
-Note: sending From a Gmail address through SES often lands in spam; switch `SES_FROM` to a verified `@partifi.org` address once the domain identity is Verified.
+Use a verified `@partifi.org` address for `SES_FROM` (not a personal Gmail). Sending From Gmail through SES fails DMARC and usually lands in spam.
 
 ---
 

@@ -341,12 +341,11 @@ def _stuck_extra(status: str | None, message: str | None) -> str:
 
 
 def subject_line(report: DailyReport) -> str:
-    day = f"{report.generated_at:%b} {report.generated_at.day}"
     err_n = len(report.error_partsets) + len(report.stuck_partsets) + len(report.log_lines)
     err_bit = f"{err_n} error{'s' if err_n != 1 else ''}" if err_n else "no errors"
     return (
-        f"Partifi daily: {len(report.new_user_names)} new users, "
-        f"{report.scores_with_parts} scores with parts, {err_bit} — {day}"
+        f"{err_bit}, {len(report.new_user_names)} new users, "
+        f"{report.scores_with_parts} scores with parts"
     )
 
 
@@ -552,7 +551,7 @@ def send_email(*, subject: str, text_body: str, html_body: str) -> str:
     if not settings.ses_from or not settings.ses_to:
         raise RuntimeError("SES_FROM and SES_TO must be set")
 
-    from_header = formataddr((settings.ses_from_name or "Partifi", settings.ses_from))
+    from_header = formataddr((settings.ses_from_name or "Partifi Alerts", settings.ses_from))
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
