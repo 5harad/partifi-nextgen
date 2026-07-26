@@ -343,9 +343,10 @@ def _stuck_extra(status: str | None, message: str | None) -> str:
 def subject_line(report: DailyReport) -> str:
     err_n = len(report.error_partsets) + len(report.stuck_partsets) + len(report.log_lines)
     err_bit = f"{err_n} error{'s' if err_n != 1 else ''}" if err_n else "no errors"
+    err_bit = err_bit[:1].upper() + err_bit[1:]
     return (
         f"{err_bit}, {len(report.new_user_names)} new users, "
-        f"{report.scores_with_parts} scores with parts"
+        f"{report.scores_with_parts} scores with new parts"
     )
 
 

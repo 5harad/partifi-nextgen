@@ -6,7 +6,7 @@ import logging
 import shutil
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -60,7 +60,7 @@ def _evict_by_ttl(cache: LocalCache, *, category: str, ttl_days: int) -> int:
 
 
 def _evict_cold_scores(cache: LocalCache, ttl_days: int) -> int:
-    cutoff = datetime.utcnow() - timedelta(days=ttl_days)
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=ttl_days)
     rows = db_conn.fetchall(
         """
         SELECT s.id AS score_id, MAX(p.last_access) AS last_access
