@@ -55,6 +55,20 @@ TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT
 collect_journal_errors >"$TMPDIR/log_errors.txt"
 
+REBOOT_REQUIRED=0
+REBOOT_REQUIRED_PKGS=""
+if [[ -e /run/reboot-required || -e /var/run/reboot-required ]]; then
+  REBOOT_REQUIRED=1
+  for pkgs_file in /run/reboot-required.pkgs /var/run/reboot-required.pkgs; do
+    if [[ -f "$pkgs_file" ]]; then
+      # Package names only; keep the env value short for compose exec.
+      # head the file first so pipefail cannot abort on SIGPIPE from a long list.
+      REBOOT_REQUIRED_PKGS="$(head -c 400 "$pkgs_file" | tr '\n\r' '  ' | tr -s ' ')"
+      break
+    fi
+  done
+fi
+
 ARGS=(python -m jobs.daily_summary --hours "$HOURS" --log-file /tmp/partifi-daily-summary-logs.txt)
 if [[ "$DRY_RUN" == "1" ]]; then
   ARGS+=(--dry-run)
@@ -62,4 +76,7 @@ fi
 
 # Copy filtered logs into the worker, then run the job.
 compose exec -T worker-1 sh -c 'cat > /tmp/partifi-daily-summary-logs.txt' <"$TMPDIR/log_errors.txt"
-compose exec -T worker-1 "${ARGS[@]}"
+compose exec -T \
+  -e "REBOOT_REQUIRED=${REBOOT_REQUIRED}" \
+  -e "REBOOT_REQUIRED_PKGS=${REBOOT_REQUIRED_PKGS}" \
+  worker-1 "${ARGS[@]}"

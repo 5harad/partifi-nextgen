@@ -65,6 +65,8 @@ class DailyReport:
     log_lines: list[str] = field(default_factory=list)
     queue_pending: int | None = None
     queue_processing: int | None = None
+    reboot_required: bool = False
+    reboot_packages: list[str] = field(default_factory=list)
 
 
 def _public_base_url() -> str:
@@ -344,10 +346,29 @@ def subject_line(report: DailyReport) -> str:
     err_n = len(report.error_partsets) + len(report.stuck_partsets) + len(report.log_lines)
     err_bit = f"{err_n} error{'s' if err_n != 1 else ''}" if err_n else "no errors"
     err_bit = err_bit[:1].upper() + err_bit[1:]
-    return (
-        f"{err_bit}, {len(report.new_user_names)} new users, "
-        f"{report.scores_with_parts} scores with new parts"
+    new_n = len(report.new_user_names)
+    user_bit = f"{new_n} new user" if new_n == 1 else f"{new_n} new users"
+    scores_n = report.scores_with_parts
+    scores_bit = (
+        f"{scores_n} score with new parts"
+        if scores_n == 1
+        else f"{scores_n} scores with new parts"
     )
+    body = f"{err_bit}, {user_bit}, {scores_bit}"
+    if report.reboot_required:
+        return f"Reboot required, {body}"
+    return body
+
+
+def _host_reboot_line(report: DailyReport) -> str:
+    if not report.reboot_required:
+        return "OK — no reboot pending"
+    if report.reboot_packages:
+        pkgs = ", ".join(report.reboot_packages[:12])
+        if len(report.reboot_packages) > 12:
+            pkgs += ", …"
+        return f"Reboot required ({pkgs})"
+    return "Reboot required"
 
 
 def render_text(report: DailyReport) -> str:
@@ -355,6 +376,11 @@ def render_text(report: DailyReport) -> str:
     lines.append("Partifi Daily Summary")
     lines.append(f"Last {report.hours} hours (generated {report.generated_at:%Y-%m-%d %H:%M UTC})")
     lines.append("")
+
+    if report.reboot_required:
+        lines.append("Host")
+        lines.append(_host_reboot_line(report))
+        lines.append("")
 
     lines.append("Users")
     lines.append(
@@ -443,6 +469,17 @@ def render_html(report: DailyReport) -> str:
   <p style="margin:0 0 24px;color:#666;font-size:13px;">Last {report.hours} hours · generated {report.generated_at:%Y-%m-%d %H:%M UTC}</p>
 """.strip()
     )
+
+    if report.reboot_required:
+        host_line = _esc(_host_reboot_line(report))
+        sections.append(
+            '<h2 style="font-size:16px;margin:0 0 8px;border-bottom:1px solid #e6e6e6;'
+            'padding-bottom:4px;">Host</h2>'
+        )
+        sections.append(
+            f'<p style="margin:0 0 24px;padding:10px 12px;background:#fff4e5;'
+            f'border-radius:6px;color:#8a4b00;">{host_line}</p>'
+        )
 
     new_n = len(report.new_user_names)
     sections.append('<h2 style="font-size:16px;margin:0 0 8px;border-bottom:1px solid #e6e6e6;padding-bottom:4px;">Users</h2>')
@@ -581,13 +618,30 @@ def _parse_log_lines(raw: str | None) -> list[str]:
     return [line.rstrip("\n") for line in raw.splitlines() if line.strip()]
 
 
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _reboot_packages_from_env() -> list[str]:
+    raw = os.environ.get("REBOOT_REQUIRED_PKGS", "")
+    return [part for part in raw.replace(",", " ").split() if part]
+
+
 def run_daily_summary(
     *,
     hours: int = 24,
     dry_run: bool = False,
     log_text: str | None = None,
+    reboot_required: bool | None = None,
+    reboot_packages: list[str] | None = None,
 ) -> DailyReport:
     report = gather_report(hours=hours, log_lines=_parse_log_lines(log_text))
+    report.reboot_required = (
+        _env_flag("REBOOT_REQUIRED") if reboot_required is None else reboot_required
+    )
+    report.reboot_packages = (
+        _reboot_packages_from_env() if reboot_packages is None else list(reboot_packages)
+    )
     subject = subject_line(report)
     text_body = render_text(report)
     html_body = render_html(report)
@@ -617,6 +671,11 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="Optional file of filtered journal/log lines to include",
     )
+    parser.add_argument(
+        "--reboot-required",
+        action="store_true",
+        help="Mark host reboot as required (normally set via REBOOT_REQUIRED env)",
+    )
     args = parser.parse_args(argv)
 
     log_text = os.environ.get("DAILY_SUMMARY_LOG_TEXT")
@@ -624,7 +683,12 @@ def main(argv: list[str] | None = None) -> int:
         log_text = args.log_file.read_text(encoding="utf-8", errors="replace")
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    run_daily_summary(hours=args.hours, dry_run=args.dry_run, log_text=log_text)
+    run_daily_summary(
+        hours=args.hours,
+        dry_run=args.dry_run,
+        log_text=log_text,
+        reboot_required=True if args.reboot_required else None,
+    )
     return 0
 
 
