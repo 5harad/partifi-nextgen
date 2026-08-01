@@ -24,14 +24,13 @@ const FAQ_ITEMS: FaqItem[] = [
     ),
   },
   {
-    question: 'Can I partifi a landscape or two-column score?',
-    answer:
-      'Yes! Partifi supports landscape scores and tries to automatically detect the correct page orientation when you first import a PDF.\n\nBut sometimes a score is landscape in disguise: the PDF is portrait-shaped, but the music is turned sideways on the page. And some landscape pages contain two side-by-side columns of music. If either happens, click on \u201cFix page orientation\u201d in Step 2 (the option is right below the score). Choose the upright orientation; for a two-column page, select \u201cTwo columns\u201d to split it into left and right portrait pages. Partifi re-analyzes the score after this change, which resets existing segments and generated parts.',
+    question: 'Does Partifi make scores from parts?',
+    answer: 'Partifi just works one way. We only help make parts from scores \u2014 hence the name!',
   },
   {
-    question: 'Partifi doesn\u2019t seem to be working correctly. What can I do?',
+    question: 'How do I log in to Partifi?',
     answer:
-      'Try using Chrome or Firefox on a desktop or laptop computer. This fixes many issues. Partifi is not set up to work on an iPad, but we will keep this improvement in mind for the future.',
+      'You can log in with your Google account. But you don\u2019t need to log in to use most of Partifi \u2014 import, edit, preview, and download parts all work without an account. Logging in is only required for your personal library, which saves your scores so you can return to them later. If you don\u2019t have a Google account, bookmark the link to each score on your computer and use that to open it again.',
   },
   {
     question:
@@ -40,18 +39,24 @@ const FAQ_ITEMS: FaqItem[] = [
       'Your work on the score is automatically saved every time you make a change. To return to it, just bookmark the URL. Alternatively, the score will be added to your personal library automatically if you are logged in to the site.',
   },
   {
-    question: 'How do I log in to Partifi?',
+    question: 'Can I partifi a landscape or two-column score?',
     answer:
-      'You can log in with your Google account. But you don\u2019t need to log in to use most of Partifi \u2014 import, edit, preview, and download parts all work without an account. Logging in is only required for your personal library, which saves your scores so you can return to them later. If you don\u2019t have a Google account, bookmark the link to each score on your computer and use that to open it again.',
+      'Yes! Partifi supports landscape scores and tries to automatically detect the correct page orientation when you first import a PDF.\n\nBut sometimes a score is landscape in disguise: the PDF is portrait-shaped, but the music is turned sideways on the page. And some landscape pages contain two side-by-side columns of music. If either happens, click on \u201cFix page orientation\u201d in Step 2 (the option is right below the score). Choose the upright orientation; for a two-column page, select \u201cTwo columns\u201d to split it into left and right portrait pages. Partifi re-analyzes the score after this change, which resets existing segments and generated parts.',
   },
   {
-    question: 'Does Partifi make scores from parts?',
-    answer: 'Partifi just works one way. We only help make parts from scores \u2014 hence the name!',
+    question: 'How do I add movement names (or other titles) to every part?',
+    answer:
+      'In Step 2, create a separate segment that covers only the movement title (or heading), and label that segment with the part name \u201call\u201d. The \u201call\u201d label means that strip of the score is copied into every part when parts are generated. Use one such segment for each movement title you want to keep, and keep the segment tight around the title so you don\u2019t pull in empty space or the next system of music.',
   },
   {
-    question: 'How do I include an entire line of rests? How do I create a full line cues?',
+    question: 'How do I add cue lines to a part?',
     answer:
-      'We aren\u2019t set up to add rests, however, we do have a way to add cues. Label cues with any instrument name followed by a space and the word \u201ccue\u201d. So, for example, when the violin isn\u2019t playing but a trumpet is you would label the trumpet part as: \u201ctrumpet cue\u201d. In Step 3 all the parts and the cue part will be listed. Combine the cue part with the instrumental part(s) you would like the cues to appear in. So you would add the violin part and the trumpet cue part together. The cue parts will be greyed out in the final violin part.',
+      'Label cues with any instrument name followed by a space and the word \u201ccue\u201d. So, for example, when the violin isn\u2019t playing but a trumpet is you would label the trumpet part as: \u201ctrumpet cue\u201d. In Step 3 all the parts and the cue part will be listed. Combine the cue part with the instrumental part(s) you would like the cues to appear in. So you would add the violin part and the trumpet cue part together. The cue parts will be greyed out in the final violin part. (NB: Partifi can\u2019t insert full lines of rests.)',
+  },
+  {
+    question: 'Partifi doesn\u2019t seem to be working correctly. What can I do?',
+    answer:
+      'Try using Chrome or Firefox on a desktop or laptop computer. This fixes many issues. Partifi is not set up to work on an iPad, but we will keep this improvement in mind for the future.',
   },
 ]
 
