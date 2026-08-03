@@ -9,6 +9,8 @@ import threading
 from typing import Any
 
 import httpx
+from sqlalchemy import func
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.orm import Session
 
 from app.models.tables import ImslpInfo
@@ -286,16 +288,56 @@ def _row_to_result(row: ImslpInfo) -> dict[str, str] | None:
 
 
 def _upsert_cache(db: Session, imslp_id: str, data: dict[str, str], imslp_url: str) -> None:
+    """Write IMSLP metadata cache; safe under concurrent inserts (multi-worker race)."""
+    title = data.get("title") or None
+    composer = data.get("composer") or None
+    publisher = data.get("publisher") or None
+    copyright_raw = data.get("copyright_raw") or None
+    url = imslp_url or None
+    file_type = data.get("file_type") or None
+
+    bind = db.get_bind()
+    if bind.dialect.name == "mysql":
+        stmt = mysql_insert(ImslpInfo).values(
+            id=imslp_id,
+            title=title,
+            composer=composer,
+            publisher=publisher,
+            copyright=copyright_raw,
+            url=url,
+            file_type=file_type,
+        )
+        # Prefer non-empty incoming values; keep existing otherwise (matches ORM merge).
+        stmt = stmt.on_duplicate_key_update(
+            title=func.coalesce(func.nullif(stmt.inserted.title, ""), ImslpInfo.title),
+            composer=func.coalesce(
+                func.nullif(stmt.inserted.composer, ""), ImslpInfo.composer
+            ),
+            publisher=func.coalesce(
+                func.nullif(stmt.inserted.publisher, ""), ImslpInfo.publisher
+            ),
+            copyright=func.coalesce(
+                func.nullif(stmt.inserted.copyright, ""), ImslpInfo.copyright
+            ),
+            url=func.coalesce(func.nullif(stmt.inserted.url, ""), ImslpInfo.url),
+            file_type=func.coalesce(
+                func.nullif(stmt.inserted.file_type, ""), ImslpInfo.file_type
+            ),
+        )
+        db.execute(stmt)
+        db.commit()
+        return
+
     row = db.get(ImslpInfo, imslp_id)
     if row is None:
         row = ImslpInfo(id=imslp_id)
         db.add(row)
-    row.title = data.get("title") or row.title
-    row.composer = data.get("composer") or row.composer
-    row.publisher = data.get("publisher") or row.publisher
-    row.copyright = data.get("copyright_raw") or row.copyright
-    row.url = imslp_url or row.url
-    row.file_type = data.get("file_type") or row.file_type
+    row.title = title or row.title
+    row.composer = composer or row.composer
+    row.publisher = publisher or row.publisher
+    row.copyright = copyright_raw or row.copyright
+    row.url = url or row.url
+    row.file_type = file_type or row.file_type
     db.commit()
 
 
