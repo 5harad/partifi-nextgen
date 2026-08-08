@@ -1,15 +1,32 @@
 import { useCallback, useEffect, useState } from 'react'
+import { CopyrightTip } from './CopyrightTip'
+import type { CopyrightValue } from '../lib/imslpUtils'
 
 export type MetadataFields = {
   title: string
   composer: string
   publisher: string
+  copyright: CopyrightValue
 }
 
 type Source = {
   title?: string | null
   composer?: string | null
   publisher?: string | null
+  copyright?: string | null
+}
+
+const COPYRIGHT_LABELS: Record<CopyrightValue, string> = {
+  'before 1923': 'Published before 1923',
+  'after 1923': 'Published in or after 1923',
+  unknown: 'Unknown copyright',
+}
+
+function normalizeCopyright(value: string | null | undefined): CopyrightValue {
+  if (value === 'before 1923' || value === 'after 1923' || value === 'unknown') {
+    return value
+  }
+  return 'unknown'
 }
 
 function fieldsFromSource(source: Source): MetadataFields {
@@ -17,6 +34,7 @@ function fieldsFromSource(source: Source): MetadataFields {
     title: source.title ?? '',
     composer: source.composer ?? '',
     publisher: source.publisher ?? '',
+    copyright: normalizeCopyright(source.copyright),
   }
 }
 
@@ -24,9 +42,11 @@ export function usePartsetMetadata(source: Source) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [title, setTitle] = useState(() => fieldsFromSource(source).title)
-  const [composer, setComposer] = useState(() => fieldsFromSource(source).composer)
-  const [publisher, setPublisher] = useState(() => fieldsFromSource(source).publisher)
+  const initial = fieldsFromSource(source)
+  const [title, setTitle] = useState(initial.title)
+  const [composer, setComposer] = useState(initial.composer)
+  const [publisher, setPublisher] = useState(initial.publisher)
+  const [copyright, setCopyright] = useState<CopyrightValue>(initial.copyright)
 
   useEffect(() => {
     if (editing) return
@@ -34,16 +54,18 @@ export function usePartsetMetadata(source: Source) {
     setTitle(next.title)
     setComposer(next.composer)
     setPublisher(next.publisher)
-  }, [source.title, source.composer, source.publisher, editing])
+    setCopyright(next.copyright)
+  }, [source.title, source.composer, source.publisher, source.copyright, editing])
 
   const startEdit = useCallback(() => {
     const next = fieldsFromSource(source)
     setTitle(next.title)
     setComposer(next.composer)
     setPublisher(next.publisher)
+    setCopyright(next.copyright)
     setError(null)
     setEditing(true)
-  }, [source.title, source.composer, source.publisher])
+  }, [source.title, source.composer, source.publisher, source.copyright])
 
   const cancelEdit = useCallback(() => {
     setEditing(false)
@@ -59,6 +81,10 @@ export function usePartsetMetadata(source: Source) {
         setError('Please provide a title and composer.')
         return
       }
+      if (!copyright) {
+        setError('Please select a copyright option.')
+        return
+      }
       setSaving(true)
       setError(null)
       try {
@@ -66,6 +92,7 @@ export function usePartsetMetadata(source: Source) {
           title: nextTitle,
           composer: nextComposer,
           publisher: nextPublisher,
+          copyright,
         })
         setEditing(false)
       } catch (err) {
@@ -74,7 +101,7 @@ export function usePartsetMetadata(source: Source) {
         setSaving(false)
       }
     },
-    [title, composer, publisher],
+    [title, composer, publisher, copyright],
   )
 
   return {
@@ -84,9 +111,11 @@ export function usePartsetMetadata(source: Source) {
     title,
     composer,
     publisher,
+    copyright,
     setTitle,
     setComposer,
     setPublisher,
+    setCopyright,
     startEdit,
     cancelEdit,
     save,
@@ -101,9 +130,12 @@ type PartsetMetadataProps = {
   title: string
   composer: string
   publisher: string
+  copyright: CopyrightValue
+  showCopyright?: boolean
   onTitleChange: (value: string) => void
   onComposerChange: (value: string) => void
   onPublisherChange: (value: string) => void
+  onCopyrightChange: (value: CopyrightValue) => void
   onSave: () => void
   onCancel: () => void
   errorClassName?: string
@@ -117,9 +149,12 @@ export function PartsetMetadata({
   title,
   composer,
   publisher,
+  copyright,
+  showCopyright = false,
   onTitleChange,
   onComposerChange,
   onPublisherChange,
+  onCopyrightChange,
   onSave,
   onCancel,
   errorClassName,
@@ -150,11 +185,32 @@ export function PartsetMetadata({
             type="text"
             className="metadata-edit"
             value={publisher}
+            placeholder="Edition"
             onChange={(e) => onPublisherChange(e.target.value)}
           />
         </div>
+        {showCopyright ? (
+          <>
+            <div style={{ height: 5 }} />
+            <div className="metadata-copyright-row">
+              <span className="metadata-copyright-label">
+                copyright
+                <CopyrightTip className="metadata-copyright-tip" />
+              </span>
+              <select
+                className="metadata-edit metadata-copyright-select"
+                value={copyright}
+                onChange={(e) => onCopyrightChange(e.target.value as CopyrightValue)}
+              >
+                <option value="before 1923">Published before 1923</option>
+                <option value="after 1923">Published in or after 1923</option>
+                <option value="unknown">Unknown copyright</option>
+              </select>
+            </div>
+          </>
+        ) : null}
         <div
-          className="save-button"
+          className={`save-button${showCopyright ? ' save-button-with-copyright' : ''}`}
           style={{ display: 'block' }}
           onClick={onSave}
           onKeyDown={(e) => {
@@ -169,7 +225,7 @@ export function PartsetMetadata({
           {saving ? 'Saving…' : 'Save'}
         </div>
         <div
-          className="cancel-button"
+          className={`cancel-button${showCopyright ? ' cancel-button-with-copyright' : ''}`}
           style={{ display: 'block' }}
           onClick={onCancel}
           onKeyDown={(e) => {
@@ -188,6 +244,10 @@ export function PartsetMetadata({
     )
   }
 
+  const copyrightLabel = showCopyright
+    ? COPYRIGHT_LABELS[normalizeCopyright(display.copyright)]
+    : null
+
   return (
     <>
       <div className="score-title">{display.title}</div>
@@ -195,6 +255,12 @@ export function PartsetMetadata({
       <div className="score-composer">{display.composer}</div>
       <div style={{ height: 5 }} />
       <div className="score-publisher">{display.publisher}</div>
+      {copyrightLabel ? (
+        <>
+          <div style={{ height: 5 }} />
+          <div className="score-publisher">{copyrightLabel}</div>
+        </>
+      ) : null}
     </>
   )
 }

@@ -918,13 +918,19 @@ def update_metadata(
     composer = body.composer.strip()
     if not title or not composer:
         raise HTTPException(status_code=400, detail="Title and composer are required")
-    update_partset_metadata(
-        db,
-        partset,
-        title=title,
-        composer=composer,
-        publisher=body.publisher.strip(),
-    )
+    if body.copyright not in COPYRIGHT_VALUES:
+        raise HTTPException(status_code=400, detail="Invalid copyright value")
+    try:
+        update_partset_metadata(
+            db,
+            partset,
+            title=title,
+            composer=composer,
+            publisher=body.publisher.strip(),
+            copyright=body.copyright,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return UpdateMetadataResponse()
 
 

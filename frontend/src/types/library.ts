@@ -12,6 +12,7 @@ export type LibraryItem = {
   title: string | null
   composer: string | null
   publisher: string | null
+  copyright: string | null
   admin: boolean
   parts_ready: boolean
   parts: LibraryPartItem[]

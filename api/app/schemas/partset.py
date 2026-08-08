@@ -20,6 +20,7 @@ class UpdateMetadataRequest(BaseModel):
     title: str
     composer: str
     publisher: str = ""
+    copyright: str
 
 
 class UpdateMetadataResponse(BaseModel):

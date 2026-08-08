@@ -39,6 +39,7 @@ export type PartsDataResponse = {
   title: string | null
   composer: string | null
   publisher: string | null
+  copyright: string | null
   score_pdf_url: string | null
   parts: Array<{
     tag: string

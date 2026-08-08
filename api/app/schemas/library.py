@@ -15,6 +15,7 @@ class LibraryItem(BaseModel):
     title: str | None = None
     composer: str | None = None
     publisher: str | None = None
+    copyright: str | None = None
     admin: bool
     parts_ready: bool
     parts: list[LibraryPartItem]

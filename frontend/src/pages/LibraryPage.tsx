@@ -27,7 +27,11 @@ function LibraryItemPane({
   item: LibraryItem
   onRemove: () => void
   onDelete: () => void
-  onMetadataSaved: (partsetId: string, fields: { title: string; composer: string; publisher: string }) => void
+  onMetadataSaved: (
+    partsetId: string,
+    fields: { title: string; composer: string; publisher: string; copyright: string },
+    identityChanged: boolean,
+  ) => void
 }) {
   const privateId = item.private_id ?? ''
   const partgenAccessId = privateId || item.partset_id
@@ -37,6 +41,7 @@ function LibraryItemPane({
     title: item.title,
     composer: item.composer,
     publisher: item.publisher,
+    copyright: item.copyright,
   })
 
   useEffect(() => {
@@ -44,22 +49,27 @@ function LibraryItemPane({
       title: item.title,
       composer: item.composer,
       publisher: item.publisher,
+      copyright: item.copyright,
     })
-  }, [item.title, item.composer, item.publisher, item.partset_id])
+  }, [item.title, item.composer, item.publisher, item.copyright, item.partset_id])
 
   const saveMetadata = useCallback(async () => {
     if (!privateId) return
     await metadata.save(async (fields) => {
       const csrf = await getCsrfToken()
       await updatePartsetMetadata(privateId, fields, csrf)
+      const identityChanged =
+        fields.title !== (item.title ?? '') ||
+        fields.composer !== (item.composer ?? '')
       setDisplay({
         title: fields.title,
         composer: fields.composer,
         publisher: fields.publisher || null,
+        copyright: fields.copyright,
       })
-      onMetadataSaved(item.partset_id, fields)
+      onMetadataSaved(item.partset_id, fields, identityChanged)
     })
-  }, [privateId, metadata, item.partset_id, onMetadataSaved])
+  }, [privateId, metadata, item, onMetadataSaved])
 
   const handleDelete = async () => {
     if (!privateId) return
@@ -125,9 +135,12 @@ function LibraryItemPane({
           title={metadata.title}
           composer={metadata.composer}
           publisher={metadata.publisher}
+          copyright={metadata.copyright}
+          showCopyright={item.admin}
           onTitleChange={metadata.setTitle}
           onComposerChange={metadata.setComposer}
           onPublisherChange={metadata.setPublisher}
+          onCopyrightChange={metadata.setCopyright}
           onSave={() => void saveMetadata()}
           onCancel={metadata.cancelEdit}
         />
@@ -214,7 +227,11 @@ export function LibraryPage() {
   }, [])
 
   const handleMetadataSaved = useCallback(
-    (partsetId: string, fields: { title: string; composer: string; publisher: string }) => {
+    (
+      partsetId: string,
+      fields: { title: string; composer: string; publisher: string; copyright: string },
+      identityChanged: boolean,
+    ) => {
       setItems((prev) =>
         prev.map((item) =>
           item.partset_id === partsetId
@@ -223,7 +240,8 @@ export function LibraryPage() {
                 title: fields.title,
                 composer: fields.composer,
                 publisher: fields.publisher || null,
-                parts_ready: false,
+                copyright: fields.copyright,
+                ...(identityChanged ? { parts_ready: false } : {}),
               }
             : item,
         ),

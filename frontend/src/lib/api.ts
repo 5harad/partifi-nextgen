@@ -301,7 +301,7 @@ export async function getPartsByAccessId(accessId: string): Promise<PartsDataRes
 
 export async function updatePartsetMetadata(
   privateId: string,
-  body: { title: string; composer: string; publisher: string },
+  body: { title: string; composer: string; publisher: string; copyright: string },
   csrfToken: string,
 ): Promise<void> {
   const res = await apiFetch(`/api/v1/partsets/${privateId}/metadata`, {

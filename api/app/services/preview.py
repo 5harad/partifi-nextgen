@@ -504,6 +504,7 @@ def get_parts_data(db: Session, partset: Partset, *, mode: str = "owner") -> dic
         "title": partset.title,
         "composer": partset.composer,
         "publisher": partset.publisher,
+        "copyright": partset.copyright,
         "score_pdf_url": score_pdf_url,
         "parts": download_items,
         "parts_ready": bool(partset.parts_ready),

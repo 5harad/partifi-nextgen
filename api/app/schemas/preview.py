@@ -73,6 +73,7 @@ class PartsDataResponse(BaseModel):
     title: str | None = None
     composer: str | None = None
     publisher: str | None = None
+    copyright: str | None = None
     score_pdf_url: str | None = None
     parts: list[PartDownloadItem]
     parts_ready: bool

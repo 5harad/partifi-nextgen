@@ -126,6 +126,7 @@ def list_library(db: Session, user_id: str) -> list[dict]:
                 "title": partset.title,
                 "composer": partset.composer,
                 "publisher": partset.publisher,
+                "copyright": partset.copyright,
                 "admin": bool(favorite.admin),
                 "parts_ready": bool(partset.parts_ready),
                 "parts": parts_payload,

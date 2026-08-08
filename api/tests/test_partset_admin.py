@@ -33,6 +33,7 @@ def db() -> Session:
             score_id="score1",
             title="Old title",
             composer="Old composer",
+            copyright="unknown",
             parts_ready=True,
             status="paste",
             cut_start=now,
@@ -68,6 +69,7 @@ def test_update_partset_metadata_invalidates_parts(
         title="梁祝",
         composer="何占豪",
         publisher="",
+        copyright="before 1923",
     )
 
     db.expire_all()
@@ -75,6 +77,7 @@ def test_update_partset_metadata_invalidates_parts(
     assert updated is not None
     assert updated.title == "梁祝"
     assert updated.composer == "何占豪"
+    assert updated.copyright == "before 1923"
     assert updated.parts_ready is False
     assert updated.status == "analysis"
     assert updated.cut_start is None
@@ -110,6 +113,7 @@ def test_update_partset_metadata_preserves_active_generation_progress(
         title="Updated title",
         composer="Updated composer",
         publisher="Publisher",
+        copyright="unknown",
     )
 
     db.expire_all()
@@ -145,6 +149,7 @@ def test_update_partset_metadata_clears_stale_invalidated_generation_progress(
         title="Updated title",
         composer="Updated composer",
         publisher="Publisher",
+        copyright="unknown",
     )
 
     db.expire_all()
@@ -157,3 +162,65 @@ def test_update_partset_metadata_clears_stale_invalidated_generation_progress(
     assert updated.paste_start is None
     assert updated.paste_complete is None
     assert updated.paste_progress == 0
+
+
+@patch("app.services.preview.gen_parts_lock_held", return_value=False)
+@patch("app.services.partset_admin.get_local_cache")
+def test_update_partset_metadata_copyright_only_keeps_parts(
+    mock_get_cache: Mock,
+    _mock_lock_held: Mock,
+    db: Session,
+) -> None:
+    mock_cache = Mock()
+    mock_get_cache.return_value = mock_cache
+    partset = db.get(Partset, "pub1")
+    assert partset is not None
+
+    update_partset_metadata(
+        db,
+        partset,
+        title="Old title",
+        composer="Old composer",
+        publisher="",
+        copyright="after 1923",
+    )
+
+    db.expire_all()
+    updated = db.get(Partset, "pub1")
+    assert updated is not None
+    assert updated.copyright == "after 1923"
+    assert updated.parts_ready is True
+    assert updated.status == "paste"
+    mock_cache.invalidate_parts.assert_not_called()
+
+
+@patch("app.services.preview.gen_parts_lock_held", return_value=False)
+@patch("app.services.partset_admin.get_local_cache")
+def test_update_partset_metadata_publisher_only_keeps_parts(
+    mock_get_cache: Mock,
+    _mock_lock_held: Mock,
+    db: Session,
+) -> None:
+    mock_cache = Mock()
+    mock_get_cache.return_value = mock_cache
+    partset = db.get(Partset, "pub1")
+    assert partset is not None
+    partset.publisher = ""
+    db.commit()
+
+    update_partset_metadata(
+        db,
+        partset,
+        title="Old title",
+        composer="Old composer",
+        publisher="Breitkopf",
+        copyright="unknown",
+    )
+
+    db.expire_all()
+    updated = db.get(Partset, "pub1")
+    assert updated is not None
+    assert updated.publisher == "Breitkopf"
+    assert updated.parts_ready is True
+    assert updated.status == "paste"
+    mock_cache.invalidate_parts.assert_not_called()

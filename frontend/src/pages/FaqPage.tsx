@@ -39,6 +39,11 @@ const FAQ_ITEMS: FaqItem[] = [
       'Your work on the score is automatically saved every time you make a change. To return to it, just bookmark the URL. Alternatively, the score will be added to your personal library automatically if you are logged in to the site.',
   },
   {
+    question: 'How do I control whether my score appears in the public Partifi Library?',
+    answer:
+      'When you import a score, the copyright choice decides this. \u201cPublished before 1923\u201d means the edition is treated as public domain in the United States and the partset can appear in public search and the Partifi Library. \u201cPublished in or after 1923\u201d and \u201cUnknown\u201d keep it out of that public listing. If you chose the wrong option, open the score with your editor link (or from your personal library if you are logged in), click \u201cedit metadata\u201d, change the copyright setting, and save.',
+  },
+  {
     question: 'Can I partifi a landscape or two-column score?',
     answer:
       'Yes! Partifi supports landscape scores and tries to automatically detect the correct page orientation when you first import a PDF.\n\nBut sometimes a score is landscape in disguise: the PDF is portrait-shaped, but the music is turned sideways on the page. And some landscape pages contain two side-by-side columns of music. If either happens, click on \u201cFix page orientation\u201d in Step 2 (the option is right below the score). Choose the upright orientation; for a two-column page, select \u201cTwo columns\u201d to split it into left and right portrait pages. Partifi re-analyzes the score after this change, which resets existing segments and generated parts.',

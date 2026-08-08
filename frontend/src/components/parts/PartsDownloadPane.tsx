@@ -36,6 +36,7 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
     title: data.title,
     composer: data.composer,
     publisher: data.publisher,
+    copyright: data.copyright,
   })
   const [favorite, setFavorite] = useState(false)
   const [retrying, setRetrying] = useState(false)
@@ -45,8 +46,9 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
       title: data.title,
       composer: data.composer,
       publisher: data.publisher,
+      copyright: data.copyright,
     })
-  }, [data.title, data.composer, data.publisher, data.partset_id])
+  }, [data.title, data.composer, data.publisher, data.copyright, data.partset_id])
 
   useEffect(() => {
     if (!user) {
@@ -123,26 +125,26 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
     await metadata.save(async (fields) => {
       const csrf = await getCsrfToken()
       await updatePartsetMetadata(privateId, fields, csrf)
-      const next = {
-        ...data,
+      const identityChanged =
+        fields.title !== (data.title ?? '') ||
+        fields.composer !== (data.composer ?? '')
+      setDisplay({
         title: fields.title,
         composer: fields.composer,
         publisher: fields.publisher || null,
-      }
-      setDisplay({
-        title: next.title,
-        composer: next.composer,
-        publisher: next.publisher,
+        copyright: fields.copyright,
       })
       onDataChange((prev) => ({
         ...prev,
         title: fields.title,
         composer: fields.composer,
         publisher: fields.publisher || null,
-        parts_ready: false,
-        error: null,
-        error_message: null,
+        copyright: fields.copyright,
+        ...(identityChanged
+          ? { parts_ready: false, error: null, error_message: null }
+          : {}),
       }))
+      if (!identityChanged) return
       try {
         if (data.error) {
           const csrf = await getCsrfToken()
@@ -256,9 +258,12 @@ export function PartsDownloadPane({ data, onDataChange }: Props) {
           title={metadata.title}
           composer={metadata.composer}
           publisher={metadata.publisher}
+          copyright={metadata.copyright}
+          showCopyright={isOwner}
           onTitleChange={metadata.setTitle}
           onComposerChange={metadata.setComposer}
           onPublisherChange={metadata.setPublisher}
+          onCopyrightChange={metadata.setCopyright}
           onSave={() => void saveMetadata()}
           onCancel={metadata.cancelEdit}
           errorClassName="red"
